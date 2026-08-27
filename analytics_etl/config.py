@@ -2,8 +2,12 @@
 
 from pathlib import Path
 
-API_URL = "https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1"
-API_KEY = "fnx_dev_OSRfVAhqmCv2w4nHkiCsHCFfflW90Yvk"  
+import os
+
+API_URL = os.getenv("API_URL", "https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1")
+# API_KEY must be set via environment variable for security
+API_KEY = os.getenv("API_KEY")
+
 
 SYMBOLS = ["INFY.NS", "RELIANCE.NS", "TATASTEEL.BO","TCS.NS","ICICIBANK.NS","HDFCBANK.NS","ADANIENT.NS"]
 
