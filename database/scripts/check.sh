@@ -3,29 +3,26 @@
 set -euo pipefail
 
 # ------------------------------------------------------------
-# Project/sprint directory
+# Project root directory
 # ------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ------------------------------------------------------------
 # Load repository .env
 # ------------------------------------------------------------
 
-ENV_FILE="$SCRIPT_DIR/.env"
+ENV_FILE="$ROOT_DIR/.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     set -a
-    # shellcheck disable=SC1090
     source "$ENV_FILE"
     set +a
 fi
 
 # ------------------------------------------------------------
 # Determine target database
-#
-# TARGET_DATABASE takes priority.
-# Otherwise use POSTGRES_DB from .env.
 # ------------------------------------------------------------
 
 TARGET_DATABASE="${TARGET_DATABASE:-${POSTGRES_DB:-}}"
@@ -64,37 +61,37 @@ if ! command -v psql >/dev/null 2>&1; then
 fi
 
 # ------------------------------------------------------------
-# Apply migrations in filename order
+# Run a probe
+#
+# A probe PASSES when PostgreSQL rejects the invalid operation.
 # ------------------------------------------------------------
 
-echo "Applying migrations to database: $TARGET_DATABASE"
+run_probe() {
+    local probe="$1"
+    local name
 
-for file in "$SCRIPT_DIR"/migrations/*.sql; do
-    [[ -e "$file" ]] || continue
+    name="$(basename "$probe")"
 
-    echo "Applying migration: $(basename "$file")"
+    echo "Running probe: $name"
 
-    psql \
+    if psql \
         -v ON_ERROR_STOP=1 \
         --dbname="$TARGET_DATABASE" \
-        --file="$file"
-done
+        --file="$probe" >/dev/null 2>&1; then
+
+        echo "FAIL: $name was accepted"
+        return 1
+    else
+        echo "PASS: $name was rejected as expected"
+    fi
+}
 
 # ------------------------------------------------------------
-# Load seed files in filename order
+# Run both probes
 # ------------------------------------------------------------
 
-echo "Loading seed data"
+run_probe "$ROOT_DIR/probes/duplicate-idempotency-key.sql"
 
-for file in "$SCRIPT_DIR"/seeds/*.sql; do
-    [[ -e "$file" ]] || continue
+run_probe "$ROOT_DIR/probes/orphan-foreign-key.sql"
 
-    echo "Loading seed: $(basename "$file")"
-
-    psql \
-        -v ON_ERROR_STOP=1 \
-        --dbname="$TARGET_DATABASE" \
-        --file="$file"
-done
-
-echo "Database migration and seeding completed successfully."
+echo "All probes passed."
