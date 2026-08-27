@@ -1,0 +1,2 @@
+[console_scripts]
+analytics-etl = etl_pipeline.pipeline.main:main

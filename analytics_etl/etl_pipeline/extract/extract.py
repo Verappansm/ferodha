@@ -8,7 +8,7 @@ import json
 import time
 import requests
 
-from config import API_URL, API_KEY, CACHE_DIR, CACHE_TTL_SECONDS, SYMBOLS
+from etl_pipeline.config import API_URL, API_KEY, CACHE_DIR, CACHE_TTL_SECONDS, SYMBOLS
 
 # Endpoint: GET /candles/{symbol}
 ENDPOINT_PATH = "/candles/{symbol}"

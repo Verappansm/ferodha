@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+analytics-etl = "etl_pipeline.pipeline.main:main"
+
+[project]
+name = "analytics-etl"
+version = "0.1.0"
+description = "Analytics ETL pipeline"
+requires-python = ">=3.10"
+
+dependencies = [
+    "requests",
+    "pandas",
+    "duckdb",
+    "python-dotenv"
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["etl_pipeline*"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

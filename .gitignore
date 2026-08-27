@@ -1,1 +1,17 @@
+# Environment variables / secrets
 .env
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Test / coverage cache
+.pytest_cache/
+.coverage
+
+# IDE
+.vscode/
