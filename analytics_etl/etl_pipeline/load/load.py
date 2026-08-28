@@ -7,7 +7,7 @@ Writes the cleaned candle data into a DuckDB table, avoiding duplicate
 import duckdb
 import pandas as pd
 
-from config import DB_PATH, TABLE_NAME
+from etl_pipeline.config import DB_PATH, TABLE_NAME
 
 
 def load(df: pd.DataFrame):
@@ -28,6 +28,8 @@ def load(df: pd.DataFrame):
             volume    BIGINT,
             currency  VARCHAR,
             interval  VARCHAR,
+            daily_return DOUBLE,
+            trade_value  DOUBLE,
             PRIMARY KEY (symbol, date)
         )
     """)

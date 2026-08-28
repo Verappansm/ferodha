@@ -8,7 +8,7 @@ import json
 import time
 import requests
 
-from config import API_URL, API_KEY, CACHE_DIR, CACHE_TTL_SECONDS, SYMBOLS
+from etl_pipeline.config import API_URL, API_KEY, CACHE_DIR, CACHE_TTL_SECONDS, SYMBOLS
 
 # Endpoint: GET /candles/{symbol}
 ENDPOINT_PATH = "/candles/{symbol}"
@@ -80,6 +80,12 @@ def fetch_symbol(symbol: str) -> dict:
     if cached is not None:
         print(f"[extract] {symbol}: using cached data")
         return cached
+
+    if not API_URL or not API_KEY:
+        raise SymbolExtractError(
+            f"{symbol}: no fresh cache and FAUXNANCE_API_URL/FAUXNANCE_API_KEY are not set "
+            "(copy .env.example to .env at the repository root and fill them in)"
+        )
 
     print(f"[extract] {symbol}: calling API")
     url = f"{API_URL}{ENDPOINT_PATH.format(symbol=symbol)}"

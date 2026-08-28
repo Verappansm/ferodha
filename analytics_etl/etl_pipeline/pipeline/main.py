@@ -5,7 +5,7 @@ import sys
 from etl_pipeline.extract.extract import extract_all , RateLimitExceeded
 from etl_pipeline.transform.transform import transform
 from etl_pipeline.load.load import load
-from config import SYMBOLS
+from etl_pipeline.config import SYMBOLS
 
 
 

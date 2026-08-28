@@ -1,4 +1,0 @@
-pip install requests pandas duckdb
-
-Run:
-python -m etl_pipeline.pipeline.main  
