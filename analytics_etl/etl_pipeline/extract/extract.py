@@ -42,7 +42,7 @@ def _read_cache(symbol: str):
 
 
 def _write_cache(symbol: str, payload: dict):
-    CACHE_DIR.mkdir(exist_ok=True)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
     with open(_cache_path(symbol), "w") as f:
         json.dump(payload, f)
 

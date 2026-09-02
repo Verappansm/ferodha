@@ -37,6 +37,7 @@ REQUIRED_FIELDS = {
     "low": (int, float),
     "close": (int, float),
     "adjclose": (int, float),
+    "volume": (int, float),
 }
 
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -180,7 +181,8 @@ def transform(payloads: list[dict]) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
-    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d").dt.date
+    df["date"] = pd.to_datetime(df["date"], format="%Y-%m-%d", errors="coerce").dt.date
+    df = df.dropna(subset=["date"])
     df["volume"] = df["volume"].astype("int64")
     df = derive(df)
 
