@@ -18,9 +18,18 @@
         <junit.version>5.11.3</junit.version>
         <maven.surefire.version>3.5.2</maven.surefire.version>
         <maven.enforcer.version>3.6.1</maven.enforcer.version>
+        <jakarta.validation.version>3.1.0</jakarta.validation.version>
+        <hibernate.validator.version>9.1.0.Final</hibernate.validator.version>
     </properties>
 
     <dependencies>
+
+        <!-- The one non-test dependency the domain is allowed: declarations, not behaviour -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>${jakarta.validation.version}</version>
+        </dependency>
 
         <!-- JUnit 5 -->
         <dependency>
@@ -30,10 +39,20 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Validator implementation to actually run the annotations in tests -->
         <dependency>
             <groupId>org.hibernate.validator</groupId>
             <artifactId>hibernate-validator</artifactId>
-            <version>9.1.0.Final</version>
+            <version>${hibernate.validator.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- hibernate-validator's EL dependency, needed at runtime for message interpolation -->
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.el</artifactId>
+            <version>4.0.2</version>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
@@ -75,9 +94,20 @@
                             <rules>
                                 <bannedDependencies>
                                     <excludes>
-                                        <!-- Add forbidden dependencies here -->
-                                        <exclude>org.springframework.boot:spring-boot-starter</exclude>
-                                        <exclude>org.springframework:spring-context</exclude>
+                                        <!-- No Spring, anywhere in the tree -->
+                                        <exclude>org.springframework:*</exclude>
+                                        <exclude>org.springframework.boot:*</exclude>
+                                        <!-- No servlet API -->
+                                        <exclude>jakarta.servlet:*</exclude>
+                                        <exclude>javax.servlet:*</exclude>
+                                        <!-- No JDBC drivers -->
+                                        <exclude>org.postgresql:postgresql</exclude>
+                                        <exclude>com.mysql:mysql-connector-j</exclude>
+                                        <exclude>com.h2database:h2</exclude>
+                                        <!-- No MyBatis -->
+                                        <exclude>org.mybatis:*</exclude>
+                                        <!-- No connection pool -->
+                                        <exclude>com.zaxxer:HikariCP</exclude>
                                     </excludes>
 
                                     <searchTransitive>true</searchTransitive>
