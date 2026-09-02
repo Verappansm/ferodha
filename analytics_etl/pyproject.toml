@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analytics-etl"
+version = "0.1.0"
+description = "Sprint 4 analytics ETL: Fauxnance candles into DuckDB, plus the claims dashboard."
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.31",
+    "pandas>=2.0",
+    "duckdb>=0.10",
+    "plotly>=5.20",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+analytics-etl = "etl_pipeline.pipeline.main:main"
+analytics-etl-dashboard = "etl_pipeline.dashboard.build_report:main"
+
+[tool.setuptools]
+packages = [
+    "etl_pipeline",
+    "etl_pipeline.extract",
+    "etl_pipeline.transform",
+    "etl_pipeline.load",
+    "etl_pipeline.pipeline",
+    "etl_pipeline.dashboard",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
