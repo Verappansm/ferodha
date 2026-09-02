@@ -1,29 +1,87 @@
 package com.trade;
 
+import com.trade.domain.Account;
+import com.trade.domain.IdempotencyKeyStore;
+import com.trade.domain.Instrument;
+import com.trade.domain.Order;
+import com.trade.domain.OrderLogic;
+import com.trade.domain.Position;
+import com.trade.enums.AccountStatus;
+import com.trade.enums.InstrumentType;
+import com.trade.enums.OrderSide;
+import com.trade.exception.AccountNotActiveException;
+import com.trade.exception.AccountNotFoundException;
+import com.trade.exception.DomainException;
+import com.trade.exception.DuplicateOrderException;
+import com.trade.exception.InstrumentNotFoundException;
+import com.trade.exception.InsufficientFundsException;
+import com.trade.exception.InsufficientHoldingsException;
+import com.trade.exception.InvalidOrderException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class OrderLogicTest {
 
+    private static final Long ACCOUNT_ID = 1L;
+    private static final String SYMBOL = "AAPL";
+
+    // Plain HashMap/Set fakes standing in for a database - this is the seam
+    // OrderLogic depends on. It only ever talks to the 4 small interfaces,
+    // never to these fakes, so Sprint 6 can swap in a real database without
+    // OrderLogic changing at all.
+    private final Map<Long, Account> accountsById = new HashMap<>();
+    private final Map<String, Instrument> instrumentsBySymbol = new HashMap<>();
+    private final Map<String, Position> positionsByKey = new HashMap<>();
+    private final Set<String> usedIdempotencyKeys = new HashSet<>();
+
     private OrderLogic orderLogic;
 
     @BeforeEach
     void setUp() {
-        orderLogic = new OrderLogic();
+        orderLogic = new OrderLogic(
+                accountId -> Optional.ofNullable(accountsById.get(accountId)),
+                symbol -> Optional.ofNullable(instrumentsBySymbol.get(symbol)),
+                (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
+                new IdempotencyKeyStore() {
+                    @Override
+                    public boolean isUsed(String key) {
+                        return usedIdempotencyKeys.contains(key);
+                    }
+
+                    @Override
+                    public void markUsed(String key) {
+                        usedIdempotencyKeys.add(key);
+                    }
+                }
+        );
+
+        // A tradable instrument, present for every test unless one of them
+        // deliberately removes or delists it.
+        instrumentsBySymbol.put(SYMBOL,
+                new Instrument(SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD"));
     }
+
+    // ---------------- Rule 1: account must exist ----------------
 
     @Test
     @DisplayName("Rule 1: should reject order when account does not exist")
     void accountNotFound() {
-        Order order = validOrder();
+        Order order = validBuyOrder();
+        // deliberately: no account added to accountsById
 
-        // account does not exist
-
-        OrderException exception = assertThrows(
-                OrderException.class,
+        AccountNotFoundException exception = assertThrows(
+                AccountNotFoundException.class,
                 () -> orderLogic.evaluate(order)
         );
 
@@ -31,50 +89,47 @@ class OrderLogicTest {
     }
 
     @Test
-    @DisplayName("Rule 1: should continue when account exists")
+    @DisplayName("Rule 1: should not fire when the account exists")
     void accountExists() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
 
-        // add existing account
-        assertDoesNotThrow(
-                () -> orderLogic.evaluate(order)
-        );
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
+
+    // ---------------- Rule 2: account must be ACTIVE ----------------
 
     @Test
     @DisplayName("Rule 2: should reject order when account is not ACTIVE")
     void accountNotActive() {
-        Order order = validOrder();
+        givenSuspendedAccount();
 
-        // add SUSPENDED or CLOSED account
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        AccountNotActiveException exception = assertThrows(
+                AccountNotActiveException.class,
+                () -> orderLogic.evaluate(validBuyOrder())
         );
 
         assertEquals("ACC-403", exception.getCode());
     }
 
     @Test
-    @DisplayName("Rule 2: should continue when account is ACTIVE")
+    @DisplayName("Rule 2: should not fire when the account is ACTIVE")
     void accountActive() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
 
-        // add ACTIVE account
-        assertDoesNotThrow(
-                () -> orderLogic.evaluate(order)
-        );
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
+
+    // ---------------- Rule 3: instrument must exist and be tradable ----------------
 
     @Test
     @DisplayName("Rule 3: should reject order when instrument does not exist")
     void instrumentNotFound() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
+        Order order = validBuyOrder();
+        order.setSymbol("UNKNOWN");
 
-        // add ACTIVE account
-        // instrument does not exist
-        OrderException exception = assertThrows(
-                OrderException.class,
+        InstrumentNotFoundException exception = assertThrows(
+                InstrumentNotFoundException.class,
                 () -> orderLogic.evaluate(order)
         );
 
@@ -82,158 +137,202 @@ class OrderLogicTest {
     }
 
     @Test
-    @DisplayName("Rule 3: should reject order when instrument is not tradable")
+    @DisplayName("Rule 3: should reject order when instrument is delisted (not tradable)")
     void instrumentNotTradable() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
+        instrumentsBySymbol.get(SYMBOL).delist();
 
-        // add ACTIVE account
-        // add instrument that is not tradable
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        InstrumentNotFoundException exception = assertThrows(
+                InstrumentNotFoundException.class,
+                () -> orderLogic.evaluate(validBuyOrder())
         );
 
         assertEquals("INS-404", exception.getCode());
     }
 
     @Test
-    @DisplayName("Rule 3: should continue when instrument exists and is tradable")
+    @DisplayName("Rule 3: should not fire when instrument exists and is tradable")
     void instrumentTradable() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
 
-        // add ACTIVE account
-        // add tradable instrument
-        assertDoesNotThrow(
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
+    }
+
+    // ---------------- Rule 4: quantity must be > 0 ----------------
+
+    @Test
+    @DisplayName("Rule 4: should reject order when quantity is zero or negative")
+    void quantityInvalid() {
+        givenActiveAccount(new BigDecimal("5000.00"));
+        Order order = validBuyOrder();
+        order.setQuantity(0);
+
+        InvalidOrderException exception = assertThrows(
+                InvalidOrderException.class,
                 () -> orderLogic.evaluate(order)
         );
+
+        assertEquals("VAL-422", exception.getCode());
+        assertEquals("quantity", exception.getField());
     }
+
+    @Test
+    @DisplayName("Rule 4: should not fire when quantity is positive")
+    void quantityValid() {
+        givenActiveAccount(new BigDecimal("5000.00"));
+
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
+    }
+
+    // ---------------- Rule 5: price must be > 0 ----------------
+
+    @Test
+    @DisplayName("Rule 5: should reject order when price is zero or negative")
+    void priceInvalid() {
+        givenActiveAccount(new BigDecimal("5000.00"));
+        Order order = validBuyOrder();
+        order.setPrice(BigDecimal.ZERO);
+
+        InvalidOrderException exception = assertThrows(
+                InvalidOrderException.class,
+                () -> orderLogic.evaluate(order)
+        );
+
+        assertEquals("VAL-422", exception.getCode());
+        assertEquals("price", exception.getField());
+    }
+
+    @Test
+    @DisplayName("Rule 5: should not fire when price is positive")
+    void priceValid() {
+        givenActiveAccount(new BigDecimal("5000.00"));
+
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
+    }
+
+    // ---------------- Rule 6: BUY must be affordable ----------------
 
     @Test
     @DisplayName("Rule 6: should reject BUY when funds are insufficient")
     void buyInsufficientFunds() {
-        Order order = validBuyOrder();
+        // Order costs 10 * 100.00 = 1000.00, account only has 50.00.
+        givenActiveAccount(new BigDecimal("50.00"));
 
-        // add ACTIVE account
-        // add tradable instrument
-        // account has less cash than quantity * price
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        InsufficientFundsException exception = assertThrows(
+                InsufficientFundsException.class,
+                () -> orderLogic.evaluate(validBuyOrder())
         );
 
         assertEquals("ORD-400", exception.getCode());
     }
 
     @Test
-    @DisplayName("Rule 6: should allow BUY when funds are sufficient")
+    @DisplayName("Rule 6: should not fire when funds are sufficient")
     void buySufficientFunds() {
-        Order order = validBuyOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
 
-        // add ACTIVE account
-        // add tradable instrument
-        // account has enough cash for quantity * price
-
-        assertDoesNotThrow(
-                () -> orderLogic.evaluate(order)
-        );
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
+
+    // ---------------- Rule 7: SELL must not exceed holdings ----------------
 
     @Test
     @DisplayName("Rule 7: should reject SELL when holdings are insufficient")
     void sellInsufficientHoldings() {
-        Order order = validSellOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
+        givenPosition(5); // holding 5 units, order below sells 10
 
-        // add ACTIVE account
-        // add tradable instrument
-        // account holds less than order quantity
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        InsufficientHoldingsException exception = assertThrows(
+                InsufficientHoldingsException.class,
+                () -> orderLogic.evaluate(validSellOrder())
         );
 
         assertEquals("ORD-409", exception.getCode());
     }
 
     @Test
-    @DisplayName("Rule 7: should allow SELL when holdings are sufficient")
+    @DisplayName("Rule 7: should not fire when holdings are sufficient")
     void sellSufficientHoldings() {
-        Order order = validSellOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
+        givenPosition(20);
 
-        // add ACTIVE account
-        // add tradable instrument
-        // account holds enough quantity
-        assertDoesNotThrow(
-                () -> orderLogic.evaluate(order)
-        );
+        assertDoesNotThrow(() -> orderLogic.evaluate(validSellOrder()));
     }
+
+    // ---------------- Rule 8: idempotency key must be new ----------------
 
     @Test
     @DisplayName("Rule 8: should reject order when idempotency key was already used")
     void duplicateOrder() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
+        usedIdempotencyKeys.add("ORDER-001");
 
-        // add ACTIVE account
-        // add tradable instrument
-        // idempotency key has already been accepted
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        DuplicateOrderException exception = assertThrows(
+                DuplicateOrderException.class,
+                () -> orderLogic.evaluate(validBuyOrder())
         );
 
         assertEquals("ORD-409", exception.getCode());
     }
 
     @Test
-    @DisplayName("Rule 8: should allow order when idempotency key is new")
+    @DisplayName("Rule 8: should not fire when the idempotency key is new")
     void newIdempotencyKey() {
-        Order order = validOrder();
+        givenActiveAccount(new BigDecimal("5000.00"));
 
-        // add ACTIVE account
-        // add tradable instrument
-        // idempotency key has not been used
-        assertDoesNotThrow(
-                () -> orderLogic.evaluate(order)
-        );
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
+
+    // ---------------- The rules run in order ----------------
 
     @Test
-    @DisplayName("Rules should be evaluated in the defined order")
+    @DisplayName("A request breaking two rules gets the code of the first one")
     void evaluationOrder() {
-        Order order = validOrder();
+        // A SUSPENDED account with no cash breaks both rule 2 (not active)
+        // and rule 6 (cannot afford the buy). It must fail with rule 2's
+        // code, ACC-403 - not rule 6's ORD-400 - because the order the rules
+        // run in is itself part of what is being tested here.
+        givenSuspendedAccount();
 
-        // Deliberately create multiple failures.
-        // Account does not exist.
-        // Other fields/rules are also invalid.
-        OrderException exception = assertThrows(
-                OrderException.class,
-                () -> orderLogic.evaluate(order)
+        DomainException exception = assertThrows(
+                DomainException.class,
+                () -> orderLogic.evaluate(validBuyOrder())
         );
 
-        // Rule 1 must be evaluated before the later rules.
-        assertEquals("ACC-404", exception.getCode());
+        assertEquals("ACC-403", exception.getCode());
     }
 
-    private Order validOrder() {
-        Order order = new Order();
-
-        order.setAccountId(1L);
-        order.setSymbol("AAPL");
-        order.setQuantity(10);
-        order.setPrice(100);
-        order.setIdempotencyKey("ORDER-001");
-
-        return order;
-    }
+    // ---------------- test data helpers ----------------
 
     private Order validBuyOrder() {
-        Order order = validOrder();
-        order.setSide(Order.Side.BUY);
+        Order order = new Order();
+        order.setAccountId(ACCOUNT_ID);
+        order.setSymbol(SYMBOL);
+        order.setSide(OrderSide.BUY);
+        order.setQuantity(10);
+        order.setPrice(new BigDecimal("100.00"));
+        order.setIdempotencyKey("ORDER-001");
         return order;
     }
 
     private Order validSellOrder() {
-        Order order = validOrder();
-        order.setSide(Order.Side.SELL);
+        Order order = validBuyOrder();
+        order.setSide(OrderSide.SELL);
         return order;
+    }
+
+    private void givenActiveAccount(BigDecimal balance) {
+        accountsById.put(ACCOUNT_ID,
+                new Account(ACCOUNT_ID, "REF-1", "Test Holder", balance, AccountStatus.ACTIVE, 0L));
+    }
+
+    private void givenSuspendedAccount() {
+        accountsById.put(ACCOUNT_ID,
+                new Account(ACCOUNT_ID, "REF-1", "Test Holder", BigDecimal.ZERO, AccountStatus.SUSPENDED, 0L));
+    }
+
+    private void givenPosition(long quantityHeld) {
+        positionsByKey.put(ACCOUNT_ID + ":" + SYMBOL,
+                new Position(ACCOUNT_ID, SYMBOL, quantityHeld, new BigDecimal("100.00")));
     }
 }

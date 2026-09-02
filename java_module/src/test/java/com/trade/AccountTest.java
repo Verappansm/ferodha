@@ -1,5 +1,8 @@
 package com.trade;
 
+import com.trade.domain.Account;
+import com.trade.enums.AccountStatus;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,7 +23,25 @@ class AccountTest {
     @Test
     @DisplayName("Account should have ACTIVE status when created")
     void status() {
-        assertEquals(Account.Status.ACTIVE, account.getStatus());
+        assertEquals(AccountStatus.ACTIVE, account.getStatus());
+        assertTrue(account.isActive());
+    }
+
+    @Test
+    @DisplayName("A SUSPENDED account is not active")
+    void suspendedIsNotActive() {
+        Account suspended = new Account(1L, "REF-1", "Jane Doe",
+                BigDecimal.ZERO, AccountStatus.SUSPENDED, 0L);
+
+        assertFalse(suspended.isActive());
+    }
+
+    @Test
+    @DisplayName("Credit should increase the account balance")
+    void credit() {
+        account.credit(new BigDecimal("100.00"));
+
+        assertEquals(new BigDecimal("100.00"), account.getBalance());
     }
 
     @Test
@@ -34,11 +55,21 @@ class AccountTest {
     }
 
     @Test
-    @DisplayName("Credit should increase the account balance")
-    void credit() {
-        account.credit(new BigDecimal("100.00"));
+    @DisplayName("Crediting a non-positive amount should be rejected")
+    void creditNonPositive() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> account.credit(BigDecimal.ZERO)
+        );
+    }
 
-        assertEquals(new BigDecimal("100.00"), account.getBalance());
+    @Test
+    @DisplayName("Debiting a non-positive amount should be rejected")
+    void debitNonPositive() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> account.debit(new BigDecimal("-10.00"))
+        );
     }
 
     @Test
@@ -58,7 +89,7 @@ class AccountTest {
     }
 
     @Test
-    @DisplayName("Debit should be refused when it would make balance negative")
+    @DisplayName("Debit should be refused when it would make the balance negative")
     void negativeDebit() {
         account.credit(new BigDecimal("100.00"));
 
@@ -67,11 +98,12 @@ class AccountTest {
                 () -> account.debit(new BigDecimal("150.00"))
         );
 
+        // The refused debit must not have changed the balance at all.
         assertEquals(new BigDecimal("100.00"), account.getBalance());
     }
 
     @Test
-    @DisplayName("Balance should not drift after many operations")
+    @DisplayName("Balance should not drift after many small operations")
     void balanceDrift() {
         account.credit(new BigDecimal("1000.00"));
 
