@@ -1,0 +1,74 @@
+classDiagram
+    direction TB
+
+    class UserStatus {
+        <<enumeration>>
+        PENDING
+        ACTIVE
+        SUSPENDED
+        CLOSED
+    }
+
+    class AccountStatus {
+        <<enumeration>>
+        OPEN
+        ACTIVE
+        SUSPENDED
+        CLOSED
+    }
+
+    class Role {
+        +int roleId
+        +String roleName
+        +getRoleId() int
+        +getRoleName() String
+    }
+
+    class User {
+        +UUID userId
+        +String name
+        +String email
+        +String phoneNumber
+        +String passwordHash
+        +UserStatus status
+        +int roleId
+        +LocalDateTime createdAt
+        +LocalDateTime lastLogin
+        +canPlaceOrder() boolean
+        +canManageUser() boolean
+        +isAdvisor() boolean
+        +isActive() boolean
+    }
+
+    class Account {
+        +UUID accountId
+        +UUID userId
+        +UUID advisorId
+        +String bankAccountNumber
+        +String currency
+        +BigDecimal cashBalance
+        +AccountStatus state
+        +LocalDateTime createdAt
+        +depositCash(BigDecimal) void
+        +withdrawCash(BigDecimal) boolean
+        +hasSufficientBalance(BigDecimal) boolean
+        +isActive() boolean
+    }
+
+    class ThirdPartyBank {
+        +String bankAccountNumber
+        +String email
+        +String pinHash
+        +BigDecimal balance
+        +verifyPin(String) boolean
+        +debit(BigDecimal) boolean
+        +credit(BigDecimal) void
+    }
+
+    Role "1" -- "0..*" User : assigns to
+    User "1" -- "0..*" Account : owns (client)
+    User "1" -- "0..*" Account : manages (advisor)
+    ThirdPartyBank "1" -- "1..*" Account : linked via bankAccountNumber
+
+    User ..> UserStatus
+    Account ..> AccountStatus

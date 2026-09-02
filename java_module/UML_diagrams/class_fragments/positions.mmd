@@ -1,0 +1,51 @@
+classDiagram
+    direction TB
+
+    class Position {
+        +UUID positionId
+        +UUID accountId
+        +UUID instrumentId
+        +BigDecimal quantity
+        +BigDecimal averagePrice
+        +BigDecimal marketValue
+        +BigDecimal unrealizedPnlValue
+        +BigDecimal unrealizedPnlPercentage
+        +calculatePnL(BigDecimal currentPrice) void
+        +isLong() boolean
+        +isEmpty() boolean
+    }
+
+    class Account {
+        +UUID accountId
+        +UUID userId
+        +String currency
+        +BigDecimal cashBalance
+        +AccountStatus state
+    }
+
+    class Instrument {
+        +UUID instrumentId
+        +String ticker
+        +String name
+        +InstrumentType type
+    }
+
+    class Trade {
+        +UUID tradeId
+        +UUID orderId
+        +BigDecimal executionPrice
+        +BigDecimal executionQuantity
+    }
+
+    class MarketData {
+        +long marketDataId
+        +UUID instrumentId
+        +LocalDateTime timestamp
+        +BigDecimal closePrice
+    }
+
+    Account "1" -- "0..*" Position : holds
+    Instrument "1" -- "0..*" Position : identifies
+    Position ..> Trade : derived from
+    Position ..> MarketData : valued by latest price
+

@@ -1,0 +1,36 @@
+classDiagram
+    direction TB
+
+    class InstrumentType {
+        <<enumeration>>
+        EQUITY
+        BOND
+        ETF
+        FOREX
+        CRYPTO
+    }
+
+    class Instrument {
+        +UUID instrumentId
+        +String ticker
+        +String name
+        +String exchange
+        +String currency
+        +InstrumentType type
+        +String sector
+        +getTicker() String
+    }
+
+    class MarketData {
+        +long marketDataId
+        +UUID instrumentId
+        +LocalDateTime timestamp
+        +BigDecimal openPrice
+        +BigDecimal closePrice
+        +BigDecimal highPrice
+        +BigDecimal lowPrice
+        +getSpread() BigDecimal
+    }
+
+    Instrument "1" -- "0..*" MarketData : price history
+    Instrument ..> InstrumentType

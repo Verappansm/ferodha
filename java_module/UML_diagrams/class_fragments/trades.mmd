@@ -1,0 +1,85 @@
+classDiagram
+    direction TB
+
+    class OrderSide {
+        <<enumeration>>
+        BUY
+        SELL
+    }
+
+    class OrderType {
+        <<enumeration>>
+        MARKET
+        LIMIT
+        STOP_LOSS
+        TAKE_PROFIT
+    }
+
+    class OrderStatus {
+        <<enumeration>>
+        PENDING
+        PARTIALLY_FILLED
+        FILLED
+        CANCELLED
+        REJECTED
+    }
+
+    class TransactionType {
+        <<enumeration>>
+        DEPOSIT
+        WITHDRAWAL
+        BUY_SETTLEMENT
+        SELL_SETTLEMENT
+        DIVIDEND
+    }
+
+    class Order {
+        +UUID orderId
+        +UUID userId
+        +UUID accountId
+        +UUID instrumentId
+        +OrderSide side
+        +OrderType orderType
+        +BigDecimal limitPrice
+        +BigDecimal quantity
+        +OrderStatus status
+        +LocalDateTime placedAt
+        +String idempotencyKey
+        +validateOrder() boolean
+        +markFilled() void
+        +markCancelled() void
+        +markPartiallyFilled() void
+        +markRejected() void
+        +getTotalOrderValue() BigDecimal
+        +isBuyOrder() boolean
+        +isSellOrder() boolean
+    }
+
+    class Trade {
+        +UUID tradeId
+        +UUID orderId
+        +BigDecimal executionPrice
+        +BigDecimal executionQuantity
+        +LocalDateTime executedAt
+        +String idempotencyKey
+        +getTotalValue() BigDecimal
+    }
+
+    class Transaction {
+        +UUID transactionId
+        +UUID accountId
+        +TransactionType transactionType
+        +BigDecimal amount
+        +LocalDateTime transactionDate
+        +Object metadata
+        +String idempotencyKey
+    }
+
+    Order "1" -- "0..*" Trade : generates
+    Trade "1" -- "0..1" Transaction : triggers settlement
+
+    Order ..> OrderSide
+    Order ..> OrderType
+    Order ..> OrderStatus
+    Transaction ..> TransactionType
+
