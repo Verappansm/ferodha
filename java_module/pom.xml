@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.trade</groupId>
+    <artifactId>trade-domain</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <junit.version>5.11.3</junit.version>
+        <maven.surefire.version>3.5.2</maven.surefire.version>
+        <maven.enforcer.version>3.6.1</maven.enforcer.version>
+        <jakarta.validation.version>3.1.0</jakarta.validation.version>
+        <hibernate.validator.version>9.1.0.Final</hibernate.validator.version>
+    </properties>
+
+    <dependencies>
+
+        <!-- The one non-test dependency the domain is allowed: declarations, not behaviour -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <version>${jakarta.validation.version}</version>
+        </dependency>
+
+        <!-- JUnit 5 -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Validator implementation to actually run the annotations in tests -->
+        <dependency>
+            <groupId>org.hibernate.validator</groupId>
+            <artifactId>hibernate-validator</artifactId>
+            <version>${hibernate.validator.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- hibernate-validator's EL dependency, needed at runtime for message interpolation -->
+        <dependency>
+            <groupId>org.glassfish</groupId>
+            <artifactId>jakarta.el</artifactId>
+            <version>4.0.2</version>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <!-- Compile using Java 21 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <release>21</release>
+                </configuration>
+            </plugin>
+
+            <!-- Run JUnit 5 tests -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven.surefire.version}</version>
+            </plugin>
+
+            <!-- Prevent forbidden dependencies -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven.enforcer.version}</version>
+
+                <executions>
+                    <execution>
+                        <id>enforce-banned-dependencies</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <excludes>
+                                        <!-- No Spring, anywhere in the tree -->
+                                        <exclude>org.springframework:*</exclude>
+                                        <exclude>org.springframework.boot:*</exclude>
+                                        <!-- No servlet API -->
+                                        <exclude>jakarta.servlet:*</exclude>
+                                        <exclude>javax.servlet:*</exclude>
+                                        <!-- No JDBC drivers -->
+                                        <exclude>org.postgresql:postgresql</exclude>
+                                        <exclude>com.mysql:mysql-connector-j</exclude>
+                                        <exclude>com.h2database:h2</exclude>
+                                        <!-- No MyBatis -->
+                                        <exclude>org.mybatis:*</exclude>
+                                        <!-- No connection pool -->
+                                        <exclude>com.zaxxer:HikariCP</exclude>
+                                    </excludes>
+
+                                    <searchTransitive>true</searchTransitive>
+                                </bannedDependencies>
+                            </rules>
+
+                            <fail>true</fail>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+</project>
