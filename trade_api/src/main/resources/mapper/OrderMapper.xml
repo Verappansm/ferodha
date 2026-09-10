@@ -1,1 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.OrderMapper">
+
+    <resultMap id="orderRow" type="com.trade.mapper.OrderRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="int"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="executed_price" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="orderHistoryRow" type="com.trade.mapper.OrderHistoryRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="int"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="executed_price" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="created_on" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="existsIdempotencyKey" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM Orders WHERE idempotency_key = #{idempotencyKey})
+    </select>
+
+    <insert id="insertOrder">
+        INSERT INTO Orders (order_id, user_id, account_id, instrument_id, side, order_type,
+                             limit_price, quantity, executed_price, status, idempotency_key)
+        VALUES (#{orderId}, #{userId}, #{accountUuid}, #{instrumentId},
+                #{side}::order_side_enum, 'LIMIT'::order_type_enum,
+                #{price}, #{quantity}, #{executedPrice,jdbcType=DECIMAL},
+                #{status}::order_status_enum, #{idempotencyKey})
+    </insert>
+
+    <insert id="insertTrade">
+        INSERT INTO Trades (order_id, execution_price, execution_quantity)
+        VALUES (#{orderId}, #{executionPrice}, #{executionQuantity})
+    </insert>
+
+    <select id="findByOrderId" resultMap="orderRow">
+        SELECT o.order_id,
+               a.id AS account_id,
+               i.ticker AS symbol,
+               o.side,
+               o.quantity,
+               o.limit_price AS price,
+               o.executed_price,
+               o.status
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.order_id = #{orderId}
+    </select>
+
+    <update id="cancelIfNew">
+        UPDATE Orders
+        SET status = 'CANCELLED'::order_status_enum
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <select id="findHistory" resultMap="orderHistoryRow">
+        SELECT o.order_id,
+               a.id AS account_id,
+               i.ticker AS symbol,
+               o.side,
+               o.quantity,
+               o.limit_price AS price,
+               o.executed_price,
+               o.status,
+               o.idempotency_key,
+               o.placed_at AS created_on
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE a.id = #{accountId}
+        <if test="status != null">
+            AND o.status = #{status}::order_status_enum
+        </if>
+        <if test="from != null">
+            AND o.placed_at &gt;= #{from}
+        </if>
+        <if test="to != null">
+            AND o.placed_at &lt;= #{to}
+        </if>
+        ORDER BY o.placed_at DESC
+    </select>
+
+</mapper>

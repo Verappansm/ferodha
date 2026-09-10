@@ -31,3 +31,13 @@ app:
 logging:
   level:
     com.trade: INFO
+
+# /actuator/health only - not the full actuator surface. Its DataSource and
+# Liquibase indicators are what let the container's HEALTHCHECK (and
+# docker-compose's healthcheck for depends_on) mean "the database is
+# actually reachable and migrated", not just "the JVM started".
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
