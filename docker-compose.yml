@@ -1,0 +1,42 @@
+services:
+
+  trade-api:
+    profiles: ["platform"]
+    build:
+      context: ./trade_api
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Point these at whatever Postgres already exists on this machine -
+      # nothing here starts one. Two common cases:
+      #   - Postgres runs natively on the host: POSTGRES_HOST=host.docker.internal
+      #     (Docker Desktop resolves this to the host machine automatically).
+      #   - Postgres runs as its own container on a Docker network: set
+      #     POSTGRES_HOST to that container's name/service name, and add
+      #     this service to that same network below.
+      # Either way, database/apply.sh must already have been run against it -
+      # this service's own Liquibase changelog only adds Sprint 6's columns
+      # on top of that Sprint 3 schema, it does not create it from nothing.
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 40s
+      retries: 5
+    # If Postgres is a container on a shared network rather than native on
+    # the host, uncomment and point this at that network (created with
+    # `docker network create <name>` or defined in whatever compose file
+    # already runs Postgres):
+    # networks:
+    #   - <existing-postgres-network>
+
+# networks:
+#   <existing-postgres-network>:
+#     external: true
