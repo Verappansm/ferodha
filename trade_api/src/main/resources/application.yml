@@ -32,6 +32,17 @@ logging:
   level:
     com.trade: INFO
 
+# Kafka configuration for ORDER_PLACED publishing
+  kafka:
+    producer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
 # /actuator/health only - not the full actuator surface. Its DataSource and
 # Liquibase indicators are what let the container's HEALTHCHECK (and
 # docker-compose's healthcheck for depends_on) mean "the database is
