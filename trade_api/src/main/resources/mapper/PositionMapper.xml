@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.PositionMapper">
+
+    <resultMap id="positionRow" type="com.trade.mapper.PositionRow">
+        <constructor>
+            <arg column="account_id" javaType="long"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="net_quantity" javaType="long"/>
+            <arg column="average_cost" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+        A position is derived, not stored: net quantity is the sum of every
+        BUY fill minus every SELL fill, and average cost is the quantity-
+        weighted average of the BUY fills alone (a sell never changes the
+        average - see com.trade.domain.Position#applySell), so this holds
+        even though it never replays the order history step by step. Filtered
+        to non-zero quantity, matching PositionResponse's "positions with a
+        net quantity of zero are not returned".
+    -->
+    <sql id="positionAggregate">
+        SELECT a.id                                                            AS account_id,
+               i.ticker                                                        AS symbol,
+               SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END) AS net_quantity,
+               CASE
+                   WHEN SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE 0 END) > 0
+                       THEN SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity * t.execution_price ELSE 0 END)
+                            / SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE 0 END)
+                   ELSE 0
+                   END                                                         AS average_cost
+        FROM Trades t
+                 JOIN Orders o ON o.order_id = t.order_id
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE a.id = #{accountId}
+    </sql>
+
+    <select id="find" resultMap="positionRow">
+        <include refid="positionAggregate"/>
+        AND i.ticker = #{symbol}
+        GROUP BY a.id, i.ticker
+        HAVING SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END) &lt;&gt; 0
+    </select>
+
+    <select id="findAllForAccount" resultMap="positionRow">
+        <include refid="positionAggregate"/>
+        GROUP BY a.id, i.ticker
+        HAVING SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END) &lt;&gt; 0
+        ORDER BY i.ticker
+    </select>
+
+</mapper>
