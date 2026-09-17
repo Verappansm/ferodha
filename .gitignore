@@ -8,3 +8,6 @@ __pycache__/
 .jar
 target
 explain.md
+storeis.txt
+RUN.md
+DOCKER.md

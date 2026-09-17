@@ -1,5 +1,6 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.consumer.PoisonMessageException;
 import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.OrderPlacedPayload;
@@ -68,10 +69,21 @@ public class OrderExecutionService {
     }
 
     public void process(OrderPlacedPayload event) {
-        UUID orderId = OrderIdCodec.parse(event.orderId());
+        UUID orderId;
+        try {
+            orderId = OrderIdCodec.parse(event.orderId());
+        } catch (IllegalArgumentException e) {
+            // Never parses no matter how many times it's retried.
+            throw new PoisonMessageException("Unparseable order id: " + event.orderId(), e);
+        }
+        // An order this old-yet-still-referenced-by-Kafka can't exist means
+        // the message is bad data, not a transient lookup failure - the
+        // insert into Orders always commits before ORDER_PLACED is
+        // published (see trade_api's OrderController), so retrying a
+        // genuinely missing order will never make it appear.
         OrderRow order = orderMapper.findById(orderId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "ORDER_PLACED references unknown order " + event.orderId()));
+                .orElseThrow(() -> new PoisonMessageException(
+                        "ORDER_PLACED references an order id not in Postgres: " + event.orderId()));
 
         // Cheap skip-ahead for an obvious redelivery - NOT the correctness
         // guard. Even without this check, a genuine duplicate still reaches

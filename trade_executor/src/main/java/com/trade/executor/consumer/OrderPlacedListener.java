@@ -43,14 +43,25 @@ public class OrderPlacedListener {
         ack.acknowledge();
     }
 
+    private static final String EXPECTED_EVENT_TYPE = "ORDER_PLACED";
+
     private OrderPlacedPayload parse(String raw) {
+        EventEnvelope<OrderPlacedPayload> envelope;
         try {
             JavaType envelopeType = objectMapper.getTypeFactory()
                     .constructParametricType(EventEnvelope.class, OrderPlacedPayload.class);
-            EventEnvelope<OrderPlacedPayload> envelope = objectMapper.readValue(raw, envelopeType);
-            return envelope.payload();
+            envelope = objectMapper.readValue(raw, envelopeType);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("Malformed ORDER_PLACED message", e);
+            // Malformed JSON will never parse no matter how many times it's
+            // retried - dead-letter on the first attempt.
+            throw new PoisonMessageException("Malformed ORDER_PLACED message", e);
         }
+        if (!EXPECTED_EVENT_TYPE.equals(envelope.eventType())) {
+            throw new PoisonMessageException("Unexpected event type on orders topic: " + envelope.eventType());
+        }
+        if (envelope.payload() == null || envelope.payload().orderId() == null) {
+            throw new PoisonMessageException("ORDER_PLACED message is missing an order id");
+        }
+        return envelope.payload();
     }
 }

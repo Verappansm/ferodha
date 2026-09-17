@@ -46,7 +46,7 @@ class AccountServiceTest {
     void returnsDetailsForAnAccessibleAccount() throws Exception {
         givenAccount(AccountStatus.ACTIVE);
         when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(
-                new PositionRow(1L, "AAPL", 20, new BigDecimal("150.00"))));
+                new PositionRow(1L, "AAPL", 20L, new BigDecimal("150.00"))));
         when(orderMapper.findHistory(1L, null, null, null)).thenReturn(List.of(
                 new OrderHistoryRow(UUID.randomUUID(), 1L, "AAPL", "BUY", 20,
                         new BigDecimal("150.00"), new BigDecimal("150.00"), "FILLED", "KEY-1", OffsetDateTime.now())));

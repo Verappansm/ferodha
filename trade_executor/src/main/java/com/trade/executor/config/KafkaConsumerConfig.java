@@ -1,5 +1,6 @@
 package com.trade.executor.config;
 
+import com.trade.executor.consumer.PoisonMessageException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -39,7 +40,18 @@ public class KafkaConsumerConfig {
         backOff.setMultiplier(2.0);
         backOff.setMaxInterval(5_000L);
 
-        factory.setCommonErrorHandler(new DefaultErrorHandler(recoverer, backOff));
+        DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);
+        // A message that will never succeed (malformed JSON, a missing or
+        // unparseable order id, an order id not in Postgres, an unexpected
+        // event type) is dead-lettered on this, the first attempt - it
+        // never burns the retry budget a genuinely transient failure (a
+        // briefly unreachable broker, a lost DB connection, an exhausted
+        // optimistic-lock budget) gets. No poison message is retried
+        // indefinitely, and none of them block the partition for longer
+        // than one failed attempt.
+        errorHandler.addNotRetryableExceptions(PoisonMessageException.class);
+
+        factory.setCommonErrorHandler(errorHandler);
         return factory;
     }
 }

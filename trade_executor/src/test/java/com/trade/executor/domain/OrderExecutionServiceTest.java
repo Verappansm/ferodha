@@ -1,5 +1,6 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.consumer.PoisonMessageException;
 import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.OrderPlacedPayload;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -149,6 +151,23 @@ class OrderExecutionServiceTest {
 
         verify(tradeEventPublisher, never()).publishFilled(any(), any(), any());
         verify(tradeEventPublisher, never()).publishRejected(any(), any());
+    }
+
+    @Test
+    @DisplayName("Story 7: an order id not in Postgres is poison, not retried as transient")
+    void unknownOrderIdIsPoison() {
+        when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.empty());
+
+        assertThrows(PoisonMessageException.class, () -> orderExecutionService.process(placedEvent()));
+    }
+
+    @Test
+    @DisplayName("Story 7: an unparseable order id is poison")
+    void unparseableOrderIdIsPoison() {
+        OrderPlacedPayload badEvent = new OrderPlacedPayload("not-a-valid-order-id", 1L, "AAPL",
+                OrderSide.BUY, 10, new BigDecimal("10.00"), "KEY-1", Instant.now());
+
+        assertThrows(PoisonMessageException.class, () -> orderExecutionService.process(badEvent));
     }
 
     private void givenOrder(OrderSide side, BigDecimal limitPrice, int quantity) {
