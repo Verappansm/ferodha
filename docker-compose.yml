@@ -24,6 +24,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      # Needed to publish ORDER_PLACED to the orders topic - see
+      # OrderController. Point this at wherever kafka_pipeline's Kafka
+      # container is reachable from this container (e.g. the Kafka
+      # container's advertised listener, or its service name if it's on a
+      # shared Docker network with this stack).
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
       interval: 10s
@@ -34,6 +40,39 @@ services:
     # the host, uncomment and point this at that network (created with
     # `docker network create <name>` or defined in whatever compose file
     # already runs Postgres):
+    # networks:
+    #   - <existing-postgres-network>
+
+  trade-executor:
+    profiles: ["platform"]
+    build:
+      context: ./trade_executor
+      dockerfile: Dockerfile
+    environment:
+      # Same Postgres as trade-api - see that service's own comment above.
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS}
+      FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
+      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
+      # Not used by this consume-driven executor today - reserved for the
+      # separate market-data poller.
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 40s
+      retries: 5
+    # trade_executor has no Liquibase of its own - trade-api's changelog is
+    # what adds the Sprint 7 settlement columns this service writes to, so
+    # it must never start before trade-api's healthcheck passes.
+    depends_on:
+      trade-api:
+        condition: service_healthy
     # networks:
     #   - <existing-postgres-network>
 

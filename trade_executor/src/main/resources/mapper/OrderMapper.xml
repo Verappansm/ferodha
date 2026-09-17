@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.OrderMapper">
+
+    <resultMap id="orderRow" type="com.trade.executor.mapper.OrderRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="instrument_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="int"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="orderRow">
+        SELECT o.order_id,
+               a.id AS account_id,
+               o.instrument_id,
+               i.ticker AS symbol,
+               o.side,
+               o.quantity,
+               o.limit_price AS price,
+               o.status
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.order_id = #{orderId}
+    </select>
+
+    <update id="fillOrderIfNew">
+        UPDATE Orders
+        SET status = 'FILLED'::order_status_enum,
+            executed_price = #{executedPrice},
+            fee_amount = #{feeAmount},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <update id="rejectOrderIfNew">
+        UPDATE Orders
+        SET status = 'REJECTED'::order_status_enum,
+            rejection_reason = #{rejectionReason},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <insert id="insertTrade">
+        INSERT INTO Trades (order_id, execution_price, execution_quantity)
+        VALUES (#{orderId}, #{executionPrice}, #{executionQuantity})
+    </insert>
+
+</mapper>

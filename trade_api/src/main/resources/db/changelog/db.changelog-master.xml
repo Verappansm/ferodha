@@ -16,5 +16,6 @@
     <include file="db/changelog/001-account-status-and-locking.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/002-order-status-alignment.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/003-instrument-tradable-flag.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/004-executor-settlement-columns.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
