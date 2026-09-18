@@ -16,6 +16,17 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.xml
 
+  # Kafka configuration for ORDER_PLACED publishing
+  kafka:
+    producer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
   configuration:
@@ -31,17 +42,6 @@ app:
 logging:
   level:
     com.trade: INFO
-
-# Kafka configuration for ORDER_PLACED publishing
-  kafka:
-    producer:
-      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-      acks: all
-      enable-idempotence: true
-      retries: 2147483647
-      max-in-flight-requests-per-connection: 5
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
 # /actuator/health only - not the full actuator surface. Its DataSource and
 # Liquibase indicators are what let the container's HEALTHCHECK (and

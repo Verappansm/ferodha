@@ -4,7 +4,7 @@ services:
     image: postgres:16-alpine
     container_name: trade-postgres
     ports:
-      - "5432:5432"
+      - "8090:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
@@ -32,7 +32,7 @@ services:
     # trade-net never go through the host port mapping, they use the
     # internal listener (kafka:29092) directly over the compose network.
     ports:
-      - "9092:9092"
+      - "8092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -66,7 +66,7 @@ services:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
     ports:
-      - "8081:8080"
+      - "8091:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: trade-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
@@ -81,7 +81,7 @@ services:
       context: ./trade_api
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8094:8080"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -114,7 +114,7 @@ services:
     # a working config unprompted; now that everything is being wired
     # together on one box with explicit port choices, applying it.
     ports:
-      - "8082:8082"
+      - "8093:8082"
     environment:
       SERVER_PORT: 8082
       POSTGRES_HOST: postgres
