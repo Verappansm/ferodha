@@ -1,5 +1,6 @@
 package com.trade.characterisation;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import io.restassured.RestAssured;
@@ -7,6 +8,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Disabled("Requires a live stack, not in the unit build")
 class OrderPlacementCharacterisationTest {
 
     @Test
