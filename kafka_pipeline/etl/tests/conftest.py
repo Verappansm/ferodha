@@ -15,7 +15,10 @@ def now():
 
 @pytest.fixture
 def con():
-    
+    """A fresh in-memory DuckDB with the Sprint 7 tables migrated in, and
+    one instrument + one account already loaded so tests can focus on
+    fact_trades behaviour.
+    """
     c = duckdb.connect(":memory:")
     db.run_migrations(c)
     yield c
@@ -43,6 +46,7 @@ def loaded_dims(con, now):
         "instrument_key_by_symbol": dimensions.get_instrument_key_map(con),
         "account_key_by_id": dimensions.get_current_account_key_map(con),
         "id_to_symbol": {instrument_id: "AAPL"},
+        "valid_date_keys": dimensions.get_valid_date_keys(con),
     }
 
 

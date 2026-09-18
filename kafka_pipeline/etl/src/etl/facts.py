@@ -9,8 +9,8 @@ from typing import Any
 import duckdb
 
 from etl.config import PIPELINE_NAME
-from etl.dimensions import get_current_account_key_map, get_instrument_key_map
-from etl.transform import FactRow, RowRejected, build_fact_row
+from etl.dimensions import get_current_account_key_map, get_instrument_key_map, get_valid_date_keys
+from etl.transform import FactRow, RowRejected, build_fact_row, resolve_date_key
 
 
 @dataclass(frozen=True)
@@ -61,10 +61,20 @@ def resolve_and_transform(
     instrument_id_to_symbol: dict[str, str],
     instrument_key_by_symbol: dict[str, int],
     account_key_by_id: dict[str, int],
+    valid_date_keys: set[int],
     batch_id: str,
     now: datetime,
 ) -> tuple[list[FactRow], list[dict]]:
-    
+    """Resolves dimension keys and validates each row. No I/O -- everything
+    it needs is passed in, which is what makes the four required unit test
+    paths runnable without a real database.
+
+    All three dimension keys (account, instrument, date) get the same
+    referential-integrity treatment: resolved and checked against what's
+    actually loaded *before* the row reaches build_fact_row, so an
+    unresolved key of any of the three is dead-lettered per-row instead of
+    failing the whole batch's transaction at a foreign key constraint.
+    """
     good: list[FactRow] = []
     dead_letters: list[dict] = []
 
@@ -83,8 +93,18 @@ def resolve_and_transform(
             dead_letters.append(_dead_letter_record(batch_id, order, "UNRESOLVED_INSTRUMENT_KEY", now))
             continue
 
+        placed_at = order.get("placed_at")
+        if placed_at is None:
+            dead_letters.append(_dead_letter_record(batch_id, order, "MISSING_PLACED_AT", now))
+            continue
+
+        date_key = resolve_date_key(placed_at)
+        if date_key not in valid_date_keys:
+            dead_letters.append(_dead_letter_record(batch_id, order, "UNRESOLVED_DATE_KEY", now))
+            continue
+
         try:
-            fact = build_fact_row(order, account_key, instrument_key)
+            fact = build_fact_row(order, account_key, instrument_key, date_key)
         except RowRejected as exc:
             dead_letters.append(_dead_letter_record(batch_id, order, exc.reason, now))
             continue
@@ -100,7 +120,11 @@ def load_facts(
     dead_letters: list[dict],
     now: datetime,
 ) -> None:
-   
+    """Idempotent merge: delete-then-insert on source_order_id, inside one
+    transaction with the dead-letter writes. Re-running the same batch is a
+    no-op for fact_trades because the delete removes the prior version of
+    each row before the insert puts it back identically.
+    """
     con.execute("BEGIN TRANSACTION")
     try:
         if good_rows:
@@ -151,7 +175,9 @@ def run_incremental_load(
     batch_id: str,
     now: datetime,
 ) -> LoadResult:
-    
+    """Wires extraction (Postgres) to the pure transform to the DuckDB load.
+    This is the only function that talks to both databases at once.
+    """
     from etl import postgres  # local import keeps transform.py DB-free
 
     watermark = get_watermark(duck_con)
@@ -163,9 +189,11 @@ def run_incremental_load(
     instrument_id_to_symbol = {str(i["instrument_id"]): i["ticker"] for i in instruments}
     instrument_key_by_symbol = get_instrument_key_map(duck_con)
     account_key_by_id = get_current_account_key_map(duck_con)
+    valid_date_keys = get_valid_date_keys(duck_con)
 
     good_rows, dead_letters = resolve_and_transform(
-        orders, instrument_id_to_symbol, instrument_key_by_symbol, account_key_by_id, batch_id, now,
+        orders, instrument_id_to_symbol, instrument_key_by_symbol, account_key_by_id,
+        valid_date_keys, batch_id, now,
     )
 
     load_facts(duck_con, good_rows, dead_letters, now)
