@@ -51,10 +51,20 @@ class OrderExecutorIT extends ExecutorMapperIntegrationTestSupport {
         @Bean
         @Primary
         QuoteSource fakeQuoteSource() {
-            return symbol -> switch (symbol) {
-                case "FILL_ME" -> Optional.of(new Quote("FILL_ME", new BigDecimal("99.00"), new BigDecimal("100.00"), "USD"));
-                case "REJECT_ME" -> Optional.of(new Quote("REJECT_ME", new BigDecimal("200.00"), new BigDecimal("210.00"), "USD"));
-                default -> Optional.empty(); // NO_PRICE, and anything unrecognized
+            return new QuoteSource() {
+                @Override
+                public Optional<Quote> fetchQuote(String symbol) {
+                    return switch (symbol) {
+                        case "FILL_ME" -> Optional.of(new Quote("FILL_ME", new BigDecimal("99.00"), new BigDecimal("100.00"), "USD"));
+                        case "REJECT_ME" -> Optional.of(new Quote("REJECT_ME", new BigDecimal("200.00"), new BigDecimal("210.00"), "USD"));
+                        default -> Optional.empty(); // NO_PRICE, and anything unrecognized
+                    };
+                }
+
+                @Override
+                public java.util.Map<String, Quote> fetchQuotes(java.util.List<String> symbols) {
+                    return java.util.Map.of();
+                }
             };
         }
     }

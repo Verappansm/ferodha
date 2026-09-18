@@ -8,8 +8,16 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import org.springframework.web.util.UriComponentsBuilder;
+
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -92,5 +100,37 @@ class FauxnanceQuoteClientTest {
 
         assertTrue(quote.isEmpty());
         server.verify();
+    }
+
+    @Test
+    @DisplayName("a batch of up to 25 symbols is fetched in one request")
+    void batchOfUpTo25SymbolsIsFetchedInOneRequest() {
+        RestClient.Builder builder = RestClient.builder().baseUrl("http://fauxnance.test");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        FauxnanceQuoteClient client = new FauxnanceQuoteClient(builder.build(), 3, 1);
+
+        List<String> symbols = IntStream.rangeClosed(1, 25).mapToObj(i -> "SYM" + i).toList();
+        Set<String> expectedSymbols = new HashSet<>(symbols);
+
+        String batchJson = """
+                {"data":{"quotes":[
+                    {"symbol":"SYM1","quote":{"symbol":"SYM1","price":10.00,"bid":9.90,"ask":10.10,"currency":"USD"}},
+                    {"symbol":"SYM2","quote":{"symbol":"SYM2","price":20.00,"bid":19.90,"ask":20.10,"currency":"USD"}}
+                ]}}
+                """;
+
+        server.expect(request -> {
+            String rawSymbols = UriComponentsBuilder.fromUri(request.getURI()).build().getQueryParams().getFirst("symbols");
+            String decoded = java.net.URLDecoder.decode(rawSymbols, java.nio.charset.StandardCharsets.UTF_8);
+            Set<String> actualSymbols = new HashSet<>(Arrays.asList(decoded.split(",")));
+            org.junit.jupiter.api.Assertions.assertEquals(expectedSymbols, actualSymbols);
+        }).andExpect(method(HttpMethod.GET)).andRespond(withSuccess(batchJson, MediaType.APPLICATION_JSON));
+
+        Map<String, Quote> quotes = client.fetchQuotes(symbols);
+
+        assertEquals(2, quotes.size());
+        assertTrue(quotes.containsKey("SYM1"));
+        assertTrue(quotes.containsKey("SYM2"));
+        server.verify(); // exactly one HTTP call was made for all 25 symbols
     }
 }

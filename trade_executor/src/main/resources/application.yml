@@ -32,13 +32,14 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
-# orders/trade-events/orders.DLT already exist - see
+# orders/trade-events/market-data/orders.DLT already exist - see
 # kafka_pipeline/create_topics.sh and create_dlt_topics.sh.
 kafka:
   topics:
     orders: ${KAFKA_TOPIC_ORDERS:orders}
     trade-events: ${KAFKA_TOPIC_TRADE_EVENTS:trade-events}
     orders-dlt: ${KAFKA_TOPIC_ORDERS_DLT:orders.DLT}
+    market-data: ${KAFKA_TOPIC_MARKET_DATA:market-data}
 
 # FAUXNANCE_API_URL/FAUXNANCE_API_KEY are read from the environment only -
 # never given a real value in any committed file, same convention as
@@ -58,6 +59,12 @@ executor:
     max-attempts: ${EXECUTOR_BALANCE_LOCK_MAX_ATTEMPTS:3}
   publish:
     timeout-ms: ${EXECUTOR_PUBLISH_TIMEOUT_MS:5000}
+  market-data:
+    # Same env var the sprint brief names for the poller specifically -
+    # not reused from anything order-placement related.
+    poll-interval-seconds: ${POLL_INTERVAL_SECONDS:60}
+    daily-quota: ${EXECUTOR_MARKET_DATA_DAILY_QUOTA:2000}
+    batch-size: ${EXECUTOR_MARKET_DATA_BATCH_SIZE:25}
 
 logging:
   level:

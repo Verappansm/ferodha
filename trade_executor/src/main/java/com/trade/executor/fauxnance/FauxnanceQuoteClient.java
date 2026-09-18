@@ -1,5 +1,7 @@
 package com.trade.executor.fauxnance;
 
+import com.trade.executor.fauxnance.dto.FauxnanceBatchQuoteItem;
+import com.trade.executor.fauxnance.dto.FauxnanceBatchQuotesEnvelope;
 import com.trade.executor.fauxnance.dto.FauxnanceQuoteDetail;
 import com.trade.executor.fauxnance.dto.FauxnanceQuoteEnvelope;
 import org.slf4j.Logger;
@@ -11,6 +13,9 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 // Design question 4: treats a Fauxnance outage as a business outcome, not an
@@ -68,6 +73,40 @@ public class FauxnanceQuoteClient implements QuoteSource {
 
         log.error("No price available for {} after {} attempts", symbol, maxAttempts);
         return Optional.empty();
+    }
+
+    @Override
+    public Map<String, Quote> fetchQuotes(List<String> symbols) {
+        if (symbols.isEmpty()) {
+            return Map.of();
+        }
+        // One HTTP call regardless of how many symbols (up to 25) are in
+        // it - that's the whole quota-saving point of batching. No internal
+        // retry loop here: this isn't on the order-fill path, so a failed
+        // poll just tries again next scheduled tick rather than spending a
+        // retry budget on data that will be re-polled shortly anyway.
+        try {
+            String joined = String.join(",", symbols);
+            FauxnanceBatchQuotesEnvelope envelope = restClient.get()
+                    .uri("/quotes?symbols={symbols}", joined)
+                    .retrieve()
+                    .body(FauxnanceBatchQuotesEnvelope.class);
+
+            if (envelope == null || envelope.data() == null || envelope.data().quotes() == null) {
+                return Map.of();
+            }
+            Map<String, Quote> result = new LinkedHashMap<>();
+            for (FauxnanceBatchQuoteItem item : envelope.data().quotes()) {
+                if (item.quote() != null) {
+                    FauxnanceQuoteDetail detail = item.quote();
+                    result.put(item.symbol(), new Quote(detail.symbol(), detail.bid(), detail.ask(), detail.currency()));
+                }
+            }
+            return result;
+        } catch (RestClientException e) {
+            log.warn("Batch quote fetch failed for {} symbols: {}", symbols.size(), e.getMessage());
+            return Map.of();
+        }
     }
 
     private Quote fetchOnce(String symbol) {
