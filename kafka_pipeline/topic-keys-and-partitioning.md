@@ -1,4 +1,4 @@
-# ADR 0001: Topic Keys and Partition Counts
+# Topic Keys and Partition Counts
 
 **Status:** Confirmed against `kafka_contract.md`
 **Owners:** Whole Sprint 7 team — per the contract, any member must be able to defend
