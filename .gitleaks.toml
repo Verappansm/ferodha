@@ -1,0 +1,20 @@
+title = "chennai-capstone-SE4-team2 gitleaks config"
+
+[extend]
+useDefault = true
+
+# Known non-secret placeholder/test values. This repo mints its own JWT test
+# tokens (no auth service yet - see trade_api's JwtTestFixture and
+# contracts/auth-api.yaml), and docker-compose.yml ships a documented
+# dev-only default for JWT_SECRET. Both are intentionally public strings,
+# not leaked credentials.
+[allowlist]
+description = "Known non-secret placeholder/test values"
+regexes = [
+  '''dev-only-jwt-signing-secret-please-change-later''',
+  '''sprint-06-test-signing-secret-please-rotate''',
+  '''a-completely-different-secret-value''',
+]
+paths = [
+  '''trade_api/src/test/java/com/trade/testsupport/JwtTestFixture\.java''',
+]

@@ -21,6 +21,7 @@ ENV_FILE="$SCRIPT_DIR/../.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     set -a
+    # shellcheck disable=SC1090 # path is only known at runtime, by design
     source "$ENV_FILE"
     set +a
 fi

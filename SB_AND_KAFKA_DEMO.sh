@@ -25,6 +25,7 @@ ACCOUNT_ID=1
 # ------------------------------------------------------------
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     set -a
+    # shellcheck disable=SC1091 # path is only known at runtime, by design
     source "$SCRIPT_DIR/.env"
     set +a
 fi
@@ -70,7 +71,7 @@ print_response() {
 }
 
 pause() {
-    [[ "${NONINTERACTIVE:-0}" == "1" ]] || read -p "Press Enter to continue..."
+    [[ "${NONINTERACTIVE:-0}" == "1" ]] || read -r -p "Press Enter to continue..."
 }
 
 # ------------------------------------------------------------
@@ -148,8 +149,7 @@ setup_stack() {
     fi
 
     print_subheader "docker compose up -d --build"
-    docker compose up -d --build
-    if [[ $? -ne 0 ]]; then
+    if ! docker compose up -d --build; then
         echo -e "${RED}✗ docker compose up failed - see output above${NC}"
         exit 1
     fi
@@ -294,7 +294,6 @@ happy_path_buy_order() {
     print_response "$RESPONSE"
 
     ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
-    LAST_ORDER_ID="$ORDER_ID"
     if [[ -n "$ORDER_ID" && "$ORDER_ID" != "null" ]]; then
         echo -e "${GREEN}✓ Order placed, answered NEW: $ORDER_ID${NC}"
     else

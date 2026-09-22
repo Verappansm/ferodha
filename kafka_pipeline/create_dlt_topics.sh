@@ -9,16 +9,14 @@ create_dlt_topic() {
 
     echo "Creating topic: $TOPIC"
 
-    docker exec "$CONTAINER_NAME" \
+    if docker exec "$CONTAINER_NAME" \
         /opt/kafka/bin/kafka-topics.sh \
         --bootstrap-server localhost:9092 \
         --create \
         --if-not-exists \
         --topic "$TOPIC" \
         --partitions 1 \
-        --replication-factor 1
-
-    if [ $? -eq 0 ]; then
+        --replication-factor 1; then
         echo "SUCCESS: $TOPIC created/exists"
     else
         echo "ERROR: Failed to create topic: $TOPIC"

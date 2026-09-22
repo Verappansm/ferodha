@@ -45,8 +45,8 @@ Tasks:
  and `SB_AND_KAFKA_DEMO.sh`.
 
  Document how to install it (`pip install pre-commit && pre-commit install`)
- in RUN.md so a fresh clone picks it up on the first commit, not silently
- never.
+ in the repo's own README.md, not a gitignored local note, so a fresh clone
+ actually picks it up on the first commit rather than silently never.
 
  Notes:
 

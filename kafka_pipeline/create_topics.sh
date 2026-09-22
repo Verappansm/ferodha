@@ -11,7 +11,7 @@ create_topic() {
 
     echo "Creating topic: $TOPIC"
 
-    docker exec "$CONTAINER_NAME" \
+    if docker exec "$CONTAINER_NAME" \
         /opt/kafka/bin/kafka-topics.sh \
         --bootstrap-server localhost:9092 \
         --create \
@@ -19,9 +19,7 @@ create_topic() {
         --topic "$TOPIC" \
         --partitions "$PARTITIONS" \
         --replication-factor 1 \
-        --config retention.ms="$RETENTION"
-
-    if [ $? -eq 0 ]; then
+        --config retention.ms="$RETENTION"; then
         echo "SUCCESS: $TOPIC created/exists"
     else
         echo "ERROR: Failed to create topic: $TOPIC"
