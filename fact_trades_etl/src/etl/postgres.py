@@ -25,7 +25,7 @@ def fetch_instruments(conn) -> list[dict[str, Any]]:
 
 
 def fetch_accounts(conn) -> list[dict[str, Any]]:
-   
+
     sql = """
         SELECT a.account_id, a.currency, a.cash_balance, a.created_at,
                u.name AS holder_name, u.status AS holder_status

@@ -80,7 +80,7 @@ pause() {
 # trade_api's own JwtTestFixture does (sub, accountId, roles, iss, iat, exp),
 # signed HS256 with whatever JWT_SECRET the running stack actually uses.
 # Pure-stdlib python3, so no extra dependency beyond what RUN.md already
-# requires for kafka_pipeline/etl.
+# requires for fact_trades_etl.
 # ------------------------------------------------------------
 mint_jwt() {
     local account_id="$1"

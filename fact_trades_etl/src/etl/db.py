@@ -14,7 +14,7 @@ def connect(cfg: DuckDBConfig) -> duckdb.DuckDBPyConnection:
 
 
 def run_migrations(con: duckdb.DuckDBPyConnection) -> None:
-    
+
     for path in sorted(_MIGRATIONS_DIR.glob("*.sql")):
         sql = path.read_text()
         con.execute(sql)

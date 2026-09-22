@@ -3,10 +3,10 @@
 ## Setup
 
 ```bash
-cd sprint-07-event-backbone/etl
+cd fact_trades_etl
 python3 -m venv .venv
-.venv/bin/python -m pip install -e 'etl[dev]'
-.venv/bin/python -m pytest etl
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python -m pytest tests
 ```
 
 ## Environment
@@ -51,4 +51,3 @@ currently produced: `UNRESOLVED_ACCOUNT_KEY`, `UNRESOLVED_INSTRUMENT_KEY`,
 `UNRESOLVED_DATE_KEY`, `INVALID_SIDE:*`, `INVALID_STATUS:*`, `MISSING_QUANTITY`,
 `UNPARSEABLE_QUANTITY`, `NON_POSITIVE_QUANTITY`, `MISSING_PRICE`,
 `UNPARSEABLE_PRICE`, `NON_POSITIVE_PRICE`, `MISSING_PLACED_AT`.
-
