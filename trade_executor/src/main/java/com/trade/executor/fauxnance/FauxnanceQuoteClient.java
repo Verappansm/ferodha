@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -26,7 +27,14 @@ import java.util.Optional;
 // exhaustion - returns Optional.empty() rather than throwing, so the caller
 // resolves the order to PRICE_UNAVAILABLE instead of it ever propagating
 // into the Kafka listener's retry/dead-letter handling.
+//
+// @Profile("!market-sim"): the spec-exact story this repo was built against
+// - real Fauxnance, direct, no simulated market. TradesGeneratorQuoteSource
+// is the other QuoteSource implementation, active only under market-sim;
+// exactly one of the two is ever a candidate bean, so nothing downstream
+// (OrderExecutionService, MarketDataPoller) needs an @Qualifier to pick.
 @Component
+@Profile("!market-sim")
 public class FauxnanceQuoteClient implements QuoteSource {
 
     private static final Logger log = LoggerFactory.getLogger(FauxnanceQuoteClient.class);

@@ -8,6 +8,7 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 
@@ -26,7 +27,13 @@ import java.util.Map;
 //
 // The poll schedule has nothing to do with order placement - this class
 // never touches Orders, Accounts, or the orders/trade-events topics.
+//
+// @Profile("!market-sim"): under the simulated-market profile,
+// trades_generator is the one process that holds FAUXNANCE_API_KEY and
+// calls Fauxnance - two independent pollers spending the same quota is
+// exactly the failure mode this repo's own poller design warned about.
 @Component
+@Profile("!market-sim")
 public class MarketDataPoller {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataPoller.class);

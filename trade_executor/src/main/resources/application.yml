@@ -48,6 +48,10 @@ fauxnance:
   base-url: ${FAUXNANCE_API_URL}
   api-key: ${FAUXNANCE_API_KEY}
 
+# Only consulted under the market-sim profile - see TradesGeneratorQuoteSource.
+trades-generator:
+  base-url: ${TRADES_GENERATOR_URL:http://trades-generator:8083}
+
 executor:
   fee:
     rate: ${EXECUTOR_FEE_RATE:0.001}
