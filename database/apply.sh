@@ -11,8 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ------------------------------------------------------------
 # Load repository .env
 # ------------------------------------------------------------
+# .env lives at the repo root (RUN.md: `cp .env.example .env` from the root),
+# not inside database/ - this used to point at $SCRIPT_DIR/.env, which never
+# existed, so the real POSTGRES_*/TARGET_DATABASE values silently never
+# loaded and this script only ever worked if the shell already had them
+# exported some other way.
 
-ENV_FILE="$SCRIPT_DIR/.env"
+ENV_FILE="$SCRIPT_DIR/../.env"
 
 if [[ -f "$ENV_FILE" ]]; then
     set -a
