@@ -43,6 +43,17 @@ public class TradeEventPublisher {
         send(order.accountId(), EventEnvelope.of("ORDER_FILLED", "trade-executor", payload));
     }
 
+    // Only reached when executor.matching.enabled is true and an order
+    // matched some, but not all, of its quantity against the resting book.
+    // Same payload shape as ORDER_FILLED - a different eventType is what
+    // tells a consumer this order is still open for the remainder.
+    public void publishPartiallyFilled(OrderRow order, BigDecimal executedPrice, BigDecimal feeAmount) {
+        OrderFilledPayload payload = new OrderFilledPayload(
+                OrderIdCodec.format(order.orderId()), order.accountId(), order.symbol(),
+                executedPrice, feeAmount, Instant.now());
+        send(order.accountId(), EventEnvelope.of("ORDER_PARTIALLY_FILLED", "trade-executor", payload));
+    }
+
     public void publishRejected(OrderRow order, RejectionReason reason) {
         OrderRejectedPayload payload = new OrderRejectedPayload(
                 OrderIdCodec.format(order.orderId()), order.accountId(), order.symbol(),

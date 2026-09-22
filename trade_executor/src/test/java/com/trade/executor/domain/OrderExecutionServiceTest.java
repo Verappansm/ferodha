@@ -58,10 +58,17 @@ class OrderExecutionServiceTest {
 
     private OrderExecutionService orderExecutionService;
 
+    private final OrderBookMatcher orderBookMatcher = mock(OrderBookMatcher.class);
+
     @BeforeEach
     void setUp() {
+        // matchingEnabled=false: every test in this file pins the existing,
+        // spec-exact single-quote fill-or-reject path. OrderBookMatcherTest
+        // and OrderExecutionServiceMatchingTest cover the matching-enabled
+        // branch separately.
         orderExecutionService = new OrderExecutionService(orderMapper, accountMapper, instrumentMapper,
-                positionMapper, quoteSource, settlementService, tradeEventPublisher, currencyConverter, feeCalculator);
+                positionMapper, quoteSource, settlementService, tradeEventPublisher, currencyConverter,
+                feeCalculator, orderBookMatcher, false);
     }
 
     @Test
@@ -172,7 +179,8 @@ class OrderExecutionServiceTest {
 
     private void givenOrder(OrderSide side, BigDecimal limitPrice, int quantity) {
         when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.of(
-                new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", side.name(), quantity, limitPrice, "NEW")));
+                new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", side.name(), quantity, limitPrice, "NEW",
+                        0, java.time.OffsetDateTime.now())));
     }
 
     private void givenTradableInstrument(String currency) {

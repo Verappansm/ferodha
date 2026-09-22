@@ -24,6 +24,7 @@ import com.trade.executor.settlement.SettlementService;
 import com.trade.executor.util.MoneyRounding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -51,12 +52,15 @@ public class OrderExecutionService {
     private final TradeEventPublisher tradeEventPublisher;
     private final CurrencyConverter currencyConverter;
     private final FeeCalculator feeCalculator;
+    private final OrderBookMatcher orderBookMatcher;
+    private final boolean matchingEnabled;
 
     public OrderExecutionService(OrderMapper orderMapper, AccountMapper accountMapper,
                                   InstrumentMapper instrumentMapper, PositionMapper positionMapper,
                                   QuoteSource quoteSource, SettlementService settlementService,
                                   TradeEventPublisher tradeEventPublisher, CurrencyConverter currencyConverter,
-                                  FeeCalculator feeCalculator) {
+                                  FeeCalculator feeCalculator, OrderBookMatcher orderBookMatcher,
+                                  @Value("${executor.matching.enabled:false}") boolean matchingEnabled) {
         this.orderMapper = orderMapper;
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
@@ -66,6 +70,8 @@ public class OrderExecutionService {
         this.tradeEventPublisher = tradeEventPublisher;
         this.currencyConverter = currencyConverter;
         this.feeCalculator = feeCalculator;
+        this.orderBookMatcher = orderBookMatcher;
+        this.matchingEnabled = matchingEnabled;
     }
 
     public void process(OrderPlacedPayload event) {
@@ -105,6 +111,11 @@ public class OrderExecutionService {
                 .or(() -> ExecutionRuleCheck.checkAccountActive(account));
         if (preCheck.isPresent()) {
             settleAndPublishReject(order, preCheck.get());
+            return;
+        }
+
+        if (matchingEnabled) {
+            processWithMatching(order, account);
             return;
         }
 
@@ -159,5 +170,35 @@ public class OrderExecutionService {
             return;
         }
         tradeEventPublisher.publishRejected(order, reason);
+    }
+
+    // Only reached when executor.matching.enabled is true. Matches against
+    // the resting book first; whatever crosses is settled and published
+    // (FILLED or PARTIALLY_FILLED). Whatever doesn't cross simply rests -
+    // no quote fetch, no FillRule, no rejection path here. A limit order
+    // that finds no counterparty is exactly what a real exchange's order
+    // book does with one too: nothing happens until something crosses it.
+    private void processWithMatching(OrderRow order, AccountRow account) {
+        OrderBookMatcher.Result result = orderBookMatcher.match(order, account);
+        if (!result.matchedAnything()) {
+            log.info("Order {} found no crossing liquidity - resting at {}", order.orderId(), order.status());
+            return;
+        }
+
+        int totalFilled = order.filledQuantity() + result.totalMatched();
+        String newStatus = totalFilled >= order.quantity() ? "FILLED" : "PARTIALLY_FILLED";
+
+        SettlementOutcome outcome = settlementService.finalizeIncomingOrder(
+                order, result.totalMatched(), result.lastExecutionPrice(), newStatus);
+        if (outcome.result() == SettlementOutcome.Result.ALREADY_PROCESSED) {
+            log.info("Order {} was already settled by a prior delivery - not republishing", order.orderId());
+            return;
+        }
+
+        if ("FILLED".equals(newStatus)) {
+            tradeEventPublisher.publishFilled(order, result.lastExecutionPrice(), BigDecimal.ZERO);
+        } else {
+            tradeEventPublisher.publishPartiallyFilled(order, result.lastExecutionPrice(), BigDecimal.ZERO);
+        }
     }
 }

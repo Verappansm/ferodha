@@ -12,23 +12,76 @@
             <arg column="quantity" javaType="int"/>
             <arg column="price" javaType="java.math.BigDecimal"/>
             <arg column="status" javaType="java.lang.String"/>
+            <arg column="filled_quantity" javaType="int"/>
+            <arg column="placed_at" javaType="java.time.OffsetDateTime"/>
         </constructor>
     </resultMap>
 
+    <sql id="orderRowColumns">
+        o.order_id,
+        a.id AS account_id,
+        o.instrument_id,
+        i.ticker AS symbol,
+        o.side,
+        o.quantity,
+        o.limit_price AS price,
+        o.status,
+        o.filled_quantity,
+        o.placed_at
+    </sql>
+
     <select id="findById" resultMap="orderRow">
-        SELECT o.order_id,
-               a.id AS account_id,
-               o.instrument_id,
-               i.ticker AS symbol,
-               o.side,
-               o.quantity,
-               o.limit_price AS price,
-               o.status
+        SELECT
+        <include refid="orderRowColumns"/>
         FROM Orders o
                  JOIN Accounts a ON a.account_id = o.account_id
                  JOIN Instruments i ON i.instrument_id = o.instrument_id
         WHERE o.order_id = #{orderId}
     </select>
+
+    <select id="findRestingOpposite" resultMap="orderRow">
+        SELECT
+        <include refid="orderRowColumns"/>
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.instrument_id = #{instrumentId}
+          AND o.side = #{side}::order_side_enum
+          AND o.status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND o.order_id != #{excludeOrderId}
+          <choose>
+              <when test="side == 'SELL'">
+                  <!-- Matching a BUY: resting asks (SELL) at or below the incoming bid, cheapest first. -->
+                  AND o.limit_price &lt;= #{crossPrice}
+                  ORDER BY o.limit_price ASC, o.placed_at ASC
+              </when>
+              <otherwise>
+                  <!-- Matching a SELL: resting bids (BUY) at or above the incoming ask, richest first. -->
+                  AND o.limit_price &gt;= #{crossPrice}
+                  ORDER BY o.limit_price DESC, o.placed_at ASC
+              </otherwise>
+          </choose>
+    </select>
+
+    <update id="matchIncomingOrderIfNew">
+        UPDATE Orders
+        SET filled_quantity = filled_quantity + #{matchedQuantity},
+            status = #{newStatus}::order_status_enum,
+            executed_price = #{executedPrice},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <update id="matchRestingOrderIfUnchanged">
+        UPDATE Orders
+        SET filled_quantity = filled_quantity + #{matchedQuantity},
+            status = #{newStatus}::order_status_enum,
+            executed_price = #{executedPrice},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND filled_quantity = #{previousFilledQuantity}
+    </update>
 
     <update id="fillOrderIfNew">
         UPDATE Orders

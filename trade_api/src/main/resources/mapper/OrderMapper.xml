@@ -63,11 +63,17 @@
         WHERE o.order_id = #{orderId}
     </select>
 
+    <!-- A partially-filled order can still be cancelled - real markets do
+         exactly this, stopping further fills on the remaining quantity
+         while whatever already executed (its Trades rows, the cash/
+         position movement they caused) stays as-is, untouched. Harmless
+         when executor.matching.enabled is off: no order ever reaches
+         PARTIALLY_FILLED in that case, so this only ever matches 'NEW'. -->
     <update id="cancelIfNew">
         UPDATE Orders
         SET status = 'CANCELLED'::order_status_enum
         WHERE order_id = #{orderId}
-          AND status = 'NEW'::order_status_enum
+          AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
     </update>
 
     <select id="findHistory" resultMap="orderHistoryRow">

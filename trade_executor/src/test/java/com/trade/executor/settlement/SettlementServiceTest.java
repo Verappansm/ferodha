@@ -41,7 +41,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW");
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(1);
@@ -64,7 +64,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW");
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(0);
@@ -75,5 +75,74 @@ class SettlementServiceTest {
         assertEquals(SettlementOutcome.Result.ALREADY_PROCESSED, outcome.result());
         verify(accountMapper, never()).updateBalanceWithVersion(any(), any(), anyInt());
         verify(orderMapper, never()).insertTrade(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a match writes a Trades row and moves cash on both sides")
+    void matchWritesTradesAndMovesCashOnBothSides() {
+        SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
+
+        OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
+                new BigDecimal("119.50"), "NEW", 0, java.time.OffsetDateTime.now());
+        OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+        AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+        AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+
+        when(orderMapper.matchRestingOrderIfUnchanged(resting.orderId(), 0, 10, "FILLED", new BigDecimal("119.50")))
+                .thenReturn(1);
+        when(accountMapper.updateBalanceWithVersion(any(), any(), anyInt())).thenReturn(1);
+
+        MatchOutcome outcome = settlementService.settleMatch(resting, restingAccount, OrderSide.SELL,
+                incoming, incomingAccount, OrderSide.BUY, 10, new BigDecimal("119.50"), "FILLED");
+
+        assertEquals(MatchOutcome.Result.MATCHED, outcome.result());
+        verify(orderMapper).insertTrade(resting.orderId(), new BigDecimal("119.50"), 10);
+        verify(orderMapper).insertTrade(incoming.orderId(), new BigDecimal("119.50"), 10);
+        // 10 * 119.50 = 1195.00 moves both ways: credited to the seller, debited from the buyer.
+        verify(accountMapper).updateBalanceWithVersion(2L, new BigDecimal("6195.00"), 0);
+        verify(accountMapper).updateBalanceWithVersion(1L, new BigDecimal("3805.00"), 0);
+    }
+
+    @Test
+    @DisplayName("a contended resting order writes nothing")
+    void contendedRestingOrderWritesNothing() {
+        SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
+
+        OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
+                new BigDecimal("119.50"), "PARTIALLY_FILLED", 3, java.time.OffsetDateTime.now());
+        OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+        AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+        AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+
+        // Someone else already advanced this resting order's filled_quantity past 3.
+        when(orderMapper.matchRestingOrderIfUnchanged(resting.orderId(), 3, 7, "FILLED", new BigDecimal("119.50")))
+                .thenReturn(0);
+
+        MatchOutcome outcome = settlementService.settleMatch(resting, restingAccount, OrderSide.SELL,
+                incoming, incomingAccount, OrderSide.BUY, 7, new BigDecimal("119.50"), "FILLED");
+
+        assertEquals(MatchOutcome.Result.CONTENDED, outcome.result());
+        verify(orderMapper, never()).insertTrade(any(), any(), any());
+        verify(accountMapper, never()).updateBalanceWithVersion(any(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("finalizing an incoming order after a partial match sets PARTIALLY_FILLED")
+    void finalizeIncomingOrderSetsPartiallyFilled() {
+        SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
+
+        OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+
+        when(orderMapper.matchIncomingOrderIfNew(ORDER_ID, 6, "PARTIALLY_FILLED", new BigDecimal("119.50")))
+                .thenReturn(1);
+
+        SettlementOutcome outcome = settlementService.finalizeIncomingOrder(
+                incoming, 6, new BigDecimal("119.50"), "PARTIALLY_FILLED");
+
+        assertEquals(SettlementOutcome.Result.FILLED, outcome.result());
+        verify(orderMapper).matchIncomingOrderIfNew(ORDER_ID, 6, "PARTIALLY_FILLED", new BigDecimal("119.50"));
     }
 }

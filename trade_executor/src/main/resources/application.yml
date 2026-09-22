@@ -53,6 +53,13 @@ trades-generator:
   base-url: ${TRADES_GENERATOR_URL:http://trades-generator:8083}
 
 executor:
+  # Off by default (the spec-exact story this repo was built against: a
+  # single quote-vs-limit fill-or-reject, no partial fills). Turned on by
+  # application-market-sim.yml, layered in automatically when
+  # SPRING_PROFILES_ACTIVE=market-sim - see OrderExecutionService/
+  # OrderBookMatcher.
+  matching:
+    enabled: ${EXECUTOR_MATCHING_ENABLED:false}
   fee:
     rate: ${EXECUTOR_FEE_RATE:0.001}
   quote:
