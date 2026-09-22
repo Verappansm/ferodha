@@ -3,10 +3,10 @@ services:
   trade-api:
     profiles: ["platform"]
     build:
-      context: ./trade_api
+      context: ./trade_api_nestjs
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "3000:3000"
     environment:
       # Point these at whatever Postgres already exists on this machine -
       # nothing here starts one. Two common cases:
@@ -25,7 +25,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
       interval: 10s
       timeout: 3s
       start_period: 40s
