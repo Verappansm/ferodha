@@ -28,8 +28,13 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 class FauxnanceQuoteClientTest {
 
+    // GET /quotes/{symbol} puts the Quote object directly under "data" (no
+    // nested "quote" key) - confirmed against the real Fauxnance OpenAPI
+    // spec. Batch GET /quotes is the one that nests each item's quote under
+    // "quote" (see FauxnanceBatchQuoteItem) - the two endpoints genuinely
+    // differ in shape, this isn't a copy-paste of the batch fixture.
     private static final String QUOTE_JSON = """
-            {"data":{"quote":{"symbol":"AAPL","price":100.25,"bid":99.00,"ask":100.50,"currency":"USD"}}}
+            {"data":{"symbol":"AAPL","price":100.25,"bid":99.00,"ask":100.50,"currency":"USD"}}
             """;
 
     @Test

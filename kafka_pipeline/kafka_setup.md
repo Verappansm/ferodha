@@ -2,7 +2,14 @@
 
 This document covers the setup required to run Kafka locally on the Linux machine and create the Sprint 7 Kafka topics.
 
-## 1. Create and Start the Kafka Docker Container
+## 1. Start the Kafka Docker Container
+
+**Kafka and Kafka UI are defined once, in the root `docker-compose.yml`**, alongside
+`postgres`/`trade-api`/`trade-executor` — there used to be a second, duplicate
+`kafka_pipeline/docker-compose.yml` defining the same two services under the same container
+names (`trade-kafka`, `kafka-ui`); it's been removed, since bringing both up collided on
+container creation, and even running the `kafka_pipeline` one alone put it on a different Docker
+network than `trade-api`/`trade-executor`, so they could never actually reach it.
 
 ### Where?
 
@@ -15,44 +22,18 @@ Windows is used only to connect to the Linux machine, for example through VS Cod
 ### Project structure
 
 ```text
+docker-compose.yml          # repo root — postgres, kafka, kafka-ui, trade-api, trade-executor
 kafka_pipeline/
-├── docker-compose.yml
 ├── create_topics.sh
 └── create_dlt_topics.sh
 ```
 
-### Create the project directory
-
-On Linux:
-
-```bash
-mkdir -p kafka_pipeline
-cd kafka_pipeline
-```
-
-### Create `docker-compose.yml`
-
-On Linux:
-
-```bash
-touch docker-compose.yml
-```
-
-Open it in your editor and add the Kafka and Kafka UI configuration used by the project.
-
-
 ### Start Docker containers
 
-On Linux, from `kafka_pipeline`:
+On Linux, from the **repo root**:
 
 ```bash
-docker-compose up -d
-```
-
-or:
-
-```bash
-docker compose up -d
+docker compose up -d kafka kafka-ui
 ```
 
 ### Verify containers
@@ -97,10 +78,10 @@ http://<LINUX_IP>:<KAFKA_UI_PORT>
 Example:
 
 ```text
-http://10.8.70.116:8081
+http://10.8.70.116:8091
 ```
 
-Use the actual Linux IP and Kafka UI port configured for your environment.
+Use the actual Linux IP and Kafka UI port (`8091`, per root `docker-compose.yml`) for your environment.
 
 Kafka UI connects to the Kafka container internally using:
 
