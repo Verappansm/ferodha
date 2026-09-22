@@ -43,11 +43,11 @@ class DuckDBConfig:
 
 PIPELINE_NAME = "fact_trades_incremental"
 
-# Confirmed against trade_api's 002-order-status-alignment.sql and a live
-# enum_range() check: the type still permits PARTIALLY_FILLED even though
-# 002-orders-status-backfill rewrote existing PARTIALLY_FILLED rows to
-# FILLED. Included here so any future/legacy row using it is loaded, not
-# dead-lettered -- see the README note on why this sits oddly next to the
-# sprint contract's "partial fills are out of scope" statement.
+# trade_api's 002-order-status-alignment.sql recreates order_status_enum as
+# exactly NEW/FILLED/REJECTED/CANCELLED, backfilling any legacy PENDING to
+# NEW and PARTIALLY_FILLED to FILLED - so PARTIALLY_FILLED cannot occur on
+# the live enum today. Kept here defensively (a superset costs nothing: an
+# order in this status just never actually shows up to be dead-lettered)
+# in case partial-fill support is added to the order lifecycle later.
 VALID_STATUSES = {"NEW", "FILLED", "REJECTED", "CANCELLED", "PARTIALLY_FILLED"}
 VALID_SIDES = {"BUY", "SELL"}

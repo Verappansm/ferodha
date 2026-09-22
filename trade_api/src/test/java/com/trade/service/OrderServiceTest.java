@@ -25,7 +25,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -64,10 +63,6 @@ class OrderServiceTest {
     private final AccountMapper accountMapper = mock(AccountMapper.class);
     private final InstrumentMapper instrumentMapper = mock(InstrumentMapper.class);
     private final OrderMapper orderMapper = mock(OrderMapper.class);
-    // Constructor-injected into OrderService but not actually used by it -
-    // the ORDER_PLACED publish lives in OrderController, not here. Kept as
-    // a plain mock purely to satisfy the constructor.
-    private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
 
     // OrderLogic itself is the frozen Sprint 5 domain class - it is
     // constructed for real, backed by adapters over the same mocked mappers,
@@ -84,7 +79,7 @@ class OrderServiceTest {
         OrderLogic orderLogic = new OrderLogic(accountRepository, instrumentRepository, positionRepository, idempotencyKeyStore);
 
         orderService = new OrderService(accountMapper, instrumentMapper, orderMapper, orderLogic,
-                new AccountAccessGuard(), kafkaTemplate, "orders");
+                new AccountAccessGuard());
     }
 
     @Test

@@ -23,8 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.UUID;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 public class OrderService {
@@ -34,20 +32,14 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderLogic orderLogic;
     private final AccountAccessGuard accessGuard;
-    private final KafkaTemplate<String, String> kafkaTemplate;
-    private final String orderTopic;
 
     public OrderService(AccountMapper accountMapper, InstrumentMapper instrumentMapper,
-                        OrderMapper orderMapper, OrderLogic orderLogic, AccountAccessGuard accessGuard,
-                        KafkaTemplate<String, String> kafkaTemplate,
-                        @Value("${kafka.topics.orders:orders}") String orderTopic) {
+                        OrderMapper orderMapper, OrderLogic orderLogic, AccountAccessGuard accessGuard) {
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
         this.orderMapper = orderMapper;
         this.orderLogic = orderLogic;
         this.accessGuard = accessGuard;
-        this.kafkaTemplate = kafkaTemplate;
-        this.orderTopic = orderTopic;
     }
 
     //service must roll back on every failure after the balance write
