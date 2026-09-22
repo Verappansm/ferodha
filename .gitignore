@@ -4,6 +4,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 .pytest_cache/
+# Generated DuckDB warehouse files - regenerate via each pipeline's own
+# load commands (see analytics_etl/README.md, fact_trades_etl/README.md),
+# never commit the populated database itself.
+*.duckdb
 .idea
 .jar
 target

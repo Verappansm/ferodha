@@ -22,6 +22,13 @@ POSTGRES_PASSWORD=
 DUCKDB_PATH=/path/to/the/SAME/warehouse.duckdb/from/sprint4   # do not point this at a new file
 ```
 
+`*.duckdb` files are gitignored repo-wide — they're generated output, not source, the same way
+nobody commits a populated Postgres data directory. `analytics_etl/etl_pipeline/config.py`
+hardcodes Sprint 4's own warehouse at `analytics_etl/data/data.duckdb` (no README there yet to
+point at instead); set `DUCKDB_PATH` to that same file's path if you want this pipeline's
+`load-dims`/`load-facts` writing into the actual shared warehouse rather than a throwaway local
+one. Either way, run the load commands below yourself — nothing ships a pre-built `.duckdb`.
+
 ## The three pipeline commands
 
 Each runs independently — a teammate can run just one stage:
