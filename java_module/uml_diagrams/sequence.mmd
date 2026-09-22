@@ -29,27 +29,27 @@ sequenceDiagram
             AccRepo-->>API: Account Active & Balance Verified
             API->>DB: INSERT INTO Orders (PENDING status, idempotency_key)
             DB-->>API: Order Created (order_id)
-            
+
             API->>OrderEngine: processOrder(order_id)
             OrderEngine->>DB: SELECT Market_Data for instrument_id
             DB-->>OrderEngine: Current Spot Price / Depth
-            
+
             OrderEngine->>DB: INSERT INTO Trades (order_id, execution_price, quantity, idempotency_key)
             DB-->>OrderEngine: Trade Record Created (trade_id)
-            
+
             OrderEngine->>DB: UPDATE Orders SET status = 'FILLED' WHERE order_id = :id
             DB-->>OrderEngine: Order Status Updated
-            
+
             OrderEngine->>Bank: settleTradeCash(trade_id, account_id, trade_value)
             Bank->>DB: UPDATE Accounts SET cash_balance = cash_balance - value WHERE account_id = :id
             Bank->>DB: INSERT INTO Transactions (BUY_SETTLEMENT, metadata, idempotency_key)
             DB-->>Bank: Settlement Transaction Logged
             Bank-->>OrderEngine: Cash Settlement Completed
-            
+
             OrderEngine->>Notify: queueNotification(user_id, "TRADE_EXECUTED", payload)
             Notify->>DB: INSERT INTO Notifications (payload, idempotency_key)
             DB-->>Notify: Notification Logged
-            
+
             OrderEngine-->>API: Order Executed & Settled (trade_id)
             API-->>User: HTTP 201 Created (Order Filled, Trade Details Payload)
         end
@@ -69,7 +69,7 @@ sequenceDiagram
     BankAPI->>BankSvc: executeDeposit(account_id, bank_account_number, amount, pin, idempotency_key)
     BankSvc->>ExtBank: SELECT balance, pin_hash FROM Third_Party_Bank WHERE bank_account_number = :num
     ExtBank-->>BankSvc: External Bank Account Details
-    
+
     BankSvc->>BankSvc: verifyPin(pin, pin_hash)
     alt Invalid PIN or Insufficient Bank Balance
         BankSvc-->>BankAPI: Verification Failed
@@ -77,13 +77,13 @@ sequenceDiagram
     else Bank Balance Sufficient & PIN Valid
         BankSvc->>ExtBank: UPDATE Third_Party_Bank SET balance = balance - :amount
         ExtBank-->>BankSvc: External Bank Balance Debited
-        
+
         BankSvc->>IntAcc: UPDATE Accounts SET cash_balance = cash_balance + :amount WHERE account_id = :id
         IntAcc-->>BankSvc: Internal Account Cash Credited
-        
+
         BankSvc->>TxnDB: INSERT INTO Transactions (DEPOSIT, amount, metadata, idempotency_key)
         TxnDB-->>BankSvc: Transaction Logged (transaction_id)
-        
+
         BankSvc-->>BankAPI: Deposit Successful
         BankAPI-->>Client: HTTP 200 OK (Updated Cash Balance & Txn Receipt)
     end
@@ -101,14 +101,14 @@ sequenceDiagram
     Advisor->>PortAPI: GET /api/v1/accounts/{account_id}/positions
     PortAPI->>PortEngine: getAccountPositions(account_id)
     PortEngine->>View: SELECT * FROM Positions_View WHERE account_id = :account_id
-    
+
     note over View,TradeDB: Internal View Query Logic
     View->>TradeDB: Aggregate BUY/SELL execution quantities & total buy costs
     TradeDB-->>View: Aggregated Position Quantities & Avg Buy Price Basis
     View->>MktDB: Query Latest Spot Close Price per Instrument (DISTINCT ON)
     MktDB-->>View: Current Market Prices
     View->>View: Compute Market Value (qty * spot) & Unrealized P&L Value/Percentage
-    
+
     View-->>PortEngine: Result Set (position_id, ticker, quantity, avg_price, market_value, unrealized_pnl)
     PortEngine-->>PortAPI: Formatted Portfolio Holdings Payload
     PortAPI-->>Advisor: HTTP 200 OK (Real-Time Positions & P&L Analytics)
@@ -138,7 +138,7 @@ sequenceDiagram
     AdminUser->>AuthAPI: POST /api/v1/admin/users/{user_id}/approve
     AuthAPI->>UserDB: UPDATE Users SET status = 'ACTIVE' WHERE user_id = :id
     UserDB-->>AuthAPI: User Status Updated to ACTIVE
-    
+
     AuthAPI->>AccDB: INSERT INTO Accounts (user_id, bank_account_number, currency = 'USD', cash_balance = 0.00, state = 'OPEN')
     AccDB-->>AuthAPI: Trading Account Created (account_id)
     AuthAPI-->>AdminUser: HTTP 200 OK (Client Approved & Trading Account Provisioned)

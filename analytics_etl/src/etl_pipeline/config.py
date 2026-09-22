@@ -26,7 +26,7 @@ SYMBOLS = [
     "ADANIENT.NS",
 ]
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 CACHE_DIR = PROJECT_ROOT / "data" / "cache"
 CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours

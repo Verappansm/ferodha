@@ -15,15 +15,15 @@ def main():
     except RateLimitExceeded as e:
         print(f"[main] STOPPED: {e}")
         sys.exit(1)  # plain stop — no retry loop, no sleeping until midnight
- 
+
     if not payloads:
         print("[main] no symbols succeeded — nothing to transform or load")
         return
- 
+
     df = transform(payloads)
     print(f"[main] {len(df)} clean rows ready to load")
     load(df)
- 
- 
+
+
 if __name__ == "__main__":
     main()
