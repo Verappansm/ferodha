@@ -35,6 +35,10 @@ fi
 JWT_SECRET="${JWT_SECRET:-dev-only-jwt-signing-secret-please-change-later}"
 POSTGRES_USER="${POSTGRES_USER:-trade}"
 POSTGRES_DB="${POSTGRES_DB:-tradedb}"
+# Whatever the running containers were actually started with - this script
+# never restarts the stack with a different profile itself (see SECTION 6),
+# it only reports which behaviour to expect based on what's already up.
+SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-}"
 
 # Color codes
 RED='\033[0;31m'
@@ -226,6 +230,10 @@ EOF
     print_header "SECTION 5: Idempotency Test - Duplicate Prevention"
     pause
     test_idempotency
+
+    print_header "SECTION 6: market-sim Profile - Partial Fills & Synthetic Liquidity"
+    pause
+    market_sim_demo
 
     print_summary
 }
@@ -607,6 +615,92 @@ test_idempotency() {
 }
 
 # ============================================================================
+# SECTION 6: market-sim Profile - Order-Book Matching & Synthetic Liquidity
+# ============================================================================
+# Everything above ran whatever profile the stack was actually started with
+# (SPRING_PROFILES_ACTIVE, read from .env by both trade-executor and
+# trades-generator - see docker-compose.yml). This section only demonstrates
+# something different if that was market-sim: restart the stack first with
+#   SPRING_PROFILES_ACTIVE=market-sim docker compose up -d --build
+# (or set it in .env and re-run this script) to see it. Under the default
+# profile this section still runs, honestly, against fill-or-reject instead -
+# see logic.md (gitignored) for the full explanation of both profiles.
+market_sim_demo() {
+    if [[ "$SPRING_PROFILES_ACTIVE" != "market-sim" ]]; then
+        echo -e "${YELLOW}SPRING_PROFILES_ACTIVE is '${SPRING_PROFILES_ACTIVE:-<empty>}', not market-sim -${NC}"
+        echo "the order below will go through the default fill-or-reject path instead, same as"
+        echo "Section 2 - nothing to see here that isn't already shown above."
+        echo ""
+        echo "To actually see order-book matching, partial fills and the synthetic RANDOMIZER"
+        echo "counterparty, restart the stack with:"
+        echo -e "  ${BLUE}SPRING_PROFILES_ACTIVE=market-sim docker compose up -d --build${NC}"
+        echo "then re-run this script."
+        echo ""
+        pause
+        return
+    fi
+
+    print_subheader "6.1 Placing a SELL priced to cross any synthetic BUY (source=RANDOMIZER)"
+    echo "trades_generator's OrderGenerator places synthetic counter-orders through a seeded"
+    echo "market-maker account every ~10s (30% chance per watched symbol by default), priced at"
+    echo "the live tick's own bid/ask - see logic.md's 'Where the crossing counterparty usually"
+    echo "comes from'. Pricing this SELL far below any plausible AAPL quote guarantees it crosses"
+    echo "the first synthetic BUY that shows up; the only uncertainty is the wait."
+    echo ""
+
+    IDEMPOTENCY_KEY="market-sim-sell-$(date +%s)-$$"
+    CURL_CMD="curl -s -X POST \
+  -H \"Authorization: Bearer \$JWT_TOKEN\" \
+  -H \"Content-Type: application/json\" \
+  -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":2,\"price\":1.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
+  http://localhost:8094/api/v1/orders"
+    print_curl "$CURL_CMD"
+
+    RESPONSE=$(curl -s -X POST \
+        -H "Authorization: Bearer $JWT_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":2,\"price\":1.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
+        http://localhost:8094/api/v1/orders)
+    print_response "$RESPONSE"
+
+    ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
+    if [[ -z "$ORDER_ID" || "$ORDER_ID" == "null" ]]; then
+        echo -e "${RED}✗ Order was rejected synchronously instead - check the response above${NC}"
+        pause
+        return
+    fi
+    echo -e "${GREEN}✓ Accepted at NEW: $ORDER_ID - resting, waiting for a synthetic BUY to cross it${NC}"
+
+    print_subheader "6.2 Polling order history for PARTIALLY_FILLED or FILLED (up to ~90s)"
+    echo -n "Waiting for OrderGenerator's next synthetic order"
+    STATUS="NEW"
+    for _ in $(seq 1 18); do
+        HIST=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/orders")
+        STATUS=$(echo "$HIST" | jq -r --arg id "$ORDER_ID" '.[] | select(.orderId == $id) | .status' 2>/dev/null)
+        [[ "$STATUS" != "NEW" && -n "$STATUS" ]] && break
+        echo -n "."
+        sleep 5
+    done
+    echo ""
+
+    if [[ "$STATUS" == "FILLED" || "$STATUS" == "PARTIALLY_FILLED" ]]; then
+        echo -e "${GREEN}✓ Matched against a synthetic counter-order - status: $STATUS${NC}"
+        echo "   A default-profile order can only ever end at FILLED or REJECTED - this status"
+        echo "   only exists at all when executor.matching.enabled is true (market-sim)."
+    else
+        echo -e "${YELLOW}→ Still NEW after ~90s - no synthetic BUY landed for AAPL in this window.${NC}"
+        echo "   This is probabilistic by design (see generator.orders.probability) - the order"
+        echo "   is still resting and will match the next time one does. Not a failure."
+    fi
+    echo ""
+    echo -e "${YELLOW}📌 On $KAFKA_UI, 'trade-events' now shows TWO messages for a full match: one for${NC}"
+    echo "   this SELL, one for the synthetic BUY it matched against - both sides publish"
+    echo "   independently (Phase 3 fix - see extension_stories.md, LEAP-004)."
+    echo ""
+    pause
+}
+
+# ============================================================================
 # Summary
 # ============================================================================
 print_summary() {
@@ -633,6 +727,13 @@ print_summary() {
 
 🔄 IDEMPOTENCY:
    A reused idempotencyKey is refused with ORD-409, not silently re-run.
+
+🧪 market-sim PROFILE (Section 6, only if the stack was started with
+   SPRING_PROFILES_ACTIVE=market-sim):
+   Order-book matching, real partial fills (PARTIALLY_FILLED), synthetic
+   RANDOMIZER counter-orders from trades_generator, and both sides of a
+   match publishing their own trade-events - none of which exist under the
+   default profile. See logic.md (gitignored) for the full walkthrough.
 
 📊 VERIFICATION IN KAFKA UI:
 EOF
