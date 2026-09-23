@@ -1,26 +1,34 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.enums.OrderSide;
+import com.trade.executor.fee.FeeCalculator;
 import com.trade.executor.mapper.AccountMapper;
 import com.trade.executor.mapper.AccountRow;
+import com.trade.executor.mapper.InstrumentRow;
 import com.trade.executor.mapper.OrderMapper;
 import com.trade.executor.mapper.OrderRow;
+import com.trade.executor.mapper.PositionMapper;
 import com.trade.executor.settlement.MatchOutcome;
 import com.trade.executor.settlement.SettlementService;
+import com.trade.executor.util.MoneyRounding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 // Only ever consulted when executor.matching.enabled is true. Walks
 // resting opposite-side liquidity on the incoming order's instrument,
 // price-then-time priority, matching as much as is available at each
 // price level before moving to the next. Every individual match is its
 // own small transaction (SettlementService.settleMatch) - this class
-// coordinates the walk, it never touches the database directly beyond the
-// read-only candidate query.
+// coordinates the walk and does the fee/currency-conversion math (the
+// same division of labour OrderExecutionService already has with
+// SettlementService for the non-matching path), it never touches the
+// database directly beyond the read-only candidate/position queries.
 //
 // Execution price is always the resting order's own limit_price ("price
 // improvement", the way a real exchange's price-time priority actually
@@ -36,27 +44,36 @@ public class OrderBookMatcher {
 
     private final OrderMapper orderMapper;
     private final AccountMapper accountMapper;
+    private final PositionMapper positionMapper;
     private final SettlementService settlementService;
+    private final CurrencyConverter currencyConverter;
+    private final FeeCalculator feeCalculator;
 
-    public OrderBookMatcher(OrderMapper orderMapper, AccountMapper accountMapper, SettlementService settlementService) {
+    public OrderBookMatcher(OrderMapper orderMapper, AccountMapper accountMapper, PositionMapper positionMapper,
+                             SettlementService settlementService, CurrencyConverter currencyConverter,
+                             FeeCalculator feeCalculator) {
         this.orderMapper = orderMapper;
         this.accountMapper = accountMapper;
+        this.positionMapper = positionMapper;
         this.settlementService = settlementService;
+        this.currencyConverter = currencyConverter;
+        this.feeCalculator = feeCalculator;
     }
 
-    public record Result(int totalMatched, BigDecimal lastExecutionPrice) {
+    public record Result(int totalMatched, BigDecimal lastExecutionPrice, BigDecimal totalFee) {
         public boolean matchedAnything() {
             return totalMatched > 0;
         }
     }
 
-    public Result match(OrderRow incoming, AccountRow incomingAccount) {
+    public Result match(OrderRow incoming, AccountRow incomingAccount, InstrumentRow instrument) {
         OrderSide incomingSide = OrderSide.valueOf(incoming.side());
         String oppositeSide = incomingSide == OrderSide.BUY ? "SELL" : "BUY";
 
         int remaining = incoming.remainingQuantity();
         int totalMatched = 0;
         BigDecimal lastExecutionPrice = null;
+        BigDecimal totalIncomingFee = BigDecimal.ZERO;
 
         while (remaining > 0) {
             List<OrderRow> candidates = orderMapper.findRestingOpposite(
@@ -77,6 +94,7 @@ public class OrderBookMatcher {
 
                 int matchQuantity = Math.min(remaining, restingRemaining);
                 BigDecimal executionPrice = resting.limitPrice();
+                OrderSide restingSide = OrderSide.valueOf(resting.side());
                 String restingNewStatus = (resting.filledQuantity() + matchQuantity >= resting.quantity())
                         ? "FILLED" : "PARTIALLY_FILLED";
 
@@ -84,9 +102,35 @@ public class OrderBookMatcher {
                         .orElseThrow(() -> new IllegalStateException(
                                 "Resting order " + resting.orderId() + " references unknown account " + resting.accountId()));
 
+                // Execution-time re-check for the resting side too - it was
+                // vetted when it was first placed, but time (and other
+                // fills) have passed since, same reasoning that already
+                // justifies re-checking the incoming side once, up front.
+                BigDecimal restingTradeValue = currencyConverter.convert(
+                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), restingAccount.currency());
+                BigDecimal restingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(restingTradeValue));
+                Optional<RejectionReason> restingCheck = restingSide == OrderSide.BUY
+                        ? ExecutionRuleCheck.checkAffordable(restingAccount, MoneyRounding.toMoneyScale(restingTradeValue.add(restingFee)))
+                        : ExecutionRuleCheck.checkHoldingsSufficient(
+                                positionMapper.findHeldQuantity(restingAccount.accountUuid(), resting.instrumentId()), matchQuantity);
+                if (restingCheck.isPresent()) {
+                    log.info("Resting order {} can no longer be honoured ({}) - skipping",
+                            resting.orderId(), restingCheck.get());
+                    continue;
+                }
+
+                BigDecimal incomingTradeValue = currencyConverter.convert(
+                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), incomingAccount.currency());
+                BigDecimal incomingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(incomingTradeValue));
+
+                BigDecimal restingCashDelta = MoneyRounding.toMoneyScale(restingSide == OrderSide.BUY
+                        ? restingTradeValue.add(restingFee) : restingTradeValue.subtract(restingFee));
+                BigDecimal incomingCashDelta = MoneyRounding.toMoneyScale(incomingSide == OrderSide.BUY
+                        ? incomingTradeValue.add(incomingFee) : incomingTradeValue.subtract(incomingFee));
+
                 MatchOutcome outcome = settlementService.settleMatch(
-                        resting, restingAccount, OrderSide.valueOf(resting.side()),
-                        incoming, incomingAccount, incomingSide,
+                        resting, restingAccount, restingSide, restingCashDelta, restingFee,
+                        incoming, incomingAccount, incomingSide, incomingCashDelta,
                         matchQuantity, executionPrice, restingNewStatus);
 
                 if (outcome.result() == MatchOutcome.Result.CONTENDED) {
@@ -96,18 +140,20 @@ public class OrderBookMatcher {
 
                 remaining -= matchQuantity;
                 totalMatched += matchQuantity;
+                totalIncomingFee = totalIncomingFee.add(incomingFee);
                 lastExecutionPrice = executionPrice;
                 progressedThisPass = true;
             }
 
             if (!progressedThisPass) {
-                // Every candidate in this pass was contended - rather than
-                // spin re-querying the same rows, leave the rest resting
-                // for whatever processes this order (or the next one) next.
+                // Every candidate in this pass was contended or could no
+                // longer be honoured - rather than spin re-querying the
+                // same rows, leave the rest resting for whatever processes
+                // this order (or the next one) next.
                 break;
             }
         }
 
-        return new Result(totalMatched, lastExecutionPrice);
+        return new Result(totalMatched, lastExecutionPrice, MoneyRounding.toMoneyScale(totalIncomingFee));
     }
 }

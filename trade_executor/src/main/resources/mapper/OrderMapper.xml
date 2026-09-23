@@ -68,16 +68,21 @@
         SET filled_quantity = filled_quantity + #{matchedQuantity},
             status = #{newStatus}::order_status_enum,
             executed_price = #{executedPrice},
+            fee_amount = #{feeAmount},
             executed_on = now()
         WHERE order_id = #{orderId}
           AND status = 'NEW'::order_status_enum
     </update>
 
+    <!-- fee_amount accumulates, unlike the incoming order's flat set above -
+         a resting order can be matched more than once across its lifetime,
+         each match adding its own fee on top of whatever it already paid. -->
     <update id="matchRestingOrderIfUnchanged">
         UPDATE Orders
         SET filled_quantity = filled_quantity + #{matchedQuantity},
             status = #{newStatus}::order_status_enum,
             executed_price = #{executedPrice},
+            fee_amount = COALESCE(fee_amount, 0) + #{feeAmount},
             executed_on = now()
         WHERE order_id = #{orderId}
           AND filled_quantity = #{previousFilledQuantity}

@@ -66,20 +66,24 @@ public class SettlementService {
     // once across its lifetime); a Trades row per side, since Positions_View
     // derives from Trades joined to Orders and both sides need to see it;
     // cash on both sides, through the same guarded balance adjustment
-    // settleFill already uses. Deliberately no fee, no currency conversion
-    // here - Phase 2 scope is proving the matching/partial-fill mechanism
-    // itself, not re-deriving FeeCalculator/CurrencyConverter for a second
-    // liquidity source. The incoming order's own row is never written here
-    // - see finalizeIncomingOrder, called once after the whole resting-book
-    // walk completes, not per match (its guard is "still NEW", which would
-    // wrongly reject the second of two matches against the same incoming
-    // order if it were checked here instead).
+    // settleFill already uses. restingCashDelta/incomingCashDelta arrive
+    // already fee- and currency-converted for each side's own account
+    // currency - OrderBookMatcher computes those with FeeCalculator/
+    // CurrencyConverter, the same division of labour OrderExecutionService
+    // already has with this class for the non-matching path (this class
+    // never touches either calculator directly). The incoming order's own
+    // row is never written here - see finalizeIncomingOrder, called once
+    // after the whole resting-book walk completes, not per match (its
+    // guard is "still NEW", which would wrongly reject the second of two
+    // matches against the same incoming order if checked here instead).
     @Transactional
     public MatchOutcome settleMatch(OrderRow restingOrder, AccountRow restingAccount, OrderSide restingSide,
+                                     BigDecimal restingCashDelta, BigDecimal restingFee,
                                      OrderRow incomingOrder, AccountRow incomingAccount, OrderSide incomingSide,
+                                     BigDecimal incomingCashDelta,
                                      int matchedQuantity, BigDecimal executionPrice, String restingNewStatus) {
-        int rows = orderMapper.matchRestingOrderIfUnchanged(
-                restingOrder.orderId(), restingOrder.filledQuantity(), matchedQuantity, restingNewStatus, executionPrice);
+        int rows = orderMapper.matchRestingOrderIfUnchanged(restingOrder.orderId(), restingOrder.filledQuantity(),
+                matchedQuantity, restingNewStatus, executionPrice, restingFee);
         if (rows == 0) {
             return MatchOutcome.contended();
         }
@@ -87,28 +91,30 @@ public class SettlementService {
         orderMapper.insertTrade(restingOrder.orderId(), executionPrice, matchedQuantity);
         orderMapper.insertTrade(incomingOrder.orderId(), executionPrice, matchedQuantity);
 
-        BigDecimal tradeValue = MoneyRounding.toMoneyScale(executionPrice.multiply(BigDecimal.valueOf(matchedQuantity)));
-        adjustBalanceWithRetry(restingAccount, tradeValue, restingSide);
-        adjustBalanceWithRetry(incomingAccount, tradeValue, incomingSide);
+        adjustBalanceWithRetry(restingAccount, restingCashDelta, restingSide);
+        adjustBalanceWithRetry(incomingAccount, incomingCashDelta, incomingSide);
 
         return MatchOutcome.matched();
     }
 
     // The one write this class makes to the incoming order's own row,
     // after OrderBookMatcher has finished walking the resting book -
-    // cumulative filled_quantity and the terminal-or-still-open status in
-    // one guarded update, same "still NEW" guard Guard 1 already uses
-    // (this is that order's first-ever processing; a genuine redelivery is
-    // caught earlier, by OrderExecutionService's own cheap status check,
-    // before matching is ever attempted).
+    // cumulative filled_quantity, total fee across every match this walk
+    // made, and the terminal-or-still-open status in one guarded update,
+    // same "still NEW" guard Guard 1 already uses (this is that order's
+    // first-ever processing; a genuine redelivery is caught earlier, by
+    // OrderExecutionService's own cheap status check, before matching is
+    // ever attempted).
     @Transactional
     public SettlementOutcome finalizeIncomingOrder(OrderRow order, int totalMatchedQuantity,
-                                                     BigDecimal lastExecutionPrice, String newStatus) {
-        int rows = orderMapper.matchIncomingOrderIfNew(order.orderId(), totalMatchedQuantity, newStatus, lastExecutionPrice);
+                                                     BigDecimal lastExecutionPrice, String newStatus,
+                                                     BigDecimal totalFee) {
+        int rows = orderMapper.matchIncomingOrderIfNew(
+                order.orderId(), totalMatchedQuantity, newStatus, lastExecutionPrice, totalFee);
         if (rows == 0) {
             return SettlementOutcome.alreadyProcessed();
         }
-        return SettlementOutcome.filled(lastExecutionPrice, BigDecimal.ZERO);
+        return SettlementOutcome.filled(lastExecutionPrice, totalFee);
     }
 
     private void adjustBalanceWithRetry(AccountRow account, BigDecimal delta, OrderSide side) {

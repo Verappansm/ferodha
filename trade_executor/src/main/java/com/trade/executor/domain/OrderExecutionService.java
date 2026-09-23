@@ -115,7 +115,7 @@ public class OrderExecutionService {
         }
 
         if (matchingEnabled) {
-            processWithMatching(order, account);
+            processWithMatching(order, account, instrument);
             return;
         }
 
@@ -178,8 +178,29 @@ public class OrderExecutionService {
     // no quote fetch, no FillRule, no rejection path here. A limit order
     // that finds no counterparty is exactly what a real exchange's order
     // book does with one too: nothing happens until something crosses it.
-    private void processWithMatching(OrderRow order, AccountRow account) {
-        OrderBookMatcher.Result result = orderBookMatcher.match(order, account);
+    private void processWithMatching(OrderRow order, AccountRow account, InstrumentRow instrument) {
+        // Worst-case re-check before attempting any match at all, same
+        // reasoning as the quote-based path's rule 6/7 re-check: the
+        // order's own limit price is the ceiling the trader authorized
+        // (matching can only ever do at least as well via price
+        // improvement, never worse), fee included the same way the
+        // quote-based path includes it.
+        OrderSide side = OrderSide.valueOf(order.side());
+        int remainingQuantity = order.remainingQuantity();
+        BigDecimal worstCaseValue = currencyConverter.convert(
+                order.limitPrice().multiply(BigDecimal.valueOf(remainingQuantity)), instrument.currency(), account.currency());
+        BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(worstCaseValue));
+
+        Optional<RejectionReason> preCheck = side == OrderSide.BUY
+                ? ExecutionRuleCheck.checkAffordable(account, MoneyRounding.toMoneyScale(worstCaseValue.add(worstCaseFee)))
+                : ExecutionRuleCheck.checkHoldingsSufficient(
+                        positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()), remainingQuantity);
+        if (preCheck.isPresent()) {
+            settleAndPublishReject(order, preCheck.get());
+            return;
+        }
+
+        OrderBookMatcher.Result result = orderBookMatcher.match(order, account, instrument);
         if (!result.matchedAnything()) {
             log.info("Order {} found no crossing liquidity - resting at {}", order.orderId(), order.status());
             return;
@@ -189,16 +210,16 @@ public class OrderExecutionService {
         String newStatus = totalFilled >= order.quantity() ? "FILLED" : "PARTIALLY_FILLED";
 
         SettlementOutcome outcome = settlementService.finalizeIncomingOrder(
-                order, result.totalMatched(), result.lastExecutionPrice(), newStatus);
+                order, result.totalMatched(), result.lastExecutionPrice(), newStatus, result.totalFee());
         if (outcome.result() == SettlementOutcome.Result.ALREADY_PROCESSED) {
             log.info("Order {} was already settled by a prior delivery - not republishing", order.orderId());
             return;
         }
 
         if ("FILLED".equals(newStatus)) {
-            tradeEventPublisher.publishFilled(order, result.lastExecutionPrice(), BigDecimal.ZERO);
+            tradeEventPublisher.publishFilled(order, result.lastExecutionPrice(), result.totalFee());
         } else {
-            tradeEventPublisher.publishPartiallyFilled(order, result.lastExecutionPrice(), BigDecimal.ZERO);
+            tradeEventPublisher.publishPartiallyFilled(order, result.lastExecutionPrice(), result.totalFee());
         }
     }
 }

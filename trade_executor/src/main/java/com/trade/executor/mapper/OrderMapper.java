@@ -46,11 +46,14 @@ public interface OrderMapper {
     // NEW" condition Guard 1 already uses, since this is that order's
     // first-ever processing (a genuine redelivery is caught earlier, by
     // OrderExecutionService's own cheap status check, before this is ever
-    // called).
+    // called). feeAmount is the sum across every match this order made in
+    // this one walk - written once here, not per-match, since this row is
+    // only ever touched once (see OrderBookMatcher).
     int matchIncomingOrderIfNew(@Param("orderId") UUID orderId,
                                  @Param("matchedQuantity") int matchedQuantity,
                                  @Param("newStatus") String newStatus,
-                                 @Param("executedPrice") BigDecimal executedPrice);
+                                 @Param("executedPrice") BigDecimal executedPrice,
+                                 @Param("feeAmount") BigDecimal feeAmount);
 
     // Guard for a resting counterparty order - optimistic-lock style,
     // conditional on filled_quantity still being exactly what was just
@@ -62,5 +65,6 @@ public interface OrderMapper {
                                       @Param("previousFilledQuantity") int previousFilledQuantity,
                                       @Param("matchedQuantity") int matchedQuantity,
                                       @Param("newStatus") String newStatus,
-                                      @Param("executedPrice") BigDecimal executedPrice);
+                                      @Param("executedPrice") BigDecimal executedPrice,
+                                      @Param("feeAmount") BigDecimal feeAmount);
 }

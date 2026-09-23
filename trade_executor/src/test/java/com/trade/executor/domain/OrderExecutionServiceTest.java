@@ -112,6 +112,32 @@ class OrderExecutionServiceTest {
     }
 
     @Test
+    @DisplayName("under matching, an order that can't afford its own worst-case cost is rejected before any match is attempted")
+    void matchingPathRejectsUnaffordableOrderBeforeConsultingTheBook() {
+        // 100 shares at the order's own limit of 10.00 = 1000.00, + 0.1% fee
+        // (1.00) = 1001.00 worst-case total. A balance of 500.00 can't cover
+        // that, so OrderBookMatcher.match(...) must never even be called -
+        // this is the same worst-case-ceiling re-check the non-matching path
+        // already does with the quote, just gated on the order's own limit
+        // price instead (there's no quote fetch on this path at all).
+        OrderExecutionService matchingEnabledService = new OrderExecutionService(orderMapper, accountMapper,
+                instrumentMapper, positionMapper, quoteSource, settlementService, tradeEventPublisher,
+                currencyConverter, feeCalculator, orderBookMatcher, true);
+
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 100);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("500.00"), "USD");
+        when(settlementService.settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS)))
+                .thenReturn(SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        matchingEnabledService.process(placedEvent());
+
+        verify(orderBookMatcher, never()).match(any(), any(), any());
+        verify(settlementService).settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
+        verify(tradeEventPublisher).publishRejected(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
     @DisplayName("an order with no available price is resolved rather than left at NEW")
     void noAvailablePriceIsResolved() {
         givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
