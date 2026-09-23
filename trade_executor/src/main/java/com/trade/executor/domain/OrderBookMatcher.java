@@ -2,6 +2,7 @@ package com.trade.executor.domain;
 
 import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.enums.OrderSide;
+import com.trade.executor.event.TradeEventPublisher;
 import com.trade.executor.fee.FeeCalculator;
 import com.trade.executor.mapper.AccountMapper;
 import com.trade.executor.mapper.AccountRow;
@@ -48,16 +49,18 @@ public class OrderBookMatcher {
     private final SettlementService settlementService;
     private final CurrencyConverter currencyConverter;
     private final FeeCalculator feeCalculator;
+    private final TradeEventPublisher tradeEventPublisher;
 
     public OrderBookMatcher(OrderMapper orderMapper, AccountMapper accountMapper, PositionMapper positionMapper,
                              SettlementService settlementService, CurrencyConverter currencyConverter,
-                             FeeCalculator feeCalculator) {
+                             FeeCalculator feeCalculator, TradeEventPublisher tradeEventPublisher) {
         this.orderMapper = orderMapper;
         this.accountMapper = accountMapper;
         this.positionMapper = positionMapper;
         this.settlementService = settlementService;
         this.currencyConverter = currencyConverter;
         this.feeCalculator = feeCalculator;
+        this.tradeEventPublisher = tradeEventPublisher;
     }
 
     public record Result(int totalMatched, BigDecimal lastExecutionPrice, BigDecimal totalFee) {
@@ -136,6 +139,18 @@ public class OrderBookMatcher {
                 if (outcome.result() == MatchOutcome.Result.CONTENDED) {
                     log.info("Resting order {} was matched by a concurrent delivery first - skipping", resting.orderId());
                     continue;
+                }
+
+                // The resting side gets its own trade-events publish here,
+                // per match, same as the incoming side gets one at the end
+                // of its own walk - previously only the incoming order ever
+                // published anything, leaving the resting account with no
+                // way to learn their order filled short of polling order
+                // history directly.
+                if ("FILLED".equals(restingNewStatus)) {
+                    tradeEventPublisher.publishFilled(resting, executionPrice, restingFee);
+                } else {
+                    tradeEventPublisher.publishPartiallyFilled(resting, executionPrice, restingFee);
                 }
 
                 remaining -= matchQuantity;

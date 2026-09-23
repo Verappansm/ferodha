@@ -76,6 +76,12 @@ executor:
     poll-interval-seconds: ${POLL_INTERVAL_SECONDS:60}
     daily-quota: ${EXECUTOR_MARKET_DATA_DAILY_QUOTA:2000}
     batch-size: ${EXECUTOR_MARKET_DATA_BATCH_SIZE:25}
+  # Only active under market-sim (see OrderExpiryScheduler) - the
+  # quote-based path always resolves an order the moment it's first seen,
+  # so nothing rests long enough under the default profile to need this.
+  expiry:
+    ttl-minutes: ${EXECUTOR_EXPIRY_TTL_MINUTES:30}
+    interval-seconds: ${EXECUTOR_EXPIRY_INTERVAL_SECONDS:60}
 
 logging:
   level:

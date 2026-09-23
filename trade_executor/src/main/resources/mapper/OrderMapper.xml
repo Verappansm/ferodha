@@ -76,7 +76,12 @@
 
     <!-- fee_amount accumulates, unlike the incoming order's flat set above -
          a resting order can be matched more than once across its lifetime,
-         each match adding its own fee on top of whatever it already paid. -->
+         each match adding its own fee on top of whatever it already paid.
+         The status check (on top of the filled_quantity guard) is what
+         stops this from re-filling an order the TTL sweep (expireStaleResting)
+         cancelled out from under a match already in flight - filled_quantity
+         alone wouldn't change on a cancel, so without this the guard would
+         wrongly still pass. -->
     <update id="matchRestingOrderIfUnchanged">
         UPDATE Orders
         SET filled_quantity = filled_quantity + #{matchedQuantity},
@@ -86,6 +91,7 @@
             executed_on = now()
         WHERE order_id = #{orderId}
           AND filled_quantity = #{previousFilledQuantity}
+          AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
     </update>
 
     <update id="fillOrderIfNew">
@@ -111,5 +117,12 @@
         INSERT INTO Trades (order_id, execution_price, execution_quantity)
         VALUES (#{orderId}, #{executionPrice}, #{executionQuantity})
     </insert>
+
+    <update id="expireStaleResting">
+        UPDATE Orders
+        SET status = 'CANCELLED'::order_status_enum
+        WHERE status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND placed_at &lt; #{cutoff}
+    </update>
 
 </mapper>

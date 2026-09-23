@@ -5,9 +5,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-// MarketDataPoller schedules itself manually (not via @Scheduled) so it can
-// recompute its own interval each cycle - explicit bean rather than relying
-// on Boot's conditional @Scheduled-triggered autoconfiguration for this.
+// MarketDataPoller and OrderExpiryScheduler both schedule themselves
+// manually (not via @Scheduled) rather than relying on Boot's
+// @Scheduled-triggered autoconfiguration - MarketDataPoller needs to
+// recompute its own interval each cycle, and OrderExpiryScheduler follows
+// the same shape for consistency. The two are mutually exclusive by
+// profile (!market-sim vs market-sim), so one pool-size-1 scheduler is
+// never actually shared between two running components at once.
 @Configuration
 public class SchedulingConfig {
 
@@ -15,7 +19,7 @@ public class SchedulingConfig {
     public TaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(1);
-        scheduler.setThreadNamePrefix("market-data-poller-");
+        scheduler.setThreadNamePrefix("trade-executor-scheduler-");
         scheduler.initialize();
         return scheduler;
     }

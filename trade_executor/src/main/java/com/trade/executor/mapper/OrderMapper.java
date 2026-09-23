@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -67,4 +68,13 @@ public interface OrderMapper {
                                       @Param("newStatus") String newStatus,
                                       @Param("executedPrice") BigDecimal executedPrice,
                                       @Param("feeAmount") BigDecimal feeAmount);
+
+    // The TTL sweep (see OrderExpiryScheduler, market-sim only) - a plain
+    // bulk UPDATE, not a per-row optimistic-lock loop, since housekeeping
+    // has no single caller to retry against contention: whichever orders
+    // are still resting and older than the cutoff at the moment this runs
+    // get cancelled, and any that a concurrent match claims first simply
+    // fail this WHERE clause's status check and are left alone. Returns
+    // the number of orders cancelled, purely for logging.
+    int expireStaleResting(@Param("cutoff") OffsetDateTime cutoff);
 }

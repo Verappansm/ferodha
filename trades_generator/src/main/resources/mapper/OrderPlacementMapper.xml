@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.generator.mapper.OrderPlacementMapper">
+
+    <resultMap id="marketMakerAccountRow" type="com.trade.generator.mapper.MarketMakerAccountRow">
+        <constructor>
+            <idArg column="account_uuid" javaType="java.util.UUID"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="user_id" javaType="java.util.UUID"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="instrumentRow" type="com.trade.generator.mapper.InstrumentRow">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.util.UUID"/>
+            <arg column="currency" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findMarketMaker" resultMap="marketMakerAccountRow">
+        SELECT account_id AS account_uuid, id AS account_id, user_id
+        FROM Accounts
+        WHERE business_ref = #{businessRef}
+    </select>
+
+    <select id="findInstrumentBySymbol" resultMap="instrumentRow">
+        SELECT instrument_id, currency
+        FROM Instruments
+        WHERE ticker = #{symbol}
+          AND tradable = true
+    </select>
+
+    <!-- Deliberately no order_type/executed_price/status columns spelled
+         out beyond what varies - LIMIT/NEW/0-filled/PORTAL-overridden-to-
+         RANDOMIZER are exactly trade_api's own insertOrder defaults, same
+         reasoning that lets that mapper rely on them too. -->
+    <insert id="insertOrder">
+        INSERT INTO Orders (order_id, user_id, account_id, instrument_id, side, order_type,
+                             limit_price, quantity, status, idempotency_key, source)
+        VALUES (#{orderId}, #{userId}, #{accountUuid}, #{instrumentId},
+                #{side}::order_side_enum, 'LIMIT'::order_type_enum,
+                #{price}, #{quantity}, 'NEW'::order_status_enum, #{idempotencyKey}, 'RANDOMIZER')
+    </insert>
+
+</mapper>

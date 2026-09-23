@@ -1,6 +1,7 @@
 package com.trade.executor.domain;
 
 import com.trade.executor.currency.CurrencyConverter;
+import com.trade.executor.event.TradeEventPublisher;
 import com.trade.executor.fee.FeeCalculator;
 import com.trade.executor.mapper.AccountMapper;
 import com.trade.executor.mapper.AccountRow;
@@ -59,8 +60,10 @@ class OrderBookMatcherTest {
     private final SettlementService settlementService = mock(SettlementService.class);
     private final CurrencyConverter currencyConverter = new CurrencyConverter();
     private final FeeCalculator feeCalculator = new FeeCalculator(BigDecimal.ZERO);
+    private final TradeEventPublisher tradeEventPublisher = mock(TradeEventPublisher.class);
     private final OrderBookMatcher matcher = new OrderBookMatcher(
-            orderMapper, accountMapper, positionMapper, settlementService, currencyConverter, feeCalculator);
+            orderMapper, accountMapper, positionMapper, settlementService, currencyConverter, feeCalculator,
+            tradeEventPublisher);
 
     private static OrderRow order(UUID id, long accountId, String side, int quantity, BigDecimal price, int filled) {
         return new OrderRow(id, accountId, INSTRUMENT_ID, "AAPL", side, quantity, price, "NEW", filled, OffsetDateTime.now());
@@ -100,6 +103,8 @@ class OrderBookMatcherTest {
         verify(settlementService).settleMatch(eq(resting), eq(restingAccount), any(), eq(new BigDecimal("1195.00")), any(),
                 eq(incoming), eq(incomingAccount), any(), eq(new BigDecimal("1195.00")),
                 eq(10), eq(new BigDecimal("119.50")), eq("FILLED"));
+        // The resting side gets its own trade-events publish too, not just the incoming order.
+        verify(tradeEventPublisher).publishFilled(eq(resting), eq(new BigDecimal("119.50")), any());
     }
 
     @Test
@@ -125,6 +130,8 @@ class OrderBookMatcherTest {
         // other 2 rest, which is what OrderExecutionService turns into
         // PARTIALLY_FILLED rather than FILLED.
         assertEquals(3, result.totalMatched());
+        // Resting order's own 3-of-3 quantity fully consumes it (filled 0 -> 3 of 3).
+        verify(tradeEventPublisher).publishFilled(eq(resting), eq(new BigDecimal("120.00")), any());
     }
 
     @Test
@@ -169,6 +176,9 @@ class OrderBookMatcherTest {
         assertEquals(new BigDecimal("119.50"), result.lastExecutionPrice());
         verify(settlementService, times(1)).settleMatch(eq(contended), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), any());
         verify(settlementService, times(1)).settleMatch(eq(next), any(), any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), any());
+        // Contention means nothing committed for that candidate - no publish either.
+        verify(tradeEventPublisher, never()).publishFilled(eq(contended), any(), any());
+        verify(tradeEventPublisher).publishFilled(eq(next), any(), any());
     }
 
     @Test
