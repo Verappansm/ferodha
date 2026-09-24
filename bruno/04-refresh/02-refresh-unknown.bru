@@ -1,0 +1,33 @@
+meta {
+  name: refresh unknown token
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "refreshToken": "totally-not-a-refresh-token-8f3e2a4c6b9d0e1f"
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 401
+  res.body.errorCode: eq AUTH-401
+}

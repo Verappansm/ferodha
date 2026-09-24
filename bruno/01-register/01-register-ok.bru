@@ -1,0 +1,45 @@
+meta {
+  name: register ok
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno Tester",
+    "username": "{{testEmail}}",
+    "password": "correct horse battery staple",
+    "accountId": 1
+  }
+}
+
+script:pre-request {
+  // Fresh email every run, so the collection stays repeatable.
+  const email = `bruno.t${Date.now()}.${Math.floor(Math.random() * 1000000)}@example.com`;
+  bru.setEnvVar("testEmail", email);
+}
+
+script:post-response {
+  const b = res.getBody();
+  if (b.accessToken !== undefined || b.refreshToken !== undefined) {
+    throw new Error("registration must not mint a session (no token keys allowed)");
+  }
+  if (b.username === undefined || b.id === undefined) {
+    throw new Error("registration must answer the contract's UserResponse");
+  }
+  bru.setEnvVar("userId", b.id);
+}
+
+assert {
+  res.status: eq 201
+  res.body.accountId: eq 1
+}

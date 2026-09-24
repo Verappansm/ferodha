@@ -1,0 +1,36 @@
+meta {
+  name: login unknown email
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "nobody.here@example.com",
+    "password": "correct horse battery staple"
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+  // User enumeration guard: this body and status must be indistinguishable
+  // from the wrong-password answer in request 02.
+}
+
+assert {
+  res.status: eq 401
+  res.body.errorCode: eq AUTH-401
+}

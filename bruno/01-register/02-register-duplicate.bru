@@ -1,0 +1,36 @@
+meta {
+  name: register duplicate email
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno Tester",
+    "username": "{{testEmail}}",
+    "password": "correct horse battery staple",
+    "accountId": 1
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.errorCode: eq AUTH-409
+}
