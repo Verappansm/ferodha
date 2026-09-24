@@ -8,6 +8,7 @@ import {
 import { Response } from 'express';
 import { ValidationError } from 'class-validator';
 import {
+  ErrorEnvelope,
   envelopeForStatus,
   isErrorEnvelope,
   normaliseStatus,
@@ -19,10 +20,14 @@ import { ValidationException } from './validation.exception';
  *
  * Whatever throws - an HttpException we raised on purpose, the
  * ValidationPipe's field failures, a Postgres error, a bug - the caller sees
- * exactly `{ errorCode, message }` and nothing else. Detail that an
- * investigation needs is logged server-side, from the exception's own type,
- * never from a request body: this service handles passwords and refresh
- * tokens, and none of those may appear in a log line or an error object.
+ * exactly `{ errorCode, message }` and nothing else.
+ *
+ * What goes to the log is built only from things that cannot carry a
+ * credential: the status, the envelope's errorCode, the exception's type, the
+ * stack FRAMES, and class-validator constraint names. Never an exception's
+ * message (a driver error can quote the value it choked on; Nest's 404
+ * message quotes the full URL, query string included), never a request body,
+ * never the exception object itself.
  */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -34,36 +39,29 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return;
     }
 
-    const { status, body, detail } = this.describe(exception);
+    const { status, body } = this.describe(exception);
 
     if (status >= 500) {
-      // The message of an unexpected exception may quote whatever it was
-      // holding - including credentials - so only its type goes to the log.
       this.logger.error(
-        `Unhandled exception (${exception instanceof Error ? exception.name : typeof exception})`,
-        exception instanceof Error ? exception.stack : undefined,
+        `Unhandled exception (${typeOf(exception)})`,
+        stackFramesOf(exception),
       );
     } else if (exception instanceof ValidationException) {
-      // Constraint names and constraints only: class-validator messages
-      // describe the rule ("password must be longer than 12 characters"),
-      // never the submitted value.
+      // Constraint names and rule texts only: class-validator's default
+      // messages describe the rule, never the submitted value.
       this.logger.warn(
         `Request failed field validation: ${JSON.stringify(
           this.constraintsOf(exception.validationErrors),
         )}`,
       );
-    } else if (detail) {
-      this.logger.warn(`${status} ${detail}`);
+    } else {
+      this.logger.warn(`${status} ${body.errorCode} (${typeOf(exception)})`);
     }
 
     response.status(status).json(body);
   }
 
-  private describe(exception: unknown): {
-    status: number;
-    body: unknown;
-    detail?: string;
-  } {
+  private describe(exception: unknown): { status: number; body: ErrorEnvelope } {
     if (exception instanceof HttpException) {
       const status = normaliseStatus(exception.getStatus());
       const payload = exception.getResponse();
@@ -76,17 +74,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return {
           status,
           body: { errorCode: object.errorCode, message: object.message },
-          detail: exception.message,
         };
       }
 
       // Some other HttpException (404 from an unknown path, 405 from the
       // wrong verb, ...): keep its status, replace its body with the envelope.
-      return {
-        status,
-        body: envelopeForStatus(status),
-        detail: exception.message,
-      };
+      return { status, body: envelopeForStatus(status) };
     }
 
     // Anything that is not an HttpException reached the boundary: a database
@@ -106,4 +99,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
     return constraints;
   }
+}
+
+function typeOf(exception: unknown): string {
+  return exception instanceof Error ? exception.name : typeof exception;
+}
+
+/**
+ * The `at ...` lines of a stack, without its first line. `error.stack`
+ * starts with "Name: message", so logging the stack whole would log the
+ * message after all - the indirect route this filter exists to close.
+ */
+function stackFramesOf(exception: unknown): string | undefined {
+  if (!(exception instanceof Error) || !exception.stack) {
+    return undefined;
+  }
+  const frames = exception.stack
+    .split('\n')
+    .filter((line) => /^\s+at\s/.test(line));
+  return frames.length ? frames.join('\n') : undefined;
 }

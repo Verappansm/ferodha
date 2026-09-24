@@ -7,6 +7,7 @@ meta {
 post {
   url: {{baseUrl}}/auth/register
   body: json
+  auth: none
 }
 
 headers {
@@ -20,6 +21,11 @@ body:json {
     "password": "correct horse battery staple",
     "accountId": 1
   }
+}
+
+assert {
+  res.status: eq 201
+  res.body.accountId: eq 1
 }
 
 script:pre-request {
@@ -37,9 +43,4 @@ script:post-response {
     throw new Error("registration must answer the contract's UserResponse");
   }
   bru.setEnvVar("userId", b.id);
-}
-
-assert {
-  res.status: eq 201
-  res.body.accountId: eq 1
 }
