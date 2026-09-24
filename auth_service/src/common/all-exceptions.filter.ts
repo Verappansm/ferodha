@@ -87,14 +87,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return { status: 500, body: envelopeForStatus(500) };
   }
 
-  private constraintsOf(errors: ValidationError[]): Record<string, string[]> {
+  private constraintsOf(
+    errors: ValidationError[],
+    prefix = '',
+  ): Record<string, string[]> {
     const constraints: Record<string, string[]> = {};
     for (const error of errors) {
+      const path = prefix ? `${prefix}.${error.property}` : error.property;
       if (error.constraints) {
-        constraints[error.property] = Object.values(error.constraints);
+        constraints[path] = Object.keys(error.constraints);
       }
       if (error.children?.length) {
-        Object.assign(constraints, this.constraintsOf(error.children));
+        Object.assign(constraints, this.constraintsOf(error.children, path));
       }
     }
     return constraints;

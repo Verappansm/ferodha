@@ -99,24 +99,52 @@ export class AuthService {
       throw unauthorised();
     }
 
+    // A fresh login starts a new refresh-token chain (its family).
     return this.issueTokenPair(user, randomUUID());
   }
 
-  // POST /auth/refresh - 200 with a token pair, or 401.
+  /**
+   * POST /auth/refresh - rotation with reuse detection.
+   *
+   * Every refresh token is single-use. Exchanging one spends it and issues
+   * a replacement in the same family. A spent or revoked token coming back
+   * means two parties hold the same chain - the legitimate client and
+   * whoever copied its token - and the service cannot tell which is which,
+   * so the whole family is revoked and both must log in again.
+   */
   async refresh(body: RefreshRequestDto): Promise<TokenResponse> {
-    const presented = await this.refreshTokens.findByHash(
-      refreshTokenHash(body.refreshToken),
-    );
+    const tokenHash = refreshTokenHash(body.refreshToken);
+    const presented = await this.refreshTokens.findByHash(tokenHash);
 
-    if (!presented || presented.expiresAt.getTime() <= Date.now()) {
+    if (!presented) {
+      throw unauthorised();
+    }
+
+    // Already exchanged, or already revoked: reuse, treated as theft.
+    if (presented.usedAt !== null || presented.revokedAt !== null) {
+      await this.refreshTokens.revokeFamily(presented.familyId);
+      throw unauthorised();
+    }
+
+    if (presented.expiresAt.getTime() <= Date.now()) {
+      throw unauthorised();
+    }
+
+    // Spend it. False means a concurrent request spent it a moment ago -
+    // the same reuse signal, the same response.
+    const claimed = await this.refreshTokens.markUsed(tokenHash);
+    if (!claimed) {
+      await this.refreshTokens.revokeFamily(presented.familyId);
       throw unauthorised();
     }
 
     const user = await this.users.findById(presented.userId);
     if (!user) {
+      await this.refreshTokens.revokeFamily(presented.familyId);
       throw unauthorised();
     }
 
+    // The replacement joins the same chain: one login, one family.
     return this.issueTokenPair(user, presented.familyId);
   }
 
@@ -135,7 +163,7 @@ export class AuthService {
   /**
    * Issues the pair the contract's login and refresh bodies carry: the
    * access token (exactly the contract claim set - see signAccessToken) and
-   * an opaque refresh token.
+   * an opaque refresh token whose SHA-256 hash is stored in its family.
    *
    * Signs first: a user with no linked account cannot get a token, and must
    * not leave a half-issued refresh row behind when that refuses.
@@ -194,12 +222,12 @@ export class AuthService {
   }
 }
 
-/** An opaque refresh token: random bytes, no claims. */
+/** An opaque refresh token: 384 random bits, no claims. */
 function newRefreshToken(): string {
   return randomBytes(48).toString('base64url');
 }
 
-/** The refresh_tokens table is keyed by this hash. */
+/** The only form of a refresh token this service ever stores. */
 function refreshTokenHash(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
