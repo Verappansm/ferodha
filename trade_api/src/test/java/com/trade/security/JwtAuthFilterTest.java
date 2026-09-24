@@ -23,7 +23,7 @@ import static org.mockito.Mockito.verify;
 // made for every /api/v1/** route.
 class JwtAuthFilterTest {
 
-    private final JwtService jwtService = new JwtService(JwtTestFixture.SECRET);
+    private final JwtService jwtService = new JwtService(JwtTestFixture.SECRET, "auth-service");
     private JwtAuthFilter filter;
 
     @BeforeEach
