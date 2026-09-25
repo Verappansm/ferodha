@@ -86,6 +86,8 @@ if ($KafkaBootstrap -match '^(localhost|127\.0\.0\.1):') {
     Write-Host "NOTE: KAFKA_BOOTSTRAP_SERVERS is $KafkaBootstrap - only right if Docker runs in WSL2 on this PC." -ForegroundColor Yellow
 }
 if ($JwtSecret.Length -lt 32) { Fail 'JWT_SECRET must be set and at least 32 characters.' }
+# Plain identifier only: it goes into CREATE DATABASE unquoted.
+if ($PgDb -cnotmatch '^[a-z_][a-z0-9_]*$') { Fail "POSTGRES_DB must be lowercase letters, digits and underscores (got '$PgDb')." }
 foreach ($required in 'POSTGRES_PASSWORD') {
     if ((Get-Setting $required '') -eq '') { Fail "$required is not set in windows\.env.windows." }
 }
@@ -130,7 +132,8 @@ function Find-Psql {
 
 # Runs one psql command and returns trimmed stdout; fails the script on error.
 function Invoke-Psql([string]$Database, [string[]]$PsqlArgs) {
-    $allArgs = @('-h', $PgHost, '-p', $PgPort, '-U', $PgUser, '-d', $Database, '-v', 'ON_ERROR_STOP=1', '-X', '-q', '-t', '-A') + $PsqlArgs
+    # -w: never stop at a password prompt - a wrong POSTGRES_PASSWORD fails fast.
+    $allArgs = @('-h', $PgHost, '-p', $PgPort, '-U', $PgUser, '-d', $Database, '-w', '-v', 'ON_ERROR_STOP=1', '-X', '-q', '-t', '-A') + $PsqlArgs
     # Windows PowerShell 5.1 turns every stderr line of a native command into
     # an ErrorRecord when redirected, which 'Stop' would make fatal - even a
     # harmless NOTICE. Judge psql by its exit code instead.
@@ -262,7 +265,7 @@ Write-Stage "Database ($PgDb)"
 
 $exists = Invoke-Psql 'postgres' @('-c', "SELECT 1 FROM pg_database WHERE datname = '$PgDb'")
 if ($exists -ne '1') {
-    $null = Invoke-Psql 'postgres' @('-c', "CREATE DATABASE `"$PgDb`"")
+    $null = Invoke-Psql 'postgres' @('-c', "CREATE DATABASE $PgDb")
     Write-Pass "created database $PgDb"
 }
 
@@ -292,7 +295,8 @@ if ($SkipBuild) {
     foreach ($svc in $SpringServices) {
         Push-Location (Join-Path $RepoDir $svc)
         try {
-            & mvn -q -B -DskipTests package
+            # maven.test.skip: don't even compile the tests - only the jar is needed.
+            & mvn -q -B '-Dmaven.test.skip=true' package
             if ($LASTEXITCODE -ne 0) { Fail "mvn package failed in $svc" }
         } finally { Pop-Location }
         Write-Pass "$svc built"

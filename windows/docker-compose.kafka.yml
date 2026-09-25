@@ -4,11 +4,12 @@
 # windows/README.md. Start it with windows/kafka-linux.sh, which sets
 # KAFKA_ADVERTISED_HOST and creates the topics.
 #
-# Uses its own compose project name, so it never shares containers or networks
-# with the root docker-compose.yml's full Docker stack. Like the root compose,
-# the broker keeps no volume: `down` then `up` starts empty, and
-# windows/kafka-linux.sh recreates the topics every time.
-name: trade-kafka-windows
+# kafka-linux.sh runs it as its own compose project (-p trade-kafka-windows),
+# so it never shares containers or networks with the root docker-compose.yml's
+# full Docker stack. The project name is passed with -p rather than a
+# top-level `name:`, which older standalone docker-compose versions reject.
+# Like the root compose, the broker keeps no volume: `down` then `up` starts
+# empty, and kafka-linux.sh recreates the topics every time.
 
 services:
 

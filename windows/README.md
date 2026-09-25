@@ -1,125 +1,226 @@
-# `windows` profile — services on Windows, Kafka on Linux
+# `windows` profile: services on Windows, Kafka on Linux
 
-The root `docker-compose.yml` runs everything in Docker. This profile splits it:
+The root `docker-compose.yml` runs everything in Docker. This profile splits it across two machines:
 
-| Where | What | Port |
+| Machine | Runs | Port |
 |---|---|---|
 | **Linux** (Docker) | Kafka broker | 9092 |
 | **Linux** (Docker) | Kafka UI | 8091 |
-| **Windows** (native) | Postgres | 5432 |
+| **Windows** (native) | PostgreSQL | 5432 |
 | **Windows** (native) | trade-api | 8080 |
 | **Windows** (native) | trade-executor | 8082 |
 | **Windows** (native) | trades-generator | 8083 |
 | **Windows** (native) | auth-service | 3000 |
 
 ```
-Windows                                       Linux (Docker)
-┌────────────────────────────────────┐        ┌───────────────────────┐
-│ auth-service ──token──► trade-api ─┼─ORDER_PLACED─►               │
-│                            │       │        │   Kafka  (9092)       │
-│                         Postgres   │        │   Kafka UI (8091)     │
-│                            │       │        │                       │
-│ trade-executor ◄───────────┼───────┼────────┤ orders                │
-│      └───── ORDER_FILLED/REJECTED ─┼───────►│ trade-events          │
-│ trades-generator ── ticks ─────────┼───────►│ market-data           │
-└────────────────────────────────────┘        └───────────────────────┘
+Windows                                           Linux (Docker)
+auth-service --token--> trade-api --ORDER_PLACED-->  Kafka  orders
+                           |                                  |
+                       PostgreSQL                             v
+trade-executor <------------------------------------ orders
+trade-executor ---ORDER_FILLED / ORDER_REJECTED---> trade-events
+trades-generator -------------- ticks ------------> market-data
 ```
 
-**What "windows" means in the code.** It's a Spring profile, `application-windows.yml`, in
-`trade_api`, `trade_executor` and `trades_generator`:
-- It requires `KAFKA_BOOTSTRAP_SERVERS`, with no `localhost` fallback, so a missing value fails at startup.
-- It sets the native ports and points trade-executor at `localhost:8083`.
-- It shortens the producer timeout to 10s for cross-machine sends.
+## Which env file?
 
-`start-windows.ps1` sets `SPRING_PROFILES_ACTIVE=windows`, or `windows,market-sim` when
-`MARKET_SIM=true`. auth-service needs no profile; it's configured entirely through environment variables.
+The repo has three `.env` example files. **This setup uses only `windows\.env.windows.example`.**
+
+| File | Used by |
+|---|---|
+| `.env.example` (repo root) | The full-Docker setup (`docker compose up`, `SB_AND_KAFKA_DEMO.sh`). **Not used here.** |
+| `auth_service\.env.example` | Running auth-service on its own. **Not used here.** |
+| `windows\.env.windows.example` | **This setup.** Copy it to `windows\.env.windows` and fill that copy in. |
+
+Never edit the `*.example` files. `windows\.env.windows` is git-ignored, so your password is never committed.
+
+---
 
 ## Prerequisites
 
-- **Windows:** JDK 21+, Maven 3.9+, Node 20+, PostgreSQL (service running), Git Bash (for the test script).
-- **Linux:** Docker with the compose plugin, and this repo checked out.
-- **Network:** the Windows machine must reach the Linux host on **9092** (and 8091 for the UI).
+**Linux machine:**
+- Docker, plus either `docker compose` or `docker-compose`. The script uses whichever exists.
+- Git.
+- Firewall open on **9092** and **8091** to the Windows machine.
 
-## 1. Linux: start Kafka
+**Windows machine:**
+- JDK 21 or newer (25 works), Maven 3.9+, Node 20+.
+- PostgreSQL, with the service running.
+- Git for Windows, which provides Git Bash for the test script.
 
+The examples below use `10.8.76.244` as the Linux machine's IP. Replace it with yours everywhere.
+
+---
+
+## Part A: Linux machine (Kafka)
+
+**A1. Get the code.**
 ```bash
-./windows/kafka-linux.sh
-# or, if the auto-detected IP is the wrong interface:
-KAFKA_ADVERTISED_HOST=192.168.1.20 ./windows/kafka-linux.sh
+git clone <repo-url>
+cd chennai-capstone-SE4-team2
+git checkout feature/nestjs-auth-service
+```
+If the repo is already cloned there, just update it:
+```bash
+cd chennai-capstone-SE4-team2
+git checkout feature/nestjs-auth-service
+git pull
 ```
 
-The script starts the broker and UI, waits until the broker is healthy, and creates `orders`,
-`trade-events`, `market-data` and their `.DLT` topics. It finishes by printing the exact
-`KAFKA_BOOTSTRAP_SERVERS` value to use on Windows.
+**A2. Find this machine's IP.**
+```bash
+hostname -I        # first address, e.g. 10.8.76.244
+```
 
-> **Docker in WSL2 on the same PC?** Use `KAFKA_ADVERTISED_HOST=localhost`. WSL2 forwards
-> `localhost` ports to Windows.
+**A3. Remove old containers from the full-Docker setup.** Do this only if you ran the whole stack in Docker before, because the container names clash. It removes the containers, not the images.
+```bash
+docker rm -f trade-kafka kafka-ui
+```
 
-## 2. Windows: configure
+**A4. Start Kafka.**
+```bash
+KAFKA_ADVERTISED_HOST=10.8.76.244 bash windows/kafka-linux.sh
+```
+The script starts Kafka and Kafka UI, waits until the broker is healthy, and creates the topics: `orders`, `trade-events`, `market-data` and their `.DLT` versions. It ends with:
+```
+KAFKA_BOOTSTRAP_SERVERS=10.8.76.244:9092
+Kafka UI:  http://10.8.76.244:8091
+```
 
+**A5. Check the topics exist.**
+```bash
+docker exec trade-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+```
+
+**A6. Open the firewall.** Only needed if Windows can't connect in step B3.
+```bash
+sudo ufw allow 9092/tcp && sudo ufw allow 8091/tcp                                            # Ubuntu/Debian
+sudo firewall-cmd --add-port=9092/tcp --add-port=8091/tcp --permanent && sudo firewall-cmd --reload  # RHEL/Fedora
+```
+
+Leave the Linux machine running. It needs no env file.
+
+---
+
+## Part B: Windows machine (everything else)
+
+**B1. Check PostgreSQL is running.** Press Win+R, type `services.msc`, and make sure **postgresql-x64-<version>** is *Running*.
+Have the password you set for the `postgres` user when installing ready.
+
+**B2. Get the code.** In PowerShell:
+```powershell
+git clone <repo-url>
+cd chennai-capstone-SE4-team2
+git checkout feature/nestjs-auth-service
+```
+
+**B3. Check Windows can reach Kafka.**
+```powershell
+Test-NetConnection 10.8.76.244 -Port 9092
+```
+It must show `TcpTestSucceeded : True`. If it shows False, do step A6.
+
+**B4. Create your env file.**
 ```powershell
 copy windows\.env.windows.example windows\.env.windows
 notepad windows\.env.windows
 ```
+Change only these lines, save, and close Notepad:
+```
+KAFKA_BOOTSTRAP_SERVERS=10.8.76.244:9092
+KAFKA_UI_URL=http://10.8.76.244:8091
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<your postgres password>
+PSQL_BIN_DIR=C:\Program Files\PostgreSQL\18\bin
+```
+- `POSTGRES_DB=tradedb` can stay as it is. The start script creates that database.
+- `FAUXNANCE_API_URL` and `FAUXNANCE_API_KEY` are optional. Left blank, every order still goes through Kafka but ends as `REJECTED / PRICE_UNAVAILABLE`. Fill them in to get real fills.
+- `MARKET_SIM=true` turns on the order book, partial fills and synthetic counter-orders.
 
-At minimum, set `KAFKA_BOOTSTRAP_SERVERS` (from step 1), `POSTGRES_USER` and `POSTGRES_PASSWORD`.
-If `psql.exe` isn't on PATH and isn't under `C:\Program Files\PostgreSQL\<ver>\bin`, also set `PSQL_BIN_DIR`.
-
-## 3. Windows: start everything
-
+**B5. Start all the services.** From the repo folder in PowerShell:
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1
-# later runs, if nothing changed:
-powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipBuild
 ```
+The first run takes a few minutes because it builds everything. You should see:
+```
+== Preflight ==              tools found, Kafka reachable, Postgres login OK
+== Database (tradedb) ==     database created + base schema applied (first run only)
+== Build ==                  3 Spring jars + auth-service
+== Start (SPRING_PROFILES_ACTIVE=windows) ==
+PASS: trade-api is up / trades-generator / trade-executor / auth-service
+== Kafka connectivity (trade-executor consumer group) ==
+PASS: trade-executor joined its consumer group on the Linux broker
+== ALL SERVICES RUNNING ==
+```
+If Windows Firewall asks whether to allow Java or Node, click **Allow**. The services run hidden in the background, and their logs are in `windows\.run\logs\`.
 
-In order, the script:
-1. Checks the tools are installed, **Kafka is reachable from Windows**, and Postgres accepts the login.
-2. Creates the database if it's missing. On an empty database it applies `001_initial_schema.sql` and
-   `001_seed_data.sql` only, the same two files Docker's postgres applies. It deliberately doesn't run
-   `database/apply.sh`: that also runs `003_auth_service.sql`, whose
-   `CREATE TYPE account_status_enum` breaks trade-api's Liquibase changeset that creates the same type.
-3. Builds the three jars (`mvn package -DskipTests`) and auth-service (`npm ci && npm run build`).
-4. Starts trade-api, then waits for it. Its Liquibase owns the schema after Sprint 3.
-5. Starts trades-generator, trade-executor and auth-service, and waits for each health check.
-6. Waits for trade-executor to be **assigned partitions of `orders`**. This is the check that proves
-   Windows ↔ Linux Kafka actually works, because actuator health has no Kafka indicator.
-
-Logs go to `windows\.run\logs\<service>.log`.
-
-## 4. Windows: verify end to end
-
+**B6. Test the whole flow.** Right-click inside the repo folder, choose **Open Git Bash here**, and run:
 ```bash
-bash windows/test-windows.sh      # from Git Bash
+bash windows/test-windows.sh
 ```
-
 The stages are:
 1. All four services are healthy and Kafka is reachable.
-2. A request with no token gets a **401**.
-3. A fresh user is **registered and logged in through auth-service**. This is a real token, not a minted one.
+2. A request with no token gets **401**.
+3. A new user is **registered and logged in through auth-service**, which returns a real token.
 4. trade-api accepts that token and stores the order as **NEW**.
-5. trade-executor logs `Received ORDER_PLACED` for that order. The event went Windows → Linux Kafka → Windows.
-6. The order settles to **FILLED / REJECTED** (or rests at NEW under market-sim).
-7. The row is read back from Postgres with `psql`.
+5. trade-executor logs `Received ORDER_PLACED` for that order: Windows to Linux Kafka and back to Windows.
+6. The order settles to **FILLED / REJECTED**. Under market-sim it may rest at NEW.
+7. The row is read back from PostgreSQL.
 
-If `FAUXNANCE_API_URL`/`KEY` are blank, the order resolves to `REJECTED` / `PRICE_UNAVAILABLE`.
-The round trip is still proven.
+It ends with `== ALL STAGES PASSED ==`.
 
-## 5. Stop
+**B7. Optional: watch the events.** Open `http://10.8.76.244:8091`, then go to **Topics**, then `orders` or `trade-events`, then **Messages**.
+
+---
+
+## Stopping
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File windows\stop-windows.ps1    # Windows services
+powershell -ExecutionPolicy Bypass -File windows\stop-windows.ps1       # Windows
 ```
 ```bash
-./windows/kafka-linux.sh down                                         # Kafka, on Linux
+bash windows/kafka-linux.sh down                                         # Linux
 ```
+
+## Running again another day
+
+1. **Linux:** `KAFKA_ADVERTISED_HOST=10.8.76.244 bash windows/kafka-linux.sh`. Kafka keeps no data between runs, so this recreates the topics every time.
+2. **Windows:** skip the rebuild. The env file and database are already there.
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipBuild
+   ```
+3. **Windows (Git Bash), optional:** `bash windows/test-windows.sh`
+
+Drop `-SkipBuild` after a `git pull` so the new code is built.
+
+---
+
+## What the pieces are
+
+- **`application-windows.yml`**: the Spring profile in `trade_api`, `trade_executor` and `trades_generator`.
+  - Requires `KAFKA_BOOTSTRAP_SERVERS`, with no localhost fallback.
+  - Sets the native ports and points trade-executor at `localhost:8083`.
+  - Shortens the producer timeout to 10s for cross-machine sends.
+  - Gives the Fauxnance settings safe defaults.
+
+  `start-windows.ps1` activates it with `SPRING_PROFILES_ACTIVE=windows`, or `windows,market-sim`.
+- **`start-windows.ps1`**:
+  - Checks the tools, Kafka reachability and the PostgreSQL login.
+  - Creates the database. On an empty database it applies only `001_initial_schema.sql` and `001_seed_data.sql`, the same two files Docker's postgres applies.
+  - Builds everything.
+  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then the other three.
+  - Waits for each health check, and for trade-executor to be assigned partitions of `orders`.
+- **`kafka-linux.sh`** plus **`docker-compose.kafka.yml`**: Kafka and Kafka UI only. The broker advertises the Linux IP on 9092 so Windows clients can reconnect to it.
 
 ## Troubleshooting
 
-| Symptom | Cause |
+| Symptom | Fix |
 |---|---|
-| `Cannot reach Kafka at ...` in preflight | Linux firewall (`sudo ufw allow 9092/tcp`), wrong IP, or Kafka not started. |
-| Preflight passes but the executor log shows connection errors to **another** address (often `localhost`) | The broker advertises an address Windows can't use. Re-run `kafka-linux.sh` with `KAFKA_ADVERTISED_HOST` set to the IP Windows connects to. |
-| trade-api fails with `type "account_status_enum" already exists` | `database/apply.sh` was run against this database. Drop and recreate the database, then let `start-windows.ps1` bootstrap it. |
-| auth-service exits at boot | Check `auth-service.err.log`. Usually `JWT_SECRET` < 32 chars or Postgres credentials. |
+| Linux: `unknown shorthand flag: 'f' in -f` | Old copy of the script. `git pull`: it now falls back to `docker-compose`. |
+| Linux: `a container named 'trade-kafka' already exists` | `docker rm -f trade-kafka kafka-ui`, then re-run. |
+| Windows: `Cannot reach Kafka at ...` | Wrong IP in `.env.windows`, Kafka not started, or the Linux firewall (step A6). |
+| Preflight passes, but the trade-executor log shows connection errors to a **different** address | Kafka advertises the wrong address. Re-run A4 with `KAFKA_ADVERTISED_HOST` set to the IP Windows uses. |
+| `psql failed` or `password authentication failed` | Check `POSTGRES_USER` and `POSTGRES_PASSWORD`, and set `PSQL_BIN_DIR` if psql isn't found. |
+| trade-api: `type "account_status_enum" already exists` | `database\apply.sh` was run on this database. **Don't use apply.sh here.** Drop the `tradedb` database and run B5 again. |
 | `Port 8080 is already in use` | A previous run is still up. Run `stop-windows.ps1`. |
+| A service `exited during startup` | The script prints its log. Full logs are in `windows\.run\logs\<service>.log` and `.err.log`. |

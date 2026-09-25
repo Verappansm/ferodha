@@ -22,8 +22,11 @@ trades-generator:
 
 # A variable can't be set to an empty string on Windows (setting "" deletes
 # it), so a blank FAUXNANCE_* in windows/.env.windows arrives here as unset.
-# Default to empty - the same value docker-compose passes - rather than
-# failing placeholder resolution at startup.
+# The URL defaults to a closed local port rather than "": an empty base URL
+# makes every request a relative URI, which fails with an exception the
+# quote client doesn't treat as a fetch failure (the order would stay NEW and
+# end up on orders.DLT). Connection refused is a normal fetch failure, so
+# without Fauxnance configured orders resolve to REJECTED/PRICE_UNAVAILABLE.
 fauxnance:
-  base-url: ${FAUXNANCE_API_URL:}
+  base-url: ${FAUXNANCE_API_URL:http://127.0.0.1:9}
   api-key: ${FAUXNANCE_API_KEY:}
