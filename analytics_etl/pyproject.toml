@@ -22,15 +22,8 @@ dev = ["pytest>=8.0"]
 analytics-etl = "etl_pipeline.pipeline.main:main"
 analytics-etl-dashboard = "etl_pipeline.dashboard.build_report:main"
 
-[tool.setuptools]
-packages = [
-    "etl_pipeline",
-    "etl_pipeline.extract",
-    "etl_pipeline.transform",
-    "etl_pipeline.load",
-    "etl_pipeline.pipeline",
-    "etl_pipeline.dashboard",
-]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

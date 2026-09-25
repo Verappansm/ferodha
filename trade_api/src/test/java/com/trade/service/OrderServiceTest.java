@@ -11,7 +11,6 @@ import com.trade.enums.AccountStatus;
 import com.trade.enums.OrderSide;
 import com.trade.enums.OrderStatus;
 import com.trade.exception.AccountNotActiveException;
-import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.OrderNotCancellableException;
@@ -37,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -46,9 +44,16 @@ import static org.mockito.Mockito.when;
 
 // OrderService orchestrates writes around the already-tested OrderLogic
 // rules (see OrderLogicTest in java_module), so this only tests what this
-// class itself is responsible for: resolving DTOs, running the optimistic
-// lock, translating a lost race or a constraint violation into the right
-// domain exception, and the cancel state transition.
+// class itself is responsible for: resolving DTOs, translating a constraint
+// violation into the right domain exception, and the cancel state
+// transition. Since Sprint 7's Story 3 (Trade REST API Publishes
+// ORDER_PLACED and Answers NEW), placeOrder no longer fills synchronously -
+// there is no price in the placement request, pricing is the executor's
+// job - so it never touches the account balance or writes a Trade row; it
+// only ever writes the Orders row at NEW. The "concurrent update on the
+// account" scenario this file used to pin no longer exists as a placeOrder
+// code path (ConcurrentUpdateException is no longer thrown from here) and
+// was removed rather than left pinning dead code.
 class OrderServiceTest {
 
     private static final UUID ACCOUNT_UUID = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -73,25 +78,25 @@ class OrderServiceTest {
         IdempotencyKeyStore idempotencyKeyStore = new IdempotencyKeyStoreImpl(orderMapper);
         OrderLogic orderLogic = new OrderLogic(accountRepository, instrumentRepository, positionRepository, idempotencyKeyStore);
 
-        orderService = new OrderService(accountMapper, instrumentMapper, orderMapper, orderLogic, new AccountAccessGuard());
+        orderService = new OrderService(accountMapper, instrumentMapper, orderMapper, orderLogic,
+                new AccountAccessGuard());
     }
 
     @Test
-    @DisplayName("Placing an order commits the balance write and the order write together")
-    void placeOrderCommitsCashAndOrderTogether() throws Exception {
+    @DisplayName("An accepted order is written at NEW and answered NEW, with no cash or trade write at placement time")
+    void placeOrderWritesNewWithoutFillingSynchronously() throws Exception {
         givenActiveAccount(new BigDecimal("5000.00"), 0);
         givenTradableInstrument();
         when(orderMapper.existsIdempotencyKey("KEY-1")).thenReturn(false);
-        when(accountMapper.updateBalanceWithVersion(eq(1L), any(BigDecimal.class), eq(0))).thenReturn(1);
         when(orderMapper.insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any(), any(), any()))
                 .thenReturn(1);
 
         OrderResponseDto response = orderService.placeOrder(validRequest(), 1L);
 
-        assertEquals(OrderStatus.FILLED, response.status());
-        verify(accountMapper).updateBalanceWithVersion(eq(1L), eq(new BigDecimal("3000.00")), eq(0));
+        assertEquals(OrderStatus.NEW, response.status());
         verify(orderMapper, times(1)).insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any(), any(), any());
-        verify(orderMapper, times(1)).insertTrade(any(), any(), anyInt());
+        verify(accountMapper, never()).updateBalanceWithVersion(anyLong(), any(), anyInt());
+        verify(orderMapper, never()).insertTrade(any(), any(), anyInt());
     }
 
     @Test
@@ -107,19 +112,6 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("A concurrent write on the account is detected and the order is refused with ORD-409")
-    void concurrentUpdateIsRefused() {
-        givenActiveAccount(new BigDecimal("5000.00"), 0);
-        givenTradableInstrument();
-        when(orderMapper.existsIdempotencyKey("KEY-1")).thenReturn(false);
-        when(accountMapper.updateBalanceWithVersion(eq(1L), any(BigDecimal.class), eq(0))).thenReturn(0);
-
-        assertThrows(ConcurrentUpdateException.class, () -> orderService.placeOrder(validRequest(), 1L));
-
-        verify(orderMapper, never()).insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any(), any(), any());
-    }
-
-    @Test
     @DisplayName("A reused idempotency key that races past the fast-path check is refused via the unique constraint")
     void duplicateKeyDetectedAtInsertIsTranslated() {
         givenActiveAccount(new BigDecimal("5000.00"), 0);
@@ -127,7 +119,6 @@ class OrderServiceTest {
         // isUsed() sees the key as free (this is the race), but the insert
         // still hits the UNIQUE constraint - that is the actual guard.
         when(orderMapper.existsIdempotencyKey("KEY-1")).thenReturn(false);
-        when(accountMapper.updateBalanceWithVersion(eq(1L), any(BigDecimal.class), eq(0))).thenReturn(1);
         when(orderMapper.insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any(), any(), any()))
                 .thenThrow(new DataIntegrityViolationException("duplicate key"));
 

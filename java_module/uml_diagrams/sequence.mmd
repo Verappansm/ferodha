@@ -1,0 +1,144 @@
+sequenceDiagram
+    autonumber
+
+    %% Place Order, match order and cash settlement
+    title Flow 1: Order Submission, Idempotency Check, Execution & Cash Settlement
+
+    actor User as Client / Advisor
+    participant API as Order Controller
+    participant Idem as Idempotency Engine
+    participant AccRepo as Account Repository
+    participant OrderEngine as Order Matching Engine
+    participant DB as PostgreSQL Database
+    participant Bank as Banking / Settlement Service
+    participant Notify as Notification Service
+
+    User->>API: POST /api/v1/orders (account_id, instrument_id, side, quantity, price, idempotency_key)
+    API->>Idem: validateAndLockKey(idempotency_key)
+    alt Idempotency Key Already Used (SQLSTATE 23505)
+        Idem-->>API: Duplicate Request Detected
+        API-->>User: HTTP 409 Conflict (Order already processed)
+    else Key Unique & Lock Acquired
+        Idem-->>API: Key Verified & Locked
+        API->>AccRepo: verifyAccountActiveAndBalance(account_id, required_funds)
+        alt Account Invalid or Insufficient Funds
+            AccRepo-->>API: Account Closed/Suspended or Insufficient Balance
+            API->>Idem: releaseLock(idempotency_key)
+            API-->>User: HTTP 400 Bad Request / 422 Unprocessable Entity
+        else Account Valid & Funds Reserved
+            AccRepo-->>API: Account Active & Balance Verified
+            API->>DB: INSERT INTO Orders (PENDING status, idempotency_key)
+            DB-->>API: Order Created (order_id)
+
+            API->>OrderEngine: processOrder(order_id)
+            OrderEngine->>DB: SELECT Market_Data for instrument_id
+            DB-->>OrderEngine: Current Spot Price / Depth
+
+            OrderEngine->>DB: INSERT INTO Trades (order_id, execution_price, quantity, idempotency_key)
+            DB-->>OrderEngine: Trade Record Created (trade_id)
+
+            OrderEngine->>DB: UPDATE Orders SET status = 'FILLED' WHERE order_id = :id
+            DB-->>OrderEngine: Order Status Updated
+
+            OrderEngine->>Bank: settleTradeCash(trade_id, account_id, trade_value)
+            Bank->>DB: UPDATE Accounts SET cash_balance = cash_balance - value WHERE account_id = :id
+            Bank->>DB: INSERT INTO Transactions (BUY_SETTLEMENT, metadata, idempotency_key)
+            DB-->>Bank: Settlement Transaction Logged
+            Bank-->>OrderEngine: Cash Settlement Completed
+
+            OrderEngine->>Notify: queueNotification(user_id, "TRADE_EXECUTED", payload)
+            Notify->>DB: INSERT INTO Notifications (payload, idempotency_key)
+            DB-->>Notify: Notification Logged
+
+            OrderEngine-->>API: Order Executed & Settled (trade_id)
+            API-->>User: HTTP 201 Created (Order Filled, Trade Details Payload)
+        end
+    end
+
+    %% Bank Deposit, cash credit
+    title Flow 2: Third-Party Clearing Bank Deposit & Account Cash Credit
+
+    actor Client as Client User
+    participant BankAPI as Banking Controller
+    participant BankSvc as Banking Service
+    participant ExtBank as Third_Party_Bank Table
+    participant IntAcc as Accounts Table
+    participant TxnDB as Transactions Table
+
+    Client->>BankAPI: POST /api/v1/bank/deposit (account_id, bank_account_number, amount, pin, idempotency_key)
+    BankAPI->>BankSvc: executeDeposit(account_id, bank_account_number, amount, pin, idempotency_key)
+    BankSvc->>ExtBank: SELECT balance, pin_hash FROM Third_Party_Bank WHERE bank_account_number = :num
+    ExtBank-->>BankSvc: External Bank Account Details
+
+    BankSvc->>BankSvc: verifyPin(pin, pin_hash)
+    alt Invalid PIN or Insufficient Bank Balance
+        BankSvc-->>BankAPI: Verification Failed
+        BankAPI-->>Client: HTTP 401 Unauthorized / HTTP 400 Insufficient Funds
+    else Bank Balance Sufficient & PIN Valid
+        BankSvc->>ExtBank: UPDATE Third_Party_Bank SET balance = balance - :amount
+        ExtBank-->>BankSvc: External Bank Balance Debited
+
+        BankSvc->>IntAcc: UPDATE Accounts SET cash_balance = cash_balance + :amount WHERE account_id = :id
+        IntAcc-->>BankSvc: Internal Account Cash Credited
+
+        BankSvc->>TxnDB: INSERT INTO Transactions (DEPOSIT, amount, metadata, idempotency_key)
+        TxnDB-->>BankSvc: Transaction Logged (transaction_id)
+
+        BankSvc-->>BankAPI: Deposit Successful
+        BankAPI-->>Client: HTTP 200 OK (Updated Cash Balance & Txn Receipt)
+    end
+
+    %% Dynamic valuation [ viewing the view created to get data from the candlestick data from fauxnance api]
+    title Flow 3: Dynamic Portfolio Valuation & Positions_View Calculation
+
+    actor Advisor as Advisor / Analyst / Client
+    participant PortAPI as Portfolio Controller
+    participant PortEngine as Portfolio Valuation Engine
+    participant View as Positions_View (PostgreSQL)
+    participant MktDB as Market_Data Table
+    participant TradeDB as Trades & Orders Tables
+
+    Advisor->>PortAPI: GET /api/v1/accounts/{account_id}/positions
+    PortAPI->>PortEngine: getAccountPositions(account_id)
+    PortEngine->>View: SELECT * FROM Positions_View WHERE account_id = :account_id
+
+    note over View,TradeDB: Internal View Query Logic
+    View->>TradeDB: Aggregate BUY/SELL execution quantities & total buy costs
+    TradeDB-->>View: Aggregated Position Quantities & Avg Buy Price Basis
+    View->>MktDB: Query Latest Spot Close Price per Instrument (DISTINCT ON)
+    MktDB-->>View: Current Market Prices
+    View->>View: Compute Market Value (qty * spot) & Unrealized P&L Value/Percentage
+
+    View-->>PortEngine: Result Set (position_id, ticker, quantity, avg_price, market_value, unrealized_pnl)
+    PortEngine-->>PortAPI: Formatted Portfolio Holdings Payload
+    PortAPI-->>Advisor: HTTP 200 OK (Real-Time Positions & P&L Analytics)
+
+    %% User Sign Up Bank Sync
+    title Flow 4: User Onboarding Signup & Admin Account Activation
+
+    actor NewUser as New User
+    actor AdminUser as Admin User
+    participant AuthAPI as Auth Controller
+    participant UserDB as Users Table
+    participant BankDB as Third_Party_Bank Table
+    participant AccDB as Accounts Table
+
+    NewUser->>AuthAPI: POST /api/v1/auth/signup (name, email, phone, password, bank_account_number)
+    AuthAPI->>BankDB: SELECT * FROM Third_Party_Bank WHERE email = :email AND bank_account_number = :num
+    alt External Bank Verification Failed
+        BankDB-->>AuthAPI: No matching bank account record
+        AuthAPI-->>NewUser: HTTP 400 Bad Request (Invalid Bank Customer Credentials)
+    else Verification Successful
+        BankDB-->>AuthAPI: Bank Account Verified
+        AuthAPI->>UserDB: INSERT INTO Users (status = 'PENDING', role = 'client')
+        UserDB-->>AuthAPI: User Created (user_id)
+        AuthAPI-->>NewUser: HTTP 201 Created (Onboarding Request Pending Approval)
+    end
+
+    AdminUser->>AuthAPI: POST /api/v1/admin/users/{user_id}/approve
+    AuthAPI->>UserDB: UPDATE Users SET status = 'ACTIVE' WHERE user_id = :id
+    UserDB-->>AuthAPI: User Status Updated to ACTIVE
+
+    AuthAPI->>AccDB: INSERT INTO Accounts (user_id, bank_account_number, currency = 'USD', cash_balance = 0.00, state = 'OPEN')
+    AccDB-->>AuthAPI: Trading Account Created (account_id)
+    AuthAPI-->>AdminUser: HTTP 200 OK (Client Approved & Trading Account Provisioned)

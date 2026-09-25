@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.InstrumentMapper">
+
+    <resultMap id="instrumentRow" type="com.trade.executor.mapper.InstrumentRow">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="ticker" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="tradable" javaType="boolean"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, currency, tradable
+        FROM Instruments
+        WHERE instrument_id = #{instrumentId}
+    </select>
+
+</mapper>

@@ -1,0 +1,8 @@
+# Layered automatically on top of application.yml when
+# SPRING_PROFILES_ACTIVE=market-sim. FauxnanceQuoteClient/MarketDataPoller
+# vs TradesGeneratorQuoteSource are already switched by @Profile directly
+# (see their own classes) - this file only needs to flip the one plain
+# property nothing else already reads from the profile name.
+executor:
+  matching:
+    enabled: true

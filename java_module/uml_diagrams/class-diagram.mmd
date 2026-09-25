@@ -1,0 +1,179 @@
+classDiagram
+    direction TB
+
+    %% ---------- Enumerations ----------
+    class AccountStatus {
+        <<enumeration>>
+        ACTIVE
+        SUSPENDED
+        CLOSED
+    }
+
+    class OrderSide {
+        <<enumeration>>
+        BUY
+        SELL
+    }
+
+    class OrderStatus {
+        <<enumeration>>
+        NEW
+        FILLED
+        REJECTED
+        CANCELLED
+    }
+
+    class InstrumentType {
+        <<enumeration>>
+        EQUITY
+        BOND
+        ETF
+        FOREX
+        CRYPTO
+    }
+
+    %% ---------- Entities ----------
+    class Account {
+        -Long accountId
+        -String accountRef
+        -String holderName
+        -BigDecimal balance
+        -AccountStatus status
+        -long version
+        +credit(BigDecimal amount) void
+        +debit(BigDecimal amount) void
+        +isAffordable(BigDecimal amount) bool
+        +isActive() bool
+    }
+
+    class Instrument {
+        -String symbol
+        -String displayName
+        -InstrumentType assetClass
+        -String quoteCurrency
+        -boolean tradable
+        +isTradable() bool
+        +delist() void
+    }
+
+    class Order {
+        -Long accountId
+        -String symbol
+        -OrderSide side
+        -Integer quantity
+        -BigDecimal price
+        -String idempotencyKey
+        -OrderStatus status
+        -BigDecimal executedPrice
+        +markFilled(BigDecimal executedPrice) void
+        +reject() void
+        +cancel() void
+    }
+
+    class Position {
+        -Long accountId
+        -String symbol
+        -long quantity
+        -BigDecimal averageCost
+        +applyBuy(long qty, BigDecimal price) void
+        +applySell(long qty) void
+    }
+
+    %% ---------- DTO ----------
+    class PlaceOrderRequestDto {
+        <<record>>
+        +Long accountId
+        +String symbol
+        +OrderSide side
+        +Integer quantity
+        +BigDecimal price
+        +String idempotencyKey
+    }
+
+    %% ---------- Rule engine and its seams ----------
+    class OrderLogic {
+        -AccountRepository accounts
+        -InstrumentRepository instruments
+        -PositionRepository positions
+        -IdempotencyKeyStore idempotencyKeys
+        +evaluate(Order order) void
+    }
+
+    class AccountRepository {
+        <<interface>>
+        +findById(Long accountId) Optional~Account~
+    }
+
+    class InstrumentRepository {
+        <<interface>>
+        +findBySymbol(String symbol) Optional~Instrument~
+    }
+
+    class PositionRepository {
+        <<interface>>
+        +find(Long accountId, String symbol) Optional~Position~
+    }
+
+    class IdempotencyKeyStore {
+        <<interface>>
+        +isUsed(String key) bool
+        +markUsed(String key) void
+    }
+
+    %% ---------- Exception hierarchy ----------
+    class DomainException {
+        <<abstract>>
+        -String code
+        +getCode() String
+    }
+    class AccountNotFoundException {
+        -Long accountId
+    }
+    class AccountNotActiveException {
+        -Long accountId
+        -AccountStatus status
+    }
+    class InstrumentNotFoundException {
+        -String symbol
+    }
+    class InsufficientFundsException {
+        -BigDecimal required
+        -BigDecimal available
+    }
+    class InsufficientHoldingsException {
+        -int requested
+        -long held
+    }
+    class DuplicateOrderException {
+        -String idempotencyKey
+    }
+    class InvalidOrderException {
+        -String field
+    }
+
+    DomainException <|-- AccountNotFoundException
+    DomainException <|-- AccountNotActiveException
+    DomainException <|-- InstrumentNotFoundException
+    DomainException <|-- InsufficientFundsException
+    DomainException <|-- InsufficientHoldingsException
+    DomainException <|-- DuplicateOrderException
+    DomainException <|-- InvalidOrderException
+
+    %% ---------- Relationships and cardinality ----------
+    Account "1" -- "0..*" Order : places against
+    Instrument "1" -- "0..*" Order : targeted by
+    Account "1" -- "0..*" Position : holds
+    Instrument "1" -- "0..*" Position : held as
+
+    Account ..> AccountStatus : has a
+    Order ..> OrderSide : has a
+    Order ..> OrderStatus : has a
+    Instrument ..> InstrumentType : has a
+    PlaceOrderRequestDto ..> OrderSide : has a
+
+    OrderLogic ..> Order : evaluates
+    OrderLogic ..> DomainException : throws
+    OrderLogic ..> AccountRepository : depends on
+    OrderLogic ..> InstrumentRepository : depends on
+    OrderLogic ..> PositionRepository : depends on
+    OrderLogic ..> IdempotencyKeyStore : depends on
