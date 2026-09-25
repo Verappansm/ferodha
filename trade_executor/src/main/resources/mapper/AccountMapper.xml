@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.AccountMapper">
+
+    <resultMap id="accountRow" type="com.trade.executor.mapper.AccountRow">
+        <constructor>
+            <idArg column="id" javaType="long"/>
+            <arg column="account_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="cash_balance" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="version" javaType="int"/>
+            <arg column="currency" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="accountRow">
+        SELECT id, account_id, cash_balance, status, version, currency
+        FROM Accounts
+        WHERE id = #{id}
+    </select>
+
+    <!-- Identical optimistic-lock UPDATE to trade_api's AccountMapper.xml -->
+    <update id="updateBalanceWithVersion">
+        UPDATE Accounts
+        SET cash_balance = #{newBalance},
+            version       = version + 1,
+            last_updated  = now()
+        WHERE id = #{id}
+          AND version = #{expectedVersion}
+    </update>
+
+</mapper>
