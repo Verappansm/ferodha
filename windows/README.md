@@ -1,6 +1,7 @@
 # `windows` profile: services on Windows, Kafka on Linux
 
-The root `docker-compose.yml` runs everything in Docker. This profile splits it across two machines:
+The root `docker-compose.yml` runs everything in Docker. This profile splits it across two machines.
+It runs the **main (default) profile only**: trades-generator and market-sim are not part of this setup.
 
 | Machine | Runs | Port |
 |---|---|---|
@@ -9,7 +10,6 @@ The root `docker-compose.yml` runs everything in Docker. This profile splits it 
 | **Windows** (native) | PostgreSQL | 5432 |
 | **Windows** (native) | trade-api | 8080 |
 | **Windows** (native) | trade-executor | 8082 |
-| **Windows** (native) | trades-generator | 8083 |
 | **Windows** (native) | auth-service | 3000 |
 
 ```
@@ -19,7 +19,6 @@ auth-service --token--> trade-api --ORDER_PLACED-->  Kafka  orders
                        PostgreSQL                             v
 trade-executor <------------------------------------ orders
 trade-executor ---ORDER_FILLED / ORDER_REJECTED---> trade-events
-trades-generator -------------- ticks ------------> market-data
 ```
 
 ## Which env file?
@@ -135,7 +134,6 @@ PSQL_BIN_DIR=C:\Program Files\PostgreSQL\18\bin
 ```
 - `POSTGRES_DB=tradedb` can stay as it is. The start script creates that database.
 - `FAUXNANCE_API_URL` and `FAUXNANCE_API_KEY` are optional. Left blank, every order still goes through Kafka but ends as `REJECTED / PRICE_UNAVAILABLE`. Fill them in to get real fills.
-- `MARKET_SIM=true` turns on the order book, partial fills and synthetic counter-orders.
 
 **B5. Start all the services.** From the repo folder in PowerShell:
 ```powershell
@@ -145,9 +143,9 @@ The first run takes a few minutes because it builds everything. You should see:
 ```
 == Preflight ==              tools found, Kafka reachable, Postgres login OK
 == Database (tradedb) ==     database created + base schema applied (first run only)
-== Build ==                  3 Spring jars + auth-service
+== Build ==                  trade-api + trade-executor jars + auth-service
 == Start (SPRING_PROFILES_ACTIVE=windows) ==
-PASS: trade-api is up / trades-generator / trade-executor / auth-service
+PASS: trade-api is up / trade-executor is up / auth-service is up
 == Kafka connectivity (trade-executor consumer group) ==
 PASS: trade-executor joined its consumer group on the Linux broker
 == ALL SERVICES RUNNING ==
@@ -159,13 +157,14 @@ If Windows Firewall asks whether to allow Java or Node, click **Allow**. The ser
 bash windows/test-windows.sh
 ```
 The stages are:
-1. All four services are healthy and Kafka is reachable.
+1. trade-api, trade-executor and auth-service are healthy, and Kafka is reachable.
 2. A request with no token gets **401**.
 3. A new user is **registered and logged in through auth-service**, which returns a real token.
 4. trade-api accepts that token and stores the order as **NEW**.
 5. trade-executor logs `Received ORDER_PLACED` for that order: Windows to Linux Kafka and back to Windows.
-6. The order settles to **FILLED / REJECTED**. Under market-sim it may rest at NEW.
-7. The row is read back from PostgreSQL.
+6. The order settles to **FILLED / REJECTED**. Without a Fauxnance key it's `REJECTED / PRICE_UNAVAILABLE`, which is expected.
+7. The result is shown: the order entry, the balance before and after, and positions, all through trade-api.
+8. The order row and account cash are read back from PostgreSQL.
 
 It ends with `== ALL STAGES PASSED ==`.
 
@@ -197,18 +196,18 @@ Drop `-SkipBuild` after a `git pull` so the new code is built.
 
 ## What the pieces are
 
-- **`application-windows.yml`**: the Spring profile in `trade_api`, `trade_executor` and `trades_generator`.
+- **`application-windows.yml`**: the Spring profile in `trade_api` and `trade_executor`. `trades_generator` has one too, but this setup doesn't start it.
   - Requires `KAFKA_BOOTSTRAP_SERVERS`, with no localhost fallback.
-  - Sets the native ports and points trade-executor at `localhost:8083`.
+  - Sets the native ports.
   - Shortens the producer timeout to 10s for cross-machine sends.
   - Gives the Fauxnance settings safe defaults.
 
-  `start-windows.ps1` activates it with `SPRING_PROFILES_ACTIVE=windows`, or `windows,market-sim`.
+  `start-windows.ps1` activates it with `SPRING_PROFILES_ACTIVE=windows`.
 - **`start-windows.ps1`**:
   - Checks the tools, Kafka reachability and the PostgreSQL login.
   - Creates the database. On an empty database it applies only `001_initial_schema.sql` and `001_seed_data.sql`, the same two files Docker's postgres applies.
   - Builds everything.
-  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then the other three.
+  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then trade-executor and auth-service.
   - Waits for each health check, and for trade-executor to be assigned partitions of `orders`.
 - **`kafka-linux.sh`** plus **`docker-compose.kafka.yml`**: Kafka and Kafka UI only. The broker advertises the Linux IP on 9092 so Windows clients can reconnect to it.
 

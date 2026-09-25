@@ -12,6 +12,8 @@ set -euo pipefail
 #                              ORDER_FILLED / ORDER_REJECTED  ──►  Kafka
 #   postgres        (Windows)  holds the settled result
 #
+# Main (default) profile only: trades-generator is not part of this setup.
+#
 # Needs only curl, sed, grep and psql - no jq, no python, no docker.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,7 +37,6 @@ done < "$ENV_FILE"
 
 TRADE_API="http://localhost:${TRADE_API_PORT:-8080}"
 EXECUTOR="http://localhost:${TRADE_EXECUTOR_PORT:-8082}"
-GENERATOR="http://localhost:${TRADES_GENERATOR_PORT:-8083}"
 AUTH="http://localhost:${AUTH_SERVICE_PORT:-3000}"
 ACCOUNT_ID="${ACCOUNT_ID:-1}"
 POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
@@ -82,7 +83,6 @@ check_up() {
 }
 check_up "trade-api" "$TRADE_API/actuator/health" '"status":"UP"'
 check_up "trade-executor" "$EXECUTOR/actuator/health" '"status":"UP"'
-check_up "trades-generator" "$GENERATOR/actuator/health" '"status":"UP"'
 check_up "auth-service" "$AUTH/health" '"status":"ok"'
 
 KAFKA_HOST="${KAFKA_BOOTSTRAP_SERVERS%%,*}"
@@ -119,6 +119,9 @@ LOGIN_RESPONSE=$(curl -s -X POST "$AUTH/auth/login" \
 TOKEN=$(json_field accessToken "$LOGIN_RESPONSE")
 if [[ -z "$TOKEN" ]]; then echo "FAIL: no token from auth service. Response: $LOGIN_RESPONSE"; exit 1; fi
 echo "PASS: got an access token for $EMAIL (account $ACCOUNT_ID)"
+
+BALANCE_BEFORE=$(curl -s -H "Authorization: Bearer $TOKEN" "$TRADE_API/api/v1/accounts/$ACCOUNT_ID/balance")
+echo "Balance before the order: $BALANCE_BEFORE"
 
 # ── Stage: Authenticated order through trade-api ─────────────────────────────
 echo "== Stage: Place Order With The Auth-Service Token =="
@@ -162,23 +165,35 @@ case "$FINAL_STATUS" in
   FILLED|PARTIALLY_FILLED|REJECTED)
     echo "PASS: order settled by trade-executor -> $FINAL_STATUS" ;;
   NEW)
-    if [[ "${MARKET_SIM:-false}" == "true" ]]; then
-      echo "PASS: order is resting at NEW in the market-sim order book (consumed above; waits for a counter-order)"
-    else
-      echo "FAIL: order still NEW after 60s - trade-executor received it but never settled it. See $EXECUTOR_LOG"
-      exit 1
-    fi ;;
+    echo "FAIL: order still NEW after 60s - trade-executor received it but never settled it. See $EXECUTOR_LOG"
+    exit 1 ;;
   *)
     echo "FAIL: could not read this order's status from order history: $HISTORY"
     exit 1 ;;
 esac
+
+if [[ "$FINAL_STATUS" == "REJECTED" ]]; then
+  echo "      (REJECTED is expected without FAUXNANCE_API_URL/KEY: no live price -> PRICE_UNAVAILABLE."
+  echo "       The Kafka round trip above is what this test proves.)"
+fi
+
+# ── Stage: Show the result through trade-api ─────────────────────────────────
+echo "== Stage: Show The Result =="
+echo "-- Order (from order history):"
+echo "   $ENTRY" | sed 's/[},]*$//'
+echo "-- Balance before: $BALANCE_BEFORE"
+echo "-- Balance after:  $(curl -s -H "Authorization: Bearer $TOKEN" "$TRADE_API/api/v1/accounts/$ACCOUNT_ID/balance")"
+echo "-- Positions:      $(curl -s -H "Authorization: Bearer $TOKEN" "$TRADE_API/api/v1/accounts/$ACCOUNT_ID/positions")"
 
 # ── Stage: Confirm it landed in Postgres (local psql) ────────────────────────
 echo "== Stage: Confirm It Actually Landed in Postgres =="
 if [[ -z "$PSQL" ]]; then
   echo "SKIP: psql not found (set PSQL_BIN_DIR in windows/.env.windows)"
 else
-  run_sql "SELECT order_id, status, rejection_reason FROM orders WHERE order_id = '$ORDER_ID';"
+  echo "-- orders row:"
+  run_sql "SELECT order_id, status, rejection_reason, executed_price FROM orders WHERE order_id = '$ORDER_ID';"
+  echo "-- account cash:"
+  run_sql "SELECT id, cash_balance FROM accounts WHERE id = $ACCOUNT_ID;"
 fi
 
 echo "== ALL STAGES PASSED =="

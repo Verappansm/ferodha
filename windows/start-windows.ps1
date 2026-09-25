@@ -1,15 +1,16 @@
 <#
 .SYNOPSIS
-  "windows" profile: runs Postgres-backed trade-api, trade-executor,
-  trades-generator and auth-service natively on Windows, against a Kafka
-  broker running in Docker on a Linux host (windows/kafka-linux.sh).
+  "windows" profile: runs Postgres-backed trade-api, trade-executor and
+  auth-service natively on Windows, against a Kafka broker running in Docker
+  on a Linux host (windows/kafka-linux.sh). Main (default) profile only:
+  trades-generator and market-sim are not part of this setup.
 
 .DESCRIPTION
   1. Loads windows/.env.windows
   2. Preflight: java/mvn/node/npm/psql present, Kafka reachable over the LAN,
      Postgres reachable
   3. Creates the database if missing; applies the Sprint 3 schema + seed once
-  4. Builds the three Spring jars and the NestJS service (skip with -SkipBuild)
+  4. Builds the two Spring jars and the NestJS service (skip with -SkipBuild)
   5. Starts them in dependency order, waits for each health endpoint, and
      checks that trade-executor actually joined its Kafka consumer group
 
@@ -75,10 +76,8 @@ $PgPort = Get-Setting 'POSTGRES_PORT' '5432'
 $PgDb = Get-Setting 'POSTGRES_DB' 'tradedb'
 $PgUser = Get-Setting 'POSTGRES_USER' 'postgres'
 $JwtSecret = Get-Setting 'JWT_SECRET' ''
-$MarketSim = (Get-Setting 'MARKET_SIM' 'false') -eq 'true'
 $TradeApiPort = Get-Setting 'TRADE_API_PORT' '8080'
 $ExecutorPort = Get-Setting 'TRADE_EXECUTOR_PORT' '8082'
-$GeneratorPort = Get-Setting 'TRADES_GENERATOR_PORT' '8083'
 $AuthPort = Get-Setting 'AUTH_SERVICE_PORT' '3000'
 
 if ($KafkaBootstrap -eq '') { Fail 'KAFKA_BOOTSTRAP_SERVERS is not set in windows\.env.windows.' }
@@ -99,7 +98,9 @@ $env:POSTGRES_DB = $PgDb
 $env:POSTGRES_USER = $PgUser
 $env:PGPASSWORD = $env:POSTGRES_PASSWORD
 $env:PGOPTIONS = '-c client_min_messages=warning'
-$env:SPRING_PROFILES_ACTIVE = $(if ($MarketSim) { 'windows,market-sim' } else { 'windows' })
+# Main profile only - market-sim needs trades-generator, which this setup
+# doesn't run.
+$env:SPRING_PROFILES_ACTIVE = 'windows'
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -254,7 +255,7 @@ $script:Psql = Find-Psql
 if (-not $script:Psql) { Fail 'psql.exe not found. Add PostgreSQL\<version>\bin to PATH or set PSQL_BIN_DIR.' }
 Write-Pass "tools found (psql: $script:Psql)"
 
-foreach ($port in $TradeApiPort, $ExecutorPort, $GeneratorPort, $AuthPort) {
+foreach ($port in $TradeApiPort, $ExecutorPort, $AuthPort) {
     if (Test-Tcp 'localhost' ([int]$port) 500) { Fail "Port $port is already in use on this machine." }
 }
 
@@ -302,7 +303,7 @@ if ($hasSchema -ne 't') {
 # ---------------------------------------------------------------------------
 # Stage: Build
 # ---------------------------------------------------------------------------
-$SpringServices = @('trade_api', 'trade_executor', 'trades_generator')
+$SpringServices = @('trade_api', 'trade_executor')
 if ($SkipBuild) {
     Write-Stage 'Build (skipped)'
 } else {
@@ -334,25 +335,20 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 Get-ChildItem $LogDir -Filter '*.log' -ErrorAction SilentlyContinue | Remove-Item -Force
 
 # trade-api first: its Liquibase changelog owns every schema change after
-# Sprint 3, and the other three services read those columns.
+# Sprint 3, and trade-executor and auth-service read those columns.
 Start-AppProcess 'trade-api' (Join-Path $RepoDir 'trade_api') 'java' `
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'trade_api'))) `
     @{ SERVER_PORT = $TradeApiPort }
 Wait-Http 'trade-api' "http://localhost:$TradeApiPort/actuator/health" '"status":"UP"' 'trade-api' 240
 
-Start-AppProcess 'trades-generator' (Join-Path $RepoDir 'trades_generator') 'java' `
-    @('-jar', (Get-BootJar (Join-Path $RepoDir 'trades_generator'))) `
-    @{ SERVER_PORT = $GeneratorPort }
-
 Start-AppProcess 'trade-executor' (Join-Path $RepoDir 'trade_executor') 'java' `
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'trade_executor'))) `
-    @{ SERVER_PORT = $ExecutorPort; TRADES_GENERATOR_URL = "http://localhost:$GeneratorPort" }
+    @{ SERVER_PORT = $ExecutorPort }
 
 Start-AppProcess 'auth-service' (Join-Path $RepoDir 'auth_service') 'node' `
     @('dist/main.js') `
     @{ PORT = $AuthPort; NODE_ENV = 'development' }
 
-Wait-Http 'trades-generator' "http://localhost:$GeneratorPort/actuator/health" '"status":"UP"' 'trades-generator'
 Wait-Http 'trade-executor' "http://localhost:$ExecutorPort/actuator/health" '"status":"UP"' 'trade-executor'
 Wait-Http 'auth-service' "http://localhost:$AuthPort/health" '"status":"ok"' 'auth-service' 60
 
@@ -383,7 +379,6 @@ Write-Host ''
 Write-Host '== ALL SERVICES RUNNING ==' -ForegroundColor Green
 Write-Host "  trade-api         http://localhost:$TradeApiPort"
 Write-Host "  trade-executor    http://localhost:$ExecutorPort/actuator/health"
-Write-Host "  trades-generator  http://localhost:$GeneratorPort/actuator/health"
 Write-Host "  auth-service      http://localhost:$AuthPort"
 Write-Host "  kafka             $KafkaBootstrap (Linux)"
 Write-Host "  kafka-ui          $(Get-Setting 'KAFKA_UI_URL' '<KAFKA_UI_URL not set>')"
