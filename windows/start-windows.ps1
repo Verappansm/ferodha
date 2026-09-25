@@ -149,16 +149,31 @@ function Invoke-Psql([string]$Database, [string[]]$PsqlArgs) {
 }
 
 function Wait-Http([string]$Name, [string]$Url, [string]$Pattern, [string]$LogName, [int]$TimeoutSec = 180) {
-    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $start = Get-Date
+    $deadline = $start.AddSeconds($TimeoutSec)
+    $nextNote = 10
+    Write-Host "   waiting for $Name (up to ${TimeoutSec}s)..."
     while ((Get-Date) -lt $deadline) {
         try {
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
-            if ($response.Content -match $Pattern) {
+            # Accept: application/json - actuator otherwise answers with
+            # application/vnd.spring-boot.actuator.v3+json, which Windows
+            # PowerShell 5.1 treats as binary: .Content comes back as a
+            # byte[] and would never match the pattern. Decode it anyway in
+            # case some endpoint still sends a non-text type.
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3 -Headers @{ Accept = 'application/json' }
+            $body = $response.Content
+            if ($body -is [byte[]]) { $body = [System.Text.Encoding]::UTF8.GetString($body) }
+            if ($body -match $Pattern) {
                 Write-Pass "$Name is up ($Url)"
                 return
             }
         } catch {
             # 503 while DOWN, or connection refused while still booting
+        }
+        $elapsed = [int]((Get-Date) - $start).TotalSeconds
+        if ($elapsed -ge $nextNote) {
+            Write-Host "   ...still waiting for $Name (${elapsed}s) - log: $(Join-Path $LogDir "$LogName.log")"
+            $nextNote += 20
         }
         $proc = $script:Started | Where-Object { $_.name -eq $LogName }
         if ($proc -and -not (Get-Process -Id $proc.pid -ErrorAction SilentlyContinue)) {
