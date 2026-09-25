@@ -17,3 +17,7 @@ RUN.md
 DOCKER.md
 handoff.md
 logic.md
+
+# windows profile: local config and runtime state (see windows/README.md)
+windows/.env.windows
+windows/.run/

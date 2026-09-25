@@ -1,6 +1,11 @@
 #!/bin/bash
 
-CONTAINER_NAME="trade-kafka"
+CONTAINER_NAME="${KAFKA_CONTAINER_NAME:-trade-kafka}"
+# Address kafka-topics.sh uses from INSIDE the container. localhost:9092 works
+# for the root docker-compose.yml; windows/docker-compose.kafka.yml advertises
+# the Linux host's IP on 9092, so windows/kafka-linux.sh passes the internal
+# listener (kafka:29092) instead.
+KAFKA_TOPICS_BOOTSTRAP="${KAFKA_TOPICS_BOOTSTRAP:-localhost:9092}"
 
 echo "Creating Kafka dead-letter topics..."
 
@@ -11,7 +16,7 @@ create_dlt_topic() {
 
     if docker exec "$CONTAINER_NAME" \
         /opt/kafka/bin/kafka-topics.sh \
-        --bootstrap-server localhost:9092 \
+        --bootstrap-server "$KAFKA_TOPICS_BOOTSTRAP" \
         --create \
         --if-not-exists \
         --topic "$TOPIC" \
