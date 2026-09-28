@@ -26,31 +26,19 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
 
-# market-data/orders already exist - see kafka_pipeline/create_topics.sh.
+# orders already exists - see kafka_pipeline/create_topics.sh.
+# This service only ever places synthetic orders; live pricing ticks come
+# from the pricing service over HTTP (see GeneratorQuoteClient).
 kafka:
   topics:
     orders: ${KAFKA_TOPIC_ORDERS:orders}
-    market-data: ${KAFKA_TOPIC_MARKET_DATA:market-data}
 
-# Same convention as trade_executor: read from the environment only, never
-# given a real value in any committed file.
-fauxnance:
-  base-url: ${FAUXNANCE_API_URL}
-  api-key: ${FAUXNANCE_API_KEY}
+# Pricing-service quote endpoint (see pricing-generator's QuoteController).
+# Same env convention as trade_executor's trades-generator.base-url.
+pricing-generator:
+  base-url: ${PRICING_GENERATOR_URL:http://pricing-generator:8084}
 
 generator:
-  candle:
-    refresh-interval-seconds: ${GENERATOR_CANDLE_REFRESH_SECONDS:86400}
-  quote:
-    refresh-interval-seconds: ${GENERATOR_QUOTE_REFRESH_SECONDS:300}
-  tick:
-    interval-seconds: ${GENERATOR_TICK_INTERVAL_SECONDS:5}
-    # Per-symbol hardcoded volatility, deliberately not computed - see
-    # RandomizerModel. A symbol with no entry here falls back to default.
-    default-volatility: ${GENERATOR_DEFAULT_VOLATILITY:0.0015}
-  market-data:
-    daily-quota: ${GENERATOR_DAILY_QUOTA:2000}
-    batch-size: ${GENERATOR_BATCH_SIZE:25}
   # market-sim only (see OrderGenerator) - synthetic counterparty orders
   # placed through the seeded market-maker account.
   orders:
