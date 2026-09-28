@@ -30,6 +30,19 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="unpublishedOrderRow" type="com.trade.mapper.UnpublishedOrderRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="int"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="placed_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
     <select id="existsIdempotencyKey" resultType="boolean">
         SELECT EXISTS(SELECT 1 FROM Orders WHERE idempotency_key = #{idempotencyKey})
     </select>
@@ -75,6 +88,35 @@
         WHERE order_id = #{orderId}
           AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
     </update>
+
+    <update id="markPublished">
+        UPDATE Orders
+        SET published_at = now()
+        WHERE order_id = #{orderId}
+          AND published_at IS NULL
+    </update>
+
+    <!-- Only PORTAL orders: trades_generator inserts its own synthetic orders
+         and publishes them itself, so their published_at is never set here. -->
+    <select id="findUnpublished" resultMap="unpublishedOrderRow">
+        SELECT o.order_id,
+               a.id AS account_id,
+               i.ticker AS symbol,
+               o.side,
+               o.quantity,
+               o.limit_price AS price,
+               o.idempotency_key,
+               o.placed_at
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.status = 'NEW'::order_status_enum
+          AND o.published_at IS NULL
+          AND o.source = 'PORTAL'
+          AND o.placed_at &lt; #{placedBefore}
+        ORDER BY o.placed_at
+        LIMIT #{limit}
+    </select>
 
     <select id="findHistory" resultMap="orderHistoryRow">
         SELECT o.order_id,
