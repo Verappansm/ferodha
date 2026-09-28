@@ -18,20 +18,20 @@ body:json {
   {
     "name": "Bruno Tester",
     "username": "{{testEmail}}",
-    "password": "correct horse battery staple",
-    "accountId": 1
+    "password": "correct horse battery staple"
   }
 }
 
 assert {
   res.status: eq 201
-  res.body.accountId: eq 1
 }
 
 script:pre-request {
-  // Fresh email every run, so the collection stays repeatable.
+  // Fresh email every run, so the collection stays repeatable. Runtime
+  // variables only: nothing is written back into environments/*.bru.
   const email = `bruno.t${Date.now()}.${Math.floor(Math.random() * 1000000)}@example.com`;
-  bru.setEnvVar("testEmail", email);
+  bru.setVar("testEmail", email);
+  bru.setVar("testEmailUpper", email.toUpperCase());
 }
 
 script:post-response {
@@ -39,8 +39,10 @@ script:post-response {
   if (b.accessToken !== undefined || b.refreshToken !== undefined) {
     throw new Error("registration must not mint a session (no token keys allowed)");
   }
-  if (b.username === undefined || b.id === undefined) {
-    throw new Error("registration must answer the contract's UserResponse");
+  if (b.username !== bru.getVar("testEmail") || b.id === undefined) {
+    throw new Error("registration must answer the UserResponse for the new user");
   }
-  bru.setEnvVar("userId", b.id);
+  if (b.accountId !== undefined) {
+    throw new Error("a new user has no trading account yet, so no accountId");
+  }
 }

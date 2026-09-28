@@ -210,12 +210,13 @@ pass "rejected with HTTP 401 Unauthorized"
 pause
 
 # ── Stage 3: real token ──────────────────────────────────────────────────────
-# Seeded users only carry placeholder password hashes, so register a fresh
-# user linked to the account, then log in as it.
-stage "Login - a real token from auth-service" "Register a user linked to account $ACCOUNT_ID, log in, and look inside the token."
+# A user is registered first and an account is opened for them afterwards, so
+# a brand-new user is refused at login until they own one. The order below is
+# placed as the seeded holder of account $ACCOUNT_ID instead.
+stage "Login - a real token from auth-service" "Register a new user (no account yet, so no login), then log in as the holder of account $ACCOUNT_ID."
 EMAIL="demo.$(date +%s).$RANDOM@example.com"
 PASSWORD="windows-demo-password-123"
-REGISTER_BODY="{\"name\":\"Windows Demo\",\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"accountId\":$ACCOUNT_ID}"
+REGISTER_BODY="{\"name\":\"Windows Demo\",\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
 show_cmd "curl -X POST $AUTH/auth/register -d '$REGISTER_BODY'"
 REGISTER_RESPONSE=$(curl -s -w $'\n%{http_code}' -X POST "$AUTH/auth/register" \
   -H "Content-Type: application/json" -d "$REGISTER_BODY")
@@ -223,13 +224,21 @@ REGISTER_CODE="${REGISTER_RESPONSE##*$'\n'}"
 [[ "$REGISTER_CODE" == "201" ]] || fail "register returned $REGISTER_CODE (expected 201): ${REGISTER_RESPONSE%$'\n'*}"
 pass "registered $EMAIL (HTTP 201)"
 show_json "${REGISTER_RESPONSE%$'\n'*}"
+
+NEW_USER_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$AUTH/auth/login" \
+  -H "Content-Type: application/json" -d "{\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+[[ "$NEW_USER_CODE" == "401" ]] || fail "new user without an account got $NEW_USER_CODE at login (expected 401)"
+pass "the new user has no trading account yet, so login answers 401"
 echo ""
 
-LOGIN_BODY="{\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+# The seeded holder of account 1 (database/seeds/001_seed_data.sql).
+SEED_EMAIL="${SEED_EMAIL:-john.carter@example.com}"
+SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
+LOGIN_BODY="{\"username\":\"$SEED_EMAIL\",\"password\":\"$SEED_PASSWORD\"}"
 show_cmd "curl -X POST $AUTH/auth/login -d '$LOGIN_BODY'"
 LOGIN_RESPONSE=$(curl -s -X POST "$AUTH/auth/login" -H "Content-Type: application/json" -d "$LOGIN_BODY")
 TOKEN=$(json_field accessToken "$LOGIN_RESPONSE")
-[[ -n "$TOKEN" ]] || fail "no token from auth service. Response: $LOGIN_RESPONSE"
+[[ -n "$TOKEN" ]] || fail "no token for $SEED_EMAIL. A database seeded before the seed password existed needs the UPDATE in windows/windows-setup.md (Troubleshooting). Response: $LOGIN_RESPONSE"
 pass "logged in - got an access token (${#TOKEN} chars)"
 info "decoded token header:  $(jwt_part "${TOKEN%%.*}")"
 PAYLOAD_SEG="${TOKEN#*.}"; PAYLOAD_SEG="${PAYLOAD_SEG%%.*}"

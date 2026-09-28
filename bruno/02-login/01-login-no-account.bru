@@ -1,7 +1,7 @@
 meta {
-  name: login wrong password
+  name: login before an account is opened
   type: http
-  seq: 2
+  seq: 1
 }
 
 post {
@@ -16,11 +16,13 @@ headers {
 body:json {
   {
     "username": "{{testEmail}}",
-    "password": "definitely-the-wrong-one"
+    "password": "correct horse battery staple"
   }
 }
 
 script:post-response {
+  // Right password, but no trading account yet: the same 401 as any other
+  // failure, since a token must carry a real accountId.
   const b = res.getBody();
   const keys = Object.keys(b).sort().join(",");
   if (keys !== "errorCode,message") {

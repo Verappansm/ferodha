@@ -14,11 +14,11 @@ headers {
 
 script:post-response {
   const b = res.getBody();
-  if (b.id !== bru.getEnvVar("userId")) {
-    throw new Error("profile id must equal the registered id (the token's sub)");
+  if (b.id !== bru.getVar("userId")) {
+    throw new Error("profile id must equal the token's sub");
   }
-  if (b.username !== bru.getEnvVar("testEmail")) {
-    throw new Error("profile username must be the email the user registered with");
+  if (b.username !== bru.getEnvVar("seedEmail")) {
+    throw new Error("profile username must be the email the user logged in with");
   }
   if (b.accountId !== 1) {
     throw new Error("profile accountId must be the numeric Accounts.id (1)");

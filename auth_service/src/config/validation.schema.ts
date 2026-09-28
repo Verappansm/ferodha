@@ -11,8 +11,6 @@ export const validationSchema = Joi.object({
   POSTGRES_DB: Joi.string().required(),
   POSTGRES_USER: Joi.string().required(),
   POSTGRES_PASSWORD: Joi.string().required(),
-  // allow(''): the repo-root .env (read via ../.env) ships these as empty
-  // placeholders, and an empty string would otherwise fail boot validation.
-  FAUXNANCE_API_URL: Joi.string().uri().allow('').optional(),
-  FAUXNANCE_API_KEY: Joi.string().allow('').optional(),
+  // FAUXNANCE_* also sits in the repo-root .env (read via ../.env). It is not
+  // validated or read here: only the market-data side holds that key.
 });

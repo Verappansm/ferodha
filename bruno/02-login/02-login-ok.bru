@@ -1,7 +1,7 @@
 meta {
   name: login ok
   type: http
-  seq: 1
+  seq: 2
 }
 
 post {
@@ -15,15 +15,15 @@ headers {
 
 body:json {
   {
-    "username": "{{testEmail}}",
-    "password": "correct horse battery staple"
+    "username": "{{seedEmail}}",
+    "password": "{{seedPassword}}"
   }
 }
 
 script:post-response {
   const b = res.getBody();
-  bru.setEnvVar("accessToken", b.accessToken);
-  bru.setEnvVar("refreshToken", b.refreshToken);
+  bru.setVar("accessToken", b.accessToken);
+  bru.setVar("refreshToken", b.refreshToken);
 
   // Story: exact claim set, verified payload, no claim outside the contract.
   const payload = JSON.parse(
@@ -48,7 +48,8 @@ script:post-response {
   if (typeof payload.sub !== "string" || payload.sub.length === 0) {
     throw new Error("sub claim must be the user's id");
   }
-  if (JSON.stringify(payload).includes("bruno.t")) {
+  bru.setVar("userId", payload.sub);
+  if (JSON.stringify(payload).includes("@")) {
     throw new Error("an email address must never appear in the token payload");
   }
 }

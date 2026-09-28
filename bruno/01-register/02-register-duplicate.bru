@@ -1,5 +1,5 @@
 meta {
-  name: register duplicate email
+  name: register duplicate email (other case)
   type: http
   seq: 2
 }
@@ -16,9 +16,8 @@ headers {
 body:json {
   {
     "name": "Bruno Tester",
-    "username": "{{testEmail}}",
-    "password": "correct horse battery staple",
-    "accountId": 1
+    "username": "{{testEmailUpper}}",
+    "password": "correct horse battery staple"
   }
 }
 

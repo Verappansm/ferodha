@@ -21,10 +21,10 @@ body:json {
 
 script:post-response {
   // Keep the consumed token so request 04 can prove it is really dead.
-  bru.setEnvVar("refreshTokenUsed", bru.getEnvVar("refreshToken"));
+  bru.setVar("refreshTokenUsed", bru.getVar("refreshToken"));
   const b = res.getBody();
-  bru.setEnvVar("accessToken", b.accessToken);
-  bru.setEnvVar("refreshToken", b.refreshToken);
+  bru.setVar("accessToken", b.accessToken);
+  bru.setVar("refreshToken", b.refreshToken);
 }
 
 assert {

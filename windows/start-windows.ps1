@@ -286,11 +286,8 @@ if ($exists -ne '1') {
 }
 
 # Only the Sprint 3 base schema + seed - exactly what the Docker postgres
-# mounts under docker-entrypoint-initdb.d. Deliberately NOT database/apply.sh:
-# it also runs 003_auth_service.sql, whose CREATE TYPE account_status_enum
-# makes trade-api's own Liquibase changeset (which creates that type) fail.
-# trade-api's Liquibase adds everything after Sprint 3; auth-service creates
-# its own table at boot.
+# mounts under docker-entrypoint-initdb.d. trade-api's Liquibase adds
+# everything after Sprint 3; auth-service creates its own table at boot.
 $hasSchema = Invoke-Psql $PgDb @('-c', "SELECT to_regclass('public.orders') IS NOT NULL")
 if ($hasSchema -ne 't') {
     $null = Invoke-Psql $PgDb @('-f', (Join-Path $RepoDir 'database\migrations\001_initial_schema.sql'))

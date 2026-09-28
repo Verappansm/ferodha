@@ -61,14 +61,6 @@ export class AppConfigService implements OnModuleInit {
     return this.configService.get<string>('POSTGRES_PASSWORD') || '';
   }
 
-  get fauxnanceApiUrl(): string | undefined {
-    return this.configService.get<string>('FAUXNANCE_API_URL');
-  }
-
-  get fauxnanceApiKey(): string | undefined {
-    return this.configService.get<string>('FAUXNANCE_API_KEY');
-  }
-
   /** Contains the database password: never log this value. */
   get postgresUrl(): string {
     return `postgresql://${this.postgresUser}:${this.postgresPassword}@${this.postgresHost}:${this.postgresPort}/${this.postgresDb}`;

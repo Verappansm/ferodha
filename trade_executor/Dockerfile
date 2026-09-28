@@ -8,4 +8,7 @@ RUN mvn -B package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/target/trade-executor-*.jar app.jar
+# Run as an unprivileged user, so a compromised app cannot act as root inside the container.
+RUN useradd --system --no-create-home app
+USER app
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

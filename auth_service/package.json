@@ -1,18 +1,22 @@
 {
-  "name": "trade_api_nestjs",
+  "name": "auth-service",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "Sprint 8 auth service: registration, login, refresh and /auth/me",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "lint:check": "eslint \"{src,test}/**/*.ts\" --max-warnings=0",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
@@ -25,7 +29,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^12.0.2",
     "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/throttler": "^6.7.1",
+    "@nestjs/swagger": "^11.4.7",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -42,10 +46,10 @@
     "@nestjs/testing": "^11.0.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
-    "@types/joi": "^17.2.2",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.0.0",
+    "dotenv": "^18.0.4",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
@@ -79,6 +83,9 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/../test/unit-env.ts"
+    ]
   }
 }
