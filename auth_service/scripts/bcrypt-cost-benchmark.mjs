@@ -4,7 +4,7 @@
 //
 //   node scripts/bcrypt-cost-benchmark.mjs
 //
-// Paste the output into docs/password-hashing-decision.md.
+// Paste the output into design/auth-password-hashing.md.
 import bcrypt from 'bcryptjs';
 import os from 'node:os';
 

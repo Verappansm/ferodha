@@ -1,4 +1,7 @@
+import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsString, MaxLength } from 'class-validator';
+import { normaliseEmail } from './normalise-email';
 
 /**
  * POST /auth/login body - LoginRequest in contracts/auth-api.yaml.
@@ -14,12 +17,18 @@ import { IsString, MaxLength } from 'class-validator';
  * contract says is valid with VAL-422. Do not.
  */
 export class LoginRequestDto {
-  /** maxLength 64, and nothing else: no pattern, no minimum. */
+  /** The registered email address, matched case-insensitively. */
+  @ApiProperty({ maxLength: 64, example: 'priya.menon@example.com' })
+  @Transform(normaliseEmail)
   @IsString()
   @MaxLength(64)
   username!: string;
 
-  /** maxLength 128, writeOnly in the contract. */
+  @ApiProperty({
+    maxLength: 128,
+    writeOnly: true,
+    example: 'correct horse battery staple',
+  })
   @IsString()
   @MaxLength(128)
   password!: string;

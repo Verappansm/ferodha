@@ -67,6 +67,8 @@ export class JwtAuthGuard implements CanActivate {
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface AuthenticatedRequest extends Request {
   user: AccessTokenClaims;
 }
@@ -82,8 +84,10 @@ function hasValidClaims(payload: unknown): payload is AccessTokenClaims {
   }
   const claims = payload as Record<string, unknown>;
   return (
+    // A UUID, as the contract says. Anything else would reach Postgres as a
+    // user_id and fail there as a 500 instead of here as a 401.
     typeof claims.sub === 'string' &&
-    claims.sub.length > 0 &&
+    UUID.test(claims.sub) &&
     typeof claims.accountId === 'number' &&
     Number.isInteger(claims.accountId) &&
     Array.isArray(claims.roles) &&

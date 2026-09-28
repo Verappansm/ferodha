@@ -28,11 +28,14 @@ import { Role } from './role.enum';
 
 const SERVICE_KEY = 'test-secret-key-that-is-at-least-32-chars-long';
 
+/** The account opened for the user; what the accountId claim must carry. */
+const ACCOUNT_ID = 7;
+
 const user: AuthUser = {
   id: '7d9f6f2c-9a1b-4e3f-8c2a-5b6d7e8f9a0b',
   email: 'refresh.spec.user@example.com',
   passwordHash: '$2b$12$unit.test.hash.the.stubs.never.compare',
-  accountId: 7,
+  status: 'ACTIVE',
   roles: [Role.CUSTOMER],
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -91,7 +94,9 @@ function buildService(store: InMemoryRefreshTokens): AuthService {
     findByEmail: () => Promise.resolve(user),
     findById: () => Promise.resolve(user),
   } as unknown as UsersRepository;
-  const accounts = {} as unknown as AccountsRepository;
+  const accounts = {
+    findAccountIdForUser: () => Promise.resolve(ACCOUNT_ID),
+  } as unknown as AccountsRepository;
   const passwords = {
     hash: () => Promise.resolve(''),
     verify: () => Promise.resolve(true),
@@ -108,8 +113,9 @@ function buildService(store: InMemoryRefreshTokens): AuthService {
   );
 }
 
-const refreshWith = (refreshToken: string) =>
-  ({ refreshToken }) as RefreshRequestDto;
+const refreshWith = (refreshToken: string): RefreshRequestDto => ({
+  refreshToken,
+});
 
 const sha256 = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -153,7 +159,9 @@ describe('refresh token issuance and rotation', () => {
     const { refreshToken } = await buildService(store).login(CREDENTIALS);
 
     expect([...store.rows.keys()]).toEqual([sha256(refreshToken)]);
-    expect(JSON.stringify([...store.rows.values()])).not.toContain(refreshToken);
+    expect(JSON.stringify([...store.rows.values()])).not.toContain(
+      refreshToken,
+    );
   });
 
   it('refresh returns a new access token and a new refresh token', async () => {

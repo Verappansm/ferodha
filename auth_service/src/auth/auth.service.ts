@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '../config/config.service';
 import { AccountsRepository } from '../persistence/accounts.repository';
@@ -9,11 +9,7 @@ import {
   UsersRepository,
   UsernameTakenError,
 } from '../persistence/users.repository';
-import {
-  invalidInput,
-  registrationConflict,
-  unauthorised,
-} from '../common/error-envelope';
+import { registrationConflict, unauthorised } from '../common/error-envelope';
 import { AccessTokenClaims } from './access-token-claims';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
@@ -24,7 +20,8 @@ import { Role } from './role.enum';
 export interface UserResponse {
   id: string;
   username: string;
-  accountId: number;
+  /** Absent until a trading account has been opened for the user. */
+  accountId?: number;
   roles: Role[];
   createdOn: string;
 }
@@ -43,8 +40,20 @@ const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const JWT_ISSUER = 'auth-service';
 
+/**
+ * A user who may hold a session: ACTIVE, and owning a trading account. The
+ * account is what the token's accountId claim carries, so without one there
+ * is nothing honest to sign.
+ */
+interface SessionUser {
+  user: AuthUser;
+  accountId: number;
+}
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UsersRepository,
     private readonly accounts: AccountsRepository,
@@ -54,38 +63,42 @@ export class AuthService {
     private readonly config: AppConfigService,
   ) {}
 
-  // POST /auth/register
+  /**
+   * POST /auth/register. Creates the user only. A trading account is opened
+   * for them afterwards, and until then they cannot log in, so registration
+   * never returns an accountId and never issues a token.
+   */
   async register(body: RegisterRequestDto): Promise<UserResponse> {
-    // Do not create a trading account: `Accounts` belongs to the Sprint 3
-    // schema. Verify the supplied id exists (else VAL-422), then record the
-    // link on the user's own row - `Accounts` itself is never written.
-    if (!(await this.accounts.exists(body.accountId))) {
-      throw invalidInput();
-    }
-
     const passwordHash = await this.passwords.hash(body.password);
 
     try {
       // Whatever `roles` the body declared is ignored: the repository pins
       // every self-registered user to the `client` role.
       const user = await this.users.create({
-        name: body.name,
+        name: body.name ?? body.username.split('@')[0],
         email: body.username,
         passwordHash,
-        accountId: body.accountId,
       });
-
-      return toUserResponse(user);
+      this.logger.log(`User registered: ${user.id}`);
+      return toUserResponse(user, null);
     } catch (error) {
       if (error instanceof UsernameTakenError) {
+        this.logger.warn('Registration refused: username already taken');
         throw registrationConflict();
       }
-
       throw error;
     }
   }
 
-  // POST /auth/login - `body.username` carries the email address.
+  /**
+   * POST /auth/login - `body.username` carries the email address, already
+   * lower-cased by the DTO.
+   *
+   * The password is checked before anything else about the user, and an
+   * unknown email runs the decoy comparison, so every failure costs one
+   * bcrypt run whatever caused it. Status and account are only looked at once
+   * the password is known to be right.
+   */
   async login(body: LoginRequestDto): Promise<TokenResponse> {
     const user = await this.users.findByEmail(body.username);
 
@@ -93,14 +106,23 @@ export class AuthService {
       ? await this.passwords.verify(body.password, user.passwordHash)
       : await this.passwords.verifyAgainstDecoy(body.password);
 
-    // Unknown email and wrong password arrive here together: same status,
-    // same body, and the decoy bcrypt run keeps the timing equal too.
     if (!user || !passwordValid) {
+      this.logger.warn(
+        user
+          ? `Login failed: wrong password for user ${user.id}`
+          : 'Login failed: unknown username',
+      );
       throw unauthorised();
     }
 
+    const session = await this.sessionFor(user);
+    if (!session) {
+      throw unauthorised();
+    }
+
+    this.logger.log(`Login succeeded: user ${user.id}`);
     // A fresh login starts a new refresh-token chain (its family).
-    return this.issueTokenPair(user, randomUUID());
+    return this.issueTokenPair(session, randomUUID());
   }
 
   /**
@@ -110,7 +132,8 @@ export class AuthService {
    * a replacement in the same family. A spent or revoked token coming back
    * means two parties hold the same chain - the legitimate client and
    * whoever copied its token - and the service cannot tell which is which,
-   * so the whole family is revoked and both must log in again.
+   * so the whole family is revoked and both must log in again. The user's
+   * other families (other devices) are left alone; see LEAP-005.
    */
   async refresh(body: RefreshRequestDto): Promise<TokenResponse> {
     const tokenHash = refreshTokenHash(body.refreshToken);
@@ -123,6 +146,9 @@ export class AuthService {
     // Already exchanged, or already revoked: reuse, treated as theft.
     if (presented.usedAt !== null || presented.revokedAt !== null) {
       await this.refreshTokens.revokeFamily(presented.familyId);
+      this.logger.warn(
+        `Refresh token reuse: family ${presented.familyId} of user ${presented.userId} revoked`,
+      );
       throw unauthorised();
     }
 
@@ -135,49 +161,68 @@ export class AuthService {
     const claimed = await this.refreshTokens.markUsed(tokenHash);
     if (!claimed) {
       await this.refreshTokens.revokeFamily(presented.familyId);
+      this.logger.warn(
+        `Refresh token reuse (concurrent): family ${presented.familyId} of user ${presented.userId} revoked`,
+      );
       throw unauthorised();
     }
 
+    // A user suspended, closed or left without an account since the last
+    // refresh loses the chain here rather than at its 7-day expiry.
     const user = await this.users.findById(presented.userId);
-    if (!user) {
+    const session = user ? await this.sessionFor(user) : null;
+    if (!session) {
       await this.refreshTokens.revokeFamily(presented.familyId);
       throw unauthorised();
     }
 
     // The replacement joins the same chain: one login, one family.
-    return this.issueTokenPair(user, presented.familyId);
+    return this.issueTokenPair(session, presented.familyId);
   }
 
-  // GET /auth/me - the user named by the verified access token.
+  /** GET /auth/me - the user named by the verified access token. */
   async currentUser(claims: AccessTokenClaims): Promise<UserResponse> {
     const user = await this.users.findById(claims.sub);
-    const accountId = user?.accountId ?? null;
-
-    if (!user || accountId === null) {
+    const session = user ? await this.sessionFor(user) : null;
+    if (!session) {
       throw unauthorised();
     }
+    return toUserResponse(session.user, session.accountId);
+  }
 
-    return toUserResponse({ ...user, accountId });
+  /**
+   * Null unless the user may hold a session right now. Only reached after
+   * the password (or a token) has proved who the caller is, so the reason is
+   * logged here and never returned.
+   */
+  private async sessionFor(user: AuthUser): Promise<SessionUser | null> {
+    if (user.status !== 'ACTIVE') {
+      this.logger.warn(`Session refused: user ${user.id} is ${user.status}`);
+      return null;
+    }
+    const accountId = await this.accounts.findAccountIdForUser(user.id);
+    if (accountId === null) {
+      this.logger.warn(`Session refused: user ${user.id} has no account yet`);
+      return null;
+    }
+    return { user, accountId };
   }
 
   /**
    * Issues the pair the contract's login and refresh bodies carry: the
    * access token (exactly the contract claim set - see signAccessToken) and
    * an opaque refresh token whose SHA-256 hash is stored in its family.
-   *
-   * Signs first: a user with no linked account cannot get a token, and must
-   * not leave a half-issued refresh row behind when that refuses.
    */
   private async issueTokenPair(
-    user: AuthUser,
+    session: SessionUser,
     familyId: string,
   ): Promise<TokenResponse> {
-    const accessToken = await this.signAccessToken(user);
+    const accessToken = await this.signAccessToken(session);
 
     const refreshToken = newRefreshToken();
     await this.refreshTokens.insert({
       tokenHash: refreshTokenHash(refreshToken),
-      userId: user.id,
+      userId: session.user.id,
       familyId,
       expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
     });
@@ -198,14 +243,7 @@ export class AuthService {
    * encryption, and an address in it would be published to every holder of
    * the token.
    */
-  private async signAccessToken(user: AuthUser): Promise<string> {
-    const accountId = user.accountId;
-    if (accountId === null) {
-      // No linked trading account, so no integer account claim to carry -
-      // a token cannot be honestly minted. Same 401 as bad credentials.
-      throw unauthorised();
-    }
-
+  private signAccessToken({ user, accountId }: SessionUser): Promise<string> {
     return this.jwt.signAsync(
       {
         sub: user.id,
@@ -233,12 +271,13 @@ function refreshTokenHash(token: string): string {
 }
 
 export function toUserResponse(
-  user: AuthUser & { accountId: number },
+  user: AuthUser,
+  accountId: number | null,
 ): UserResponse {
   return {
     id: user.id,
     username: user.email,
-    accountId: user.accountId,
+    ...(accountId === null ? {} : { accountId }),
     roles: user.roles,
     createdOn: user.createdAt.toISOString(),
   };

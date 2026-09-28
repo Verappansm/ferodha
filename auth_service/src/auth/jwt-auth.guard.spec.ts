@@ -101,22 +101,22 @@ describe('JwtAuthGuard', () => {
     });
 
     // Genuine: right key, intact payload. Only the clock is wrong with it.
-    expect(() =>
+    expect(() => {
       new JwtService({}).verify(token, {
         secret: SERVICE_KEY,
         algorithms: ['HS256'],
         ignoreExpiration: true,
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
 
     const { request, context } = contextWith(`Bearer ${token}`);
     expectAuth401(() => guard.canActivate(context));
 
     // Refused by the expiry check specifically, not by anything else.
-    expect(verifySpy.mock.results[0]).toEqual({
-      type: 'throw',
-      value: expect.objectContaining({ name: 'TokenExpiredError' }),
-    });
+    expect(verifySpy.mock.results[0].type).toBe('throw');
+    expect((verifySpy.mock.results[0].value as Error).name).toBe(
+      'TokenExpiredError',
+    );
     expect(request.user).toBeUndefined();
   });
 
@@ -131,10 +131,10 @@ describe('JwtAuthGuard', () => {
     // verify() threw on the signature, so no payload ever came back to the
     // guard: the claim-shape check never ran and nothing was attached.
     expect(verifySpy).toHaveBeenCalledTimes(1);
-    expect(verifySpy.mock.results[0]).toEqual({
-      type: 'throw',
-      value: expect.objectContaining({ message: 'invalid signature' }),
-    });
+    expect(verifySpy.mock.results[0].type).toBe('throw');
+    expect((verifySpy.mock.results[0].value as Error).message).toBe(
+      'invalid signature',
+    );
     expect(request.user).toBeUndefined();
   });
 

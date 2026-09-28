@@ -3,24 +3,27 @@ import { Pool } from 'pg';
 import { PG_POOL } from './database.service';
 
 /**
- * Read-only view onto trading accounts.
- *
- * The auth service must never create an account - `Accounts` belongs to the
- * Sprint 3 schema: the numeric `id` (the BIGSERIAL trade_api's Liquibase adds;
- * its `business_ref` ACC-000001 form is display-only) is the account key the
- * contract's `accountId` names - so this repository has exactly one
- * operation: does that account already exist? Registration turns a "no" into
- * VAL-422 and records the link on the user's own row.
+ * Read-only view of trading accounts. A user is registered first and an
+ * account is opened for them afterwards (`Accounts.user_id` points at the
+ * user), so this service only ever asks which account a user trades. It never
+ * creates or changes one.
  */
 @Injectable()
 export class AccountsRepository {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
-  async exists(accountId: number): Promise<boolean> {
-    const result = await this.pool.query(
-      'SELECT 1 FROM Accounts WHERE id = $1 LIMIT 1',
-      [accountId],
+  /**
+   * The numeric key (`Accounts.id`) of the user's account, or null while no
+   * account has been opened for them. A user with more than one account gets
+   * the oldest, so the token's accountId is the same from one login to the
+   * next.
+   */
+  async findAccountIdForUser(userId: string): Promise<number | null> {
+    const result = await this.pool.query<{ id: string }>(
+      'SELECT id FROM Accounts WHERE user_id = $1 ORDER BY id LIMIT 1',
+      [userId],
     );
-    return result.rows.length > 0;
+    // BIGINT comes back from pg as a string.
+    return result.rows[0] ? Number(result.rows[0].id) : null;
   }
 }

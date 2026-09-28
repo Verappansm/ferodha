@@ -27,12 +27,18 @@ describe('redact', () => {
   it('redacts at any depth, including inside arrays', () => {
     const input = {
       user: { email: 'a@example.com', credentials: { password: 'p' } },
-      attempts: [{ password: 'p1' }, { nested: { deeper: { passwordHash: 'h' } } }],
+      attempts: [
+        { password: 'p1' },
+        { nested: { deeper: { passwordHash: 'h' } } },
+      ],
     };
 
     expect(redact(input)).toEqual({
       user: { email: 'a@example.com', credentials: REDACTED },
-      attempts: [{ password: REDACTED }, { nested: { deeper: { passwordHash: REDACTED } } }],
+      attempts: [
+        { password: REDACTED },
+        { nested: { deeper: { passwordHash: REDACTED } } },
+      ],
     });
   });
 
@@ -50,7 +56,10 @@ describe('redact', () => {
 
   it('redacts properties attached to an Error', () => {
     const error = Object.assign(new Error('boom'), { password: 'p' });
-    expect(redact(error)).toMatchObject({ message: 'boom', password: REDACTED });
+    expect(redact(error)).toMatchObject({
+      message: 'boom',
+      password: REDACTED,
+    });
   });
 });
 
@@ -65,6 +74,9 @@ describe('RedactingLogger', () => {
     new RedactingLogger().log({ body: { password: 'hunter2' } }, 'AuthService');
 
     expect(JSON.stringify(spy.mock.calls)).not.toContain('hunter2');
-    expect(spy).toHaveBeenCalledWith({ body: { password: REDACTED } }, 'AuthService');
+    expect(spy).toHaveBeenCalledWith(
+      { body: { password: REDACTED } },
+      'AuthService',
+    );
   });
 });

@@ -13,11 +13,17 @@ class PasswordOnlyDto {
 
 describe('createValidationPipe', () => {
   it('keeps neither the submitted DTO nor the rejected value on the exception', async () => {
-    const metadata: ArgumentMetadata = { type: 'body', metatype: PasswordOnlyDto };
+    const metadata: ArgumentMetadata = {
+      type: 'body',
+      metatype: PasswordOnlyDto,
+    };
 
     const thrown = await createValidationPipe()
       .transform({ password: SECRET }, metadata)
-      .then(() => undefined, (error: unknown) => error);
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
 
     expect(thrown).toBeInstanceOf(ValidationException);
     const errors = (thrown as ValidationException).validationErrors;

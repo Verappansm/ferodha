@@ -33,7 +33,9 @@ describe('PasswordService', () => {
   it('fails verification for an incorrect password', async () => {
     await expect(service.verify('wrong password', stored)).resolves.toBe(false);
     // Near misses too: case, a trailing space, an empty string.
-    await expect(service.verify(PASSWORD.toUpperCase(), stored)).resolves.toBe(false);
+    await expect(service.verify(PASSWORD.toUpperCase(), stored)).resolves.toBe(
+      false,
+    );
     await expect(service.verify(`${PASSWORD} `, stored)).resolves.toBe(false);
     await expect(service.verify('', stored)).resolves.toBe(false);
   });
@@ -61,5 +63,14 @@ describe('PasswordService', () => {
 
   it('the unknown-user decoy never verifies', async () => {
     await expect(service.verifyAgainstDecoy(PASSWORD)).resolves.toBe(false);
+  });
+
+  it('a stored value that is not a bcrypt hash fails through the decoy, not instantly', async () => {
+    const decoy = jest.spyOn(service, 'verifyAgainstDecoy');
+    await expect(
+      service.verify(PASSWORD, '$2b$12$placeholder_hash'),
+    ).resolves.toBe(false);
+    expect(decoy).toHaveBeenCalledTimes(1);
+    decoy.mockRestore();
   });
 });

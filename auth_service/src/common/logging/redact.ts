@@ -63,7 +63,9 @@ function walk(value: unknown, seen: WeakSet<object>): unknown {
     for (const [key, item] of value) {
       copy.set(
         key,
-        typeof key === 'string' && isSensitiveKey(key) ? REDACTED : walk(item, seen),
+        typeof key === 'string' && isSensitiveKey(key)
+          ? REDACTED
+          : walk(item, seen),
       );
     }
     return copy;
@@ -71,7 +73,12 @@ function walk(value: unknown, seen: WeakSet<object>): unknown {
 
   const source =
     value instanceof Error
-      ? { ...value, name: value.name, message: value.message, stack: value.stack }
+      ? {
+          ...value,
+          name: value.name,
+          message: value.message,
+          stack: value.stack,
+        }
       : value;
 
   const copy: Record<string, unknown> = {};

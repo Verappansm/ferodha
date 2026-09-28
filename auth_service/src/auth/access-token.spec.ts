@@ -21,11 +21,14 @@ import { Role } from './role.enum';
 /** The service key for this unit: what the service signs with. */
 const SERVICE_KEY = 'test-secret-key-that-is-at-least-32-chars-long';
 
+/** The account opened for the user; what the accountId claim must carry. */
+const ACCOUNT_ID = 7;
+
 const user: AuthUser = {
   id: '7d9f6f2c-9a1b-4e3f-8c2a-5b6d7e8f9a0b',
   email: 'token.spec.user@example.com',
   passwordHash: '$2b$12$unit.test.hash.the.stubs.never.compare',
-  accountId: 7,
+  status: 'ACTIVE',
   roles: [Role.CUSTOMER],
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
 };
@@ -41,7 +44,9 @@ function buildService(): AuthService {
     findByEmail: () => Promise.resolve(user),
     findById: () => Promise.resolve(user),
   } as unknown as UsersRepository;
-  const accounts = {} as unknown as AccountsRepository;
+  const accounts = {
+    findAccountIdForUser: () => Promise.resolve(ACCOUNT_ID),
+  } as unknown as AccountsRepository;
   const passwords = {
     hash: () => Promise.resolve(''),
     verify: () => Promise.resolve(true),
@@ -52,7 +57,14 @@ function buildService(): AuthService {
   } as unknown as RefreshTokensRepository;
   const config = { jwtSecret: SERVICE_KEY } as unknown as AppConfigService;
   const jwt = new JwtService({ secret: SERVICE_KEY });
-  return new AuthService(users, accounts, refreshTokens, passwords, jwt, config);
+  return new AuthService(
+    users,
+    accounts,
+    refreshTokens,
+    passwords,
+    jwt,
+    config,
+  );
 }
 
 /**
@@ -64,7 +76,7 @@ function issuedClaims(token: string): AccessTokenClaims {
     secret: SERVICE_KEY,
     algorithms: ['HS256'],
   });
-  return verified as unknown as AccessTokenClaims;
+  return verified as AccessTokenClaims;
 }
 
 describe('access token issuance', () => {
@@ -75,7 +87,7 @@ describe('access token issuance', () => {
     expect(claims.sub).toBe(user.id);
     expect(typeof claims.accountId).toBe('number');
     expect(Number.isInteger(claims.accountId)).toBe(true);
-    expect(claims.accountId).toBe(user.accountId);
+    expect(claims.accountId).toBe(ACCOUNT_ID);
     expect(claims.roles).toEqual([Role.CUSTOMER]);
     expect(claims.iss).toBe(JWT_ISSUER);
     expect(typeof claims.iat).toBe('number');
@@ -86,12 +98,12 @@ describe('access token issuance', () => {
   it('signature verifies with the service key', async () => {
     const { accessToken } = await buildService().login(CREDENTIALS);
 
-    expect(() =>
+    expect(() => {
       new JwtService({}).verify(accessToken, {
         secret: SERVICE_KEY,
         algorithms: ['HS256'],
-      }),
-    ).not.toThrow();
+      });
+    }).not.toThrow();
   });
 
   it('has no claim outside the contract set', async () => {

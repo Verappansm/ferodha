@@ -61,7 +61,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(body);
   }
 
-  private describe(exception: unknown): { status: number; body: ErrorEnvelope } {
+  private describe(exception: unknown): {
+    status: number;
+    body: ErrorEnvelope;
+  } {
     if (exception instanceof HttpException) {
       const status = normaliseStatus(exception.getStatus());
       const payload = exception.getResponse();

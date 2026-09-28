@@ -24,11 +24,13 @@ function hostWithResponse() {
   return { host, response };
 }
 
+type LogMock = jest.Mock<void, unknown[]>;
+
 function everythingLogged(): string {
   const calls = [
-    ...(Logger.prototype.error as jest.Mock).mock.calls,
-    ...(Logger.prototype.warn as jest.Mock).mock.calls,
-    ...(Logger.prototype.log as jest.Mock).mock.calls,
+    ...(Logger.prototype.error as LogMock).mock.calls,
+    ...(Logger.prototype.warn as LogMock).mock.calls,
+    ...(Logger.prototype.log as LogMock).mock.calls,
   ];
   return JSON.stringify(calls);
 }
@@ -64,7 +66,9 @@ describe('AllExceptionsFilter logging', () => {
       property: 'password',
       value: SECRET,
       target: { username: 'a@example.com', password: SECRET },
-      constraints: { minLength: 'password must be longer than or equal to 12 characters' },
+      constraints: {
+        minLength: 'password must be longer than or equal to 12 characters',
+      },
       children: [],
     });
 

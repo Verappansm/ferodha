@@ -5,6 +5,7 @@
  */
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { LoginRequestDto } from './login-request.dto';
 import { RegisterRequestDto } from './register-request.dto';
 
 async function passwordErrors(password: unknown) {
@@ -12,7 +13,6 @@ async function passwordErrors(password: unknown) {
     name: 'Spec User',
     username: 'dto.spec@example.com',
     password,
-    accountId: 1,
   });
   const errors = await validate(dto);
   return errors.filter((error) => error.property === 'password');
@@ -41,5 +41,32 @@ describe('RegisterRequestDto password', () => {
 
   it('rejects a non-string', async () => {
     expect(await passwordErrors(123456789012345)).not.toHaveLength(0);
+  });
+});
+
+describe('email normalisation', () => {
+  it('lower-cases and trims the username on register', () => {
+    const dto = plainToInstance(RegisterRequestDto, {
+      username: '  Priya.Menon@Example.COM ',
+      password: 'a'.repeat(12),
+    });
+    expect(dto.username).toBe('priya.menon@example.com');
+  });
+
+  it('lower-cases the username on login, so either case finds the user', () => {
+    const dto = plainToInstance(LoginRequestDto, {
+      username: 'Priya.Menon@Example.COM',
+      password: 'x',
+    });
+    expect(dto.username).toBe('priya.menon@example.com');
+  });
+
+  it('leaves a non-string alone for the validators to refuse', async () => {
+    const dto = plainToInstance(RegisterRequestDto, {
+      username: 42,
+      password: 'a'.repeat(12),
+    });
+    const errors = await validate(dto);
+    expect(errors.map((error) => error.property)).toContain('username');
   });
 });

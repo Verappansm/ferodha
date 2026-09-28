@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
 
 /**
@@ -8,6 +9,9 @@ import { IsString } from 'class-validator';
  * back as the same AUTH-401 rather than as a hint about which part was wrong.
  */
 export class RefreshRequestDto {
+  @ApiProperty({
+    description: 'The refresh token issued by the previous login or refresh.',
+  })
   @IsString()
   refreshToken!: string;
 }

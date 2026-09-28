@@ -1,71 +1,78 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
   IsEmail,
   IsEnum,
-  IsInt,
   IsNotEmpty,
-  Min,
   IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
 import { Role } from '../role.enum';
+import { normaliseEmail } from './normalise-email';
 
 /**
- * POST /auth/register body - RegisterRequest in contracts/auth-api.yaml,
- * including its `additionalProperties: false` (the global ValidationPipe is
- * configured with whitelist + forbidNonWhitelisted, so an undeclared field is
- * a VAL-422 rather than a silently ignored extra property).
+ * POST /auth/register body - RegisterRequest in contracts/auth-api.yaml, with
+ * the departures recorded in story_docs/contract-breach.md: the username is an
+ * email address, `name` is an optional extra, and there is no `accountId`
+ * because a user is registered before any trading account is opened for them.
  *
- * The decorators mirror the schema except where this service reads the
- * username as an email and takes a display `name` (both fields say why):
- * for the password, length beats character-class rules, so there is no
- * symbol requirement that would push users towards a shorter one.
+ * The global ValidationPipe runs with whitelist + forbidNonWhitelisted, so an
+ * undeclared field is a VAL-422 rather than a silently ignored property.
  */
 export class RegisterRequestDto {
   /**
-   * The account holder's display name. Not part of the contract's
-   * RegisterRequest - added because the platform's `Users.name` is NOT NULL
-   * and a person should not be registered (or greeted) under their email
-   * address. Stored verbatim; this API never returns it (UserResponse has
-   * no name field - `additionalProperties: false` keeps it that way).
+   * The username this service accepts is an email address (`Users.email`,
+   * UNIQUE). Stored lower-cased, so `Priya@Example.com` and
+   * `priya@example.com` are one user.
    */
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(100)
-  name!: string;
-
-  /**
-   * The username this service accepts IS an email address - `Users.email`,
-   * UNIQUE. The field keeps the contract's `username` name; the contract's
-   * username pattern is reference-only here, since it would reject every
-   * value this API actually takes (`@` is not in its character class).
-   * maxLength 64 from the contract still holds.
-   */
+  @ApiProperty({
+    format: 'email',
+    maxLength: 64,
+    example: 'priya.menon@example.com',
+  })
+  @Transform(normaliseEmail)
   @IsEmail()
   @MaxLength(64)
   username!: string;
 
-  /** minLength 12, maxLength 128, writeOnly in the contract. */
+  /** Length only: no symbol rule that pushes people towards shorter passwords. */
+  @ApiProperty({
+    minLength: 12,
+    maxLength: 128,
+    writeOnly: true,
+    example: 'correct horse battery staple',
+  })
   @IsString()
   @MinLength(12)
   @MaxLength(128)
   password!: string;
 
-  /** The numeric trading account key, `Accounts.id`; minimum 1. */
-  @IsInt()
-  @Min(1)
-  accountId!: number;
+  /**
+   * Display name for `Users.name`, which is NOT NULL. Optional so that a
+   * client built from the contract, which has no such field, can still
+   * register; without it the part of the email before the @ is used.
+   */
+  @ApiPropertyOptional({ maxLength: 100, example: 'Priya Menon' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  name?: string;
 
   /**
-   * Optional in the schema - and accepted, validated, then ignored. The route
-   * is `security: []`: no caller of it has proved anything, so a self-declared
-   * `ADMIN` would be privilege escalation. Everyone who registers is pinned to
-   * the `client` role (see UsersRepository.create), which reads back as
-   * CUSTOMER.
+   * Accepted because the contract allows it, validated, then ignored: this
+   * route is public, and a self-declared ADMIN would be privilege escalation.
+   * Everyone who registers is a CUSTOMER.
    */
+  @ApiPropertyOptional({
+    enum: Role,
+    isArray: true,
+    description: 'Ignored. Every self-registered user is CUSTOMER.',
+  })
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()

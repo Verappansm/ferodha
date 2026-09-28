@@ -41,7 +41,7 @@ export const UNEXPECTED_ERROR = 'An unexpected error occurred';
  * this service, and an unknown path is an invalid request. What matters is
  * that the body stays inside the catalogue and inside the envelope.
  */
-export function envelopeForStatus(status: number): ErrorEnvelope {
+export function envelopeForStatus(status: HttpStatus): ErrorEnvelope {
   switch (status) {
     case HttpStatus.UNAUTHORIZED:
       return { errorCode: ErrorCode.Unauthorised, message: UNAUTHORISED };
@@ -63,7 +63,7 @@ export function envelopeForStatus(status: number): ErrorEnvelope {
  * handler maps the same failure the same way). Everything else keeps the
  * status it was raised with.
  */
-export function normaliseStatus(status: number): number {
+export function normaliseStatus(status: HttpStatus): number {
   return status === HttpStatus.BAD_REQUEST
     ? HttpStatus.UNPROCESSABLE_ENTITY
     : status;
