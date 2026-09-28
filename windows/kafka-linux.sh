@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Runs on the LINUX Docker host. Starts Kafka + Kafka UI for the "windows"
 # setup (every other service runs natively on Windows) and creates the
-# topics. See windows/README.md.
+# topics. See windows/windows-setup.md.
 #
 #   ./windows/kafka-linux.sh            # up + topics
 #   ./windows/kafka-linux.sh down       # stop and remove

@@ -1,7 +1,7 @@
 # Kafka only - for the "windows" setup, where this file runs on a Linux Docker
 # host and everything else (postgres, trade-api, trade-executor,
 # trades-generator, auth-service) runs natively on Windows. See
-# windows/README.md. Start it with windows/kafka-linux.sh, which sets
+# windows/windows-setup.md. Start it with windows/kafka-linux.sh, which sets
 # KAFKA_ADVERTISED_HOST and creates the topics.
 #
 # kafka-linux.sh runs it as its own compose project (-p trade-kafka-windows),

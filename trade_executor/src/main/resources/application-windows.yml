@@ -1,6 +1,6 @@
 # Layered on top of application.yml when SPRING_PROFILES_ACTIVE includes
 # "windows": this service runs natively on Windows and the Kafka broker runs
-# in Docker on a separate Linux host - see windows/README.md. Combine with
+# in Docker on a separate Linux host - see windows/windows-setup.md. Combine with
 # market-sim as SPRING_PROFILES_ACTIVE=windows,market-sim.
 #
 # KAFKA_BOOTSTRAP_SERVERS has no default here on purpose - see trade_api's

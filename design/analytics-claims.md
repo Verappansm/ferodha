@@ -2,9 +2,9 @@
 
 | # | Claim | Chart artefact |
 |---|---|---|
-| 1 | HDFC Bank and ICICI Bank closed in the same direction (both up or both down) on 69.5% of trading days (173 of 249) between 2025-08-29 and 2026-08-26. | report.html#hdfc-icici-sync |
-| 2 | Combined traded value in HDFC Bank and ICICI Bank (₹10.96 trillion) exceeded combined traded value in Infosys and TCS (₹6.08 trillion) by 80% between 2025-08-28 and 2026-08-26. | report.html#sector-turnover |
-| 3 | Adani Enterprises' average daily traded value rose 57%, from ₹321.2 crore/day (Aug–Dec 2025) to ₹502.7 crore/day (Jan–Jun 2026), alongside a rise in realized daily volatility from 1.63% to 2.62%. | report.html#adanient-trade-size |
+| 1 | HDFC Bank and ICICI Bank closed in the same direction (both up or both down) on 69.5% of trading days (173 of 249) between 2025-08-29 and 2026-08-26. | analytics_etl/report.html#hdfc-icici-sync |
+| 2 | Combined traded value in HDFC Bank and ICICI Bank (₹10.96 trillion) exceeded combined traded value in Infosys and TCS (₹6.08 trillion) by 80% between 2025-08-28 and 2026-08-26. | analytics_etl/report.html#sector-turnover |
+| 3 | Adani Enterprises' average daily traded value rose 57%, from ₹321.2 crore/day (Aug–Dec 2025) to ₹502.7 crore/day (Jan–Jun 2026), alongside a rise in realized daily volatility from 1.63% to 2.62%. | analytics_etl/report.html#adanient-trade-size |
 
 ## Notes
 
@@ -14,7 +14,7 @@ seven satisfy criterion 6 on their own; claims 1 and 2 use the four bank/IT
 names, claim 3 uses Adani Enterprises.
 
 **Date range pulled.** Daily candles from 2025-08-28 to 2026-08-27, cached
-per symbol in `data/cache/`. `TATASTEEL.BO`'s cache only covers 2026-07-17
+per symbol in `analytics_etl/data/cache/`. `TATASTEEL.BO`'s cache only covers 2026-07-17
 to 2026-08-26 (27 sessions) -- noticeably shorter than the other six, which
 each have roughly a full year. That is why claim 3 uses Adani Enterprises
 rather than Tata Steel: a volatility comparison across two six-month windows
@@ -66,7 +66,7 @@ python -m etl_pipeline.dashboard.build_report  # reads the DuckDB store, writes 
 pytest                                         # tests/test_transform.py, no network required
 ```
 
-`scripts/rebuild_from_cache.py` rebuilds the DuckDB store straight from
-whatever is already in `data/cache/`, with no network call and no API key --
+`analytics_etl/scripts/rebuild_from_cache.py` rebuilds the DuckDB store straight from
+whatever is already in `analytics_etl/data/cache/`, with no network call and no API key --
 useful after a transform change, or for a teammate who has the repo's cache
 but not a key yet.
