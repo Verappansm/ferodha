@@ -4,8 +4,8 @@ JWT Token Generator for Trade API Testing
 Generates a JWT bearer token for use in Bruno or other REST clients.
 
 Usage:
-    python generate_jwt.py
-    
+    python scripts/generate_jwt.py
+
 Environment Variables Required:
     JWT_SECRET: The secret key for signing the token (same as your Spring app)
 
@@ -39,21 +39,21 @@ def get_env_var(name, default=None):
 
 def generate_jwt_token():
     """Generate a JWT token for API testing."""
-    
+
     # Get JWT secret from environment
     secret = get_env_var("JWT_SECRET")
-    
+
     # Get optional configuration from environment variables
     user_id = os.getenv("USER_ID", "test-user")
     account_id = int(os.getenv("ACCOUNT_ID", "1"))
     roles = os.getenv("ROLES", "USER").split(",")
     expiry_hours = int(os.getenv("TOKEN_EXPIRY_HOURS", "24"))
     issuer = os.getenv("ISSUER", "trade-api-test")
-    
+
     # Create payload
     now = datetime.now(timezone.utc)
     expiry = now + timedelta(hours=expiry_hours)
-    
+
     payload = {
         "sub": user_id,
         "accountId": account_id,
@@ -62,10 +62,10 @@ def generate_jwt_token():
         "exp": expiry,
         "iss": issuer,
     }
-    
+
     # Generate token
     token = jwt_encode(payload, secret, algorithm="HS256")
-    
+
     return token, payload
 
 
@@ -73,7 +73,7 @@ def main():
     """Main function."""
     try:
         token, payload = generate_jwt_token()
-        
+
         print("\n" + "="*70)
         print("JWT TOKEN GENERATED SUCCESSFULLY")
         print("="*70)
@@ -93,7 +93,7 @@ def main():
             else:
                 print(f"  {key}: {value}")
         print("="*70 + "\n")
-        
+
     except Exception as e:
         print(f"Error generating token: {e}", file=sys.stderr)
         sys.exit(1)

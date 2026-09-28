@@ -3,7 +3,7 @@ package com.trade.dto;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
-//account and balance 
+//account and balance
 public record BalanceResponseDto(
         Long accountId,
         BigDecimal cashBalance,

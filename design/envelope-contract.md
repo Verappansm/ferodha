@@ -1,6 +1,6 @@
 # Envelope Contract
 
-Source of truth: `kafka_contract.md`. 
+Source of truth: `kafka_contract.md`.
 
 ## 1. The envelope
 
@@ -18,4 +18,3 @@ the same five-field envelope plus a `payload` (see `EventEnvelope.java`):
 
 Adding an optional field is **not** a breaking change and does **not** bump
 `schemaVersion`. Removing a field, renaming one, or changing its type **is** breaking.
-

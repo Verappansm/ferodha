@@ -12,8 +12,9 @@
 
 set +e  # Don't exit on errors - we want to show bad cases
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR" || exit 1
+# Lives in scripts/; everything below works from the repository root.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT" || exit 1
 
 API_BASE="http://localhost:8094"
 EXECUTOR_BASE="http://localhost:8093"
@@ -23,10 +24,10 @@ ACCOUNT_ID=1
 # ------------------------------------------------------------
 # Load .env (same convention as database/apply.sh)
 # ------------------------------------------------------------
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
+if [[ -f "$REPO_ROOT/.env" ]]; then
     set -a
     # shellcheck disable=SC1091 # path is only known at runtime, by design
-    source "$SCRIPT_DIR/.env"
+    source "$REPO_ROOT/.env"
     set +a
 fi
 
@@ -146,10 +147,10 @@ wait_for_health() {
 setup_stack() {
     print_header "SETUP: Bringing up Postgres, Kafka, trade-api, trade-executor"
 
-    if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
+    if [[ ! -f "$REPO_ROOT/.env" ]]; then
         echo -e "${YELLOW}No .env found - copying .env.example. Fill in FAUXNANCE_API_URL/FAUXNANCE_API_KEY${NC}"
         echo -e "${YELLOW}for real quotes, or fills will resolve to REJECTED/PRICE_UNAVAILABLE.${NC}"
-        cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
+        cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
     fi
 
     print_subheader "docker compose up -d --build"
@@ -162,7 +163,7 @@ setup_stack() {
     wait_for_health "trade-executor" "$EXECUTOR_BASE/actuator/health" || exit 1
 
     print_subheader "Creating Kafka topics (idempotent - safe to re-run)"
-    (cd "$SCRIPT_DIR/kafka_pipeline" && ./create_topics.sh && ./create_dlt_topics.sh)
+    (cd "$REPO_ROOT/kafka_pipeline" && ./create_topics.sh && ./create_dlt_topics.sh)
 
     echo -e "${GREEN}✓ Stack is up${NC}"
     echo ""
@@ -695,7 +696,7 @@ market_sim_demo() {
     echo ""
     echo -e "${YELLOW}📌 On $KAFKA_UI, 'trade-events' now shows TWO messages for a full match: one for${NC}"
     echo "   this SELL, one for the synthetic BUY it matched against - both sides publish"
-    echo "   independently (Phase 3 fix - see extension_stories.md, LEAP-004)."
+    echo "   independently (Phase 3 fix - see story_docs/extension-stories.md, LEAP-004)."
     echo ""
     pause
 }

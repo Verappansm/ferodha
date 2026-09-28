@@ -71,7 +71,7 @@ CREATE TABLE Market_Data (
 CREATE INDEX idx_market_data_lookup ON Market_Data (instrument_id, timestamp DESC);
 
 -- Automated market data mapping helper function
-CREATE OR REPLACE FUNCTION get_instrument_id_by_ticker(p_ticker VARCHAR) 
+CREATE OR REPLACE FUNCTION get_instrument_id_by_ticker(p_ticker VARCHAR)
 RETURNS UUID AS $$
 DECLARE
     v_instrument_id UUID;
@@ -144,7 +144,7 @@ CREATE TABLE Notifications (
 -- 13. Dynamic Positions Calculation View
 CREATE OR REPLACE VIEW Positions_View AS
 WITH TradeExecutions AS (
-    SELECT 
+    SELECT
         o.account_id,
         o.instrument_id,
         SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END) AS total_quantity,
@@ -161,19 +161,19 @@ LatestPrices AS (
     FROM Market_Data
     ORDER BY instrument_id, timestamp DESC
 )
-SELECT 
+SELECT
     gen_random_uuid() AS position_id,
     te.account_id,
     te.instrument_id,
     te.total_quantity AS quantity,
-    CASE 
+    CASE
         WHEN te.total_buy_qty > 0 THEN ROUND(te.total_buy_cost / te.total_buy_qty, 4)
-        ELSE 0.0000 
+        ELSE 0.0000
     END AS average_price,
     ROUND(te.total_quantity * lp.current_market_price, 4) AS market_value,
     ROUND((te.total_quantity * lp.current_market_price) - (te.total_quantity * (te.total_buy_cost / NULLIF(te.total_buy_qty, 0))), 4) AS unrealized_pnl_value,
-    CASE 
-        WHEN te.total_buy_cost > 0 THEN 
+    CASE
+        WHEN te.total_buy_cost > 0 THEN
             ROUND((((te.total_quantity * lp.current_market_price) - (te.total_quantity * (te.total_buy_cost / te.total_buy_qty))) / (te.total_quantity * (te.total_buy_cost / te.total_buy_qty))) * 100, 2)
         ELSE 0.00
     END AS unrealized_pnl_percentage
@@ -184,20 +184,20 @@ WHERE te.total_quantity <> 0;
 
 
 -- ------------------ stuff i added
-ALTER TABLE Notifications 
+ALTER TABLE Notifications
 ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;
 
-ALTER TABLE Trades 
+ALTER TABLE Trades
 ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;
 -- Alternatively, use the broker's unique execution report ID:
 -- ADD COLUMN execution_report_id VARCHAR(100) UNIQUE;
 
 
-ALTER TABLE Transactions 
+ALTER TABLE Transactions
 ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;
 
 
 
 
-ALTER TABLE Orders 
+ALTER TABLE Orders
 ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;

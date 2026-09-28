@@ -36,7 +36,7 @@ public class OrderLogic {
         Account account = accounts.findById(order.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(order.getAccountId()));
 
-        // rule 2 the account must be ACTIVE 
+        // rule 2 the account must be ACTIVE
         if (!account.isActive()) {
             throw new AccountNotActiveException(order.getAccountId(), account.getStatus());
         }
