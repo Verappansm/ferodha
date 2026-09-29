@@ -27,7 +27,7 @@ The repo has two `.env` example files. **This setup uses only `windows\.env.wind
 
 | File | Used by |
 |---|---|
-| `.env.example` (repo root) | The full-Docker setup (`docker compose up`, `scripts/SB_AND_KAFKA_DEMO.sh`). **Not used here.** |
+| `.env.example` (repo root) | The full-Docker setup (`docker compose up`, `scripts/demo.sh`). **Not used here.** |
 | `windows\.env.windows.example` | **This setup.** Copy it to `windows\.env.windows` and fill that copy in. |
 
 Never edit the `*.example` files. `windows\.env.windows` is git-ignored, so your password is never committed.

@@ -29,10 +29,12 @@ Each folder has a short README. Design write-ups are in `design/` (index:
 
 ```bash
 cp .env.example .env   # fill in POSTGRES_*, JWT_SECRET, FAUXNANCE_API_URL, FAUXNANCE_API_KEY
-./scripts/SB_AND_KAFKA_DEMO.sh
+./scripts/demo.sh          # add --fresh to start from an empty database
 ```
 
-Brings up the stack, creates the Kafka topics, and walks through every endpoint.
+Brings up the stack, creates the Kafka topics, then walks the auth service and
+every trade-api endpoint with real tokens from the auth service. It works with
+either `docker compose` or the older `docker-compose`.
 
 ## Development setup
 

@@ -64,7 +64,7 @@ Tasks:
 
  Add `shellcheck` against `database/apply.sh`, `database/scripts/check.sh`,
  `kafka_pipeline/create_topics.sh`, `kafka_pipeline/create_dlt_topics.sh`,
- and `scripts/SB_AND_KAFKA_DEMO.sh`.
+ and `scripts/demo.sh`.
 
  Add a local hook running `auth_service`'s own ESLint config (Prettier
  included) on staged TypeScript, and force LF for `*.ts`/`*.js`/`*.json` in
@@ -220,7 +220,7 @@ Tasks:
  synthetic order no matter what the env var said. Documented the var in
  `.env.example`, which never mentioned it either.
 
- Added `scripts/SB_AND_KAFKA_DEMO.sh` Section 6: places a portal order priced to
+ Added `scripts/demo.sh` Section 6: places a portal order priced to
  cross a synthetic one, polls for `PARTIALLY_FILLED`/`FILLED`, and
  explains itself honestly when the stack isn't running market-sim rather
  than silently doing nothing.

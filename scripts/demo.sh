@@ -1,14 +1,19 @@
 #!/bin/bash
 
-# Complete Trade System Setup + Demo
+# The platform demo, against the Docker stack.
 #
-# Brings the whole platform up from a fresh clone (Postgres, Kafka, the two
-# topic-creation scripts, trade-api, trade-executor) and then walks every one
-# of trade-api's six contract endpoints, both happy and rejected paths, with
-# real curl commands, real JWT auth, and real Kafka verification.
+# Brings the whole platform up (Postgres, Kafka, the topics, trade-api,
+# trade-executor, auth-service and the market-sim generators), then walks the
+# auth service and every one of trade-api's six contract endpoints, happy and
+# rejected paths, with real tokens from the auth service and real Kafka
+# verification.
 #
-# Requires on the host: docker, docker compose, curl, python3, jq (jq is
-# optional - responses still print as raw JSON without it).
+#   ./scripts/demo.sh                    # start (or reuse) the stack, run the demo
+#   ./scripts/demo.sh --fresh            # wipe the database volume first
+#   NONINTERACTIVE=1 ./scripts/demo.sh   # no pauses
+#
+# Requires on the host: docker with either `docker compose` or
+# `docker-compose`, curl and jq.
 
 set +e  # Don't exit on errors - we want to show bad cases
 
@@ -18,8 +23,18 @@ cd "$REPO_ROOT" || exit 1
 
 API_BASE="http://localhost:8094"
 EXECUTOR_BASE="http://localhost:8093"
+AUTH_BASE="http://localhost:8096"
 KAFKA_UI="http://localhost:8091"
+
+# The seeded holder of account 1 (database/seeds/001_seed_data.sql). A user
+# registered through the auth service has no trading account yet, so the
+# trading sections run as this one.
+SEED_EMAIL="${SEED_EMAIL:-john.carter@example.com}"
+SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
 ACCOUNT_ID=1
+
+FRESH=0
+[[ "${1:-}" == "--fresh" ]] && FRESH=1
 
 # ------------------------------------------------------------
 # Load .env (same convention as database/apply.sh)
@@ -31,9 +46,6 @@ if [[ -f "$REPO_ROOT/.env" ]]; then
     set +a
 fi
 
-# Must match docker-compose.yml's own default exactly, since that's what
-# trade-api is actually signing/verifying against if .env doesn't override it.
-JWT_SECRET="${JWT_SECRET:-dev-only-jwt-signing-secret-please-change-later}"
 POSTGRES_USER="${POSTGRES_USER:-trade}"
 POSTGRES_DB="${POSTGRES_DB:-tradedb}"
 # Whatever the running containers were actually started with - this script
@@ -79,43 +91,41 @@ pause() {
     [[ "${NONINTERACTIVE:-0}" == "1" ]] || read -r -p "Press Enter to continue..."
 }
 
-# ------------------------------------------------------------
-# JWT minting - trade-api has no auth service this sprint, per
-# contracts/auth-api.yaml; tokens are minted directly the same way
-# trade_api's own JwtTestFixture does (sub, accountId, roles, iss, iat, exp),
-# signed HS256 with whatever JWT_SECRET the running stack actually uses.
-# Pure-stdlib python3, so no extra dependency beyond what RUN.md already
-# requires for fact_trades_etl.
-# ------------------------------------------------------------
-mint_jwt() {
-    local account_id="$1"
-    python3 - "$JWT_SECRET" "$account_id" <<'PY'
-import sys, json, time, hmac, hashlib, base64
+# Some hosts have the Compose plugin (`docker compose`), others only the older
+# standalone `docker-compose`; use whichever exists.
+if docker compose version >/dev/null 2>&1; then
+    COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE=(docker-compose)
+else
+    echo -e "${RED}✗ Neither 'docker compose' nor 'docker-compose' is available${NC}"
+    exit 1
+fi
 
-secret, account_id = sys.argv[1], int(sys.argv[2])
-
-def b64url(data: bytes) -> str:
-    return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
-
-now = int(time.time())
-header = {"alg": "HS256", "typ": "JWT"}
-payload = {
-    "sub": "11111111-1111-1111-1111-111111111111",
-    "accountId": account_id,
-    "roles": ["CUSTOMER"],
-    "iss": "auth-service",
-    "iat": now,
-    "exp": now + 900,
+# Logs the seeded account holder in through the auth service and sets
+# JWT_TOKEN. Called before every section: an access token lives 15 minutes,
+# and a demo with pauses can outlast one.
+login_seed_user() {
+    local response
+    response=$(curl -s -X POST "$AUTH_BASE/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"$SEED_EMAIL\",\"password\":\"$SEED_PASSWORD\"}")
+    JWT_TOKEN=$(echo "$response" | jq -r '.accessToken // empty' 2>/dev/null)
+    if [[ -z "$JWT_TOKEN" ]]; then
+        echo -e "${RED}✗ Could not log in as $SEED_EMAIL: $response${NC}"
+        echo "  A database seeded before the seed password existed needs a reset:"
+        echo "  run ./scripts/demo.sh --fresh"
+        exit 1
+    fi
 }
-segments = [
-    b64url(json.dumps(header, separators=(",", ":")).encode()),
-    b64url(json.dumps(payload, separators=(",", ":")).encode()),
-]
-signing_input = ".".join(segments).encode()
-signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
-segments.append(b64url(signature))
-print(".".join(segments))
-PY
+
+# The payload segment of a JWT, decoded (base64url, padding restored).
+jwt_claims() {
+    local seg="${1#*.}"
+    seg="${seg%%.*}"
+    seg=$(echo "$seg" | tr '_-' '/+')
+    while (( ${#seg} % 4 )); do seg="$seg="; done
+    echo "$seg" | base64 -d 2>/dev/null
 }
 
 # Runs a read-only-in-spirit but occasionally state-flipping SQL statement
@@ -128,9 +138,9 @@ run_sql() {
 }
 
 wait_for_health() {
-    local name="$1" url="$2" attempts=0
+    local name="$1" url="$2" healthy="${3:-\"status\":\"UP\"}" attempts=0
     print_subheader "Waiting for $name to report healthy ($url)"
-    until curl -s -o /dev/null -w '' "$url" 2>/dev/null && curl -s "$url" | grep -q '"status":"UP"'; do
+    until curl -s "$url" 2>/dev/null | grep -q "$healthy"; do
         attempts=$((attempts + 1))
         if [[ $attempts -gt 60 ]]; then
             echo -e "${RED}✗ $name did not become healthy after 5 minutes${NC}"
@@ -145,7 +155,7 @@ wait_for_health() {
 # SETUP: bring the whole stack up from nothing
 # ============================================================================
 setup_stack() {
-    print_header "SETUP: Bringing up Postgres, Kafka, trade-api, trade-executor"
+    print_header "SETUP: Bringing up the Docker stack"
 
     if [[ ! -f "$REPO_ROOT/.env" ]]; then
         echo -e "${YELLOW}No .env found - copying .env.example. Fill in FAUXNANCE_API_URL/FAUXNANCE_API_KEY${NC}"
@@ -153,14 +163,20 @@ setup_stack() {
         cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
     fi
 
-    print_subheader "docker compose up -d --build"
-    if ! docker compose up -d --build; then
-        echo -e "${RED}✗ docker compose up failed - see output above${NC}"
+    if [[ "$FRESH" == "1" ]]; then
+        print_subheader "${COMPOSE[*]} down -v (--fresh: wiping the database volume)"
+        "${COMPOSE[@]}" down -v
+    fi
+
+    print_subheader "${COMPOSE[*]} up -d --build"
+    if ! "${COMPOSE[@]}" up -d --build; then
+        echo -e "${RED}✗ ${COMPOSE[*]} up failed - see output above${NC}"
         exit 1
     fi
 
     wait_for_health "trade-api" "$API_BASE/actuator/health" || exit 1
     wait_for_health "trade-executor" "$EXECUTOR_BASE/actuator/health" || exit 1
+    wait_for_health "auth-service" "$AUTH_BASE/health" '"status":"ok"' || exit 1
 
     print_subheader "Creating Kafka topics (idempotent - safe to re-run)"
     (cd "$REPO_ROOT/kafka_pipeline" && ./create_topics.sh && ./create_dlt_topics.sh)
@@ -181,8 +197,8 @@ main() {
     ║                                                                   ║
     ║            TRADING PLATFORM - SETUP + COMPLETE DEMO               ║
     ║                                                                   ║
-    ║  All six contract endpoints, happy and rejected paths,           ║
-    ║  real JWT auth, and Kafka event verification                     ║
+    ║  The auth service, all six trade-api endpoints, happy and        ║
+    ║  rejected paths, and Kafka event verification                    ║
     ║                                                                   ║
     ╚═══════════════════════════════════════════════════════════════════╝
 EOF
@@ -190,26 +206,24 @@ EOF
 
     setup_stack
 
-    JWT_TOKEN="$(mint_jwt "$ACCOUNT_ID")"
-    if [[ -z "$JWT_TOKEN" ]]; then
-        echo -e "${RED}✗ Failed to mint a JWT (is python3 on PATH?)${NC}"
-        exit 1
-    fi
-
     echo -e "${YELLOW}Configuration:${NC}"
-    echo "  API Base: $API_BASE"
-    echo "  Account ID: $ACCOUNT_ID"
-    echo "  JWT Token: ${JWT_TOKEN:0:50}..."
-    echo "  Kafka UI: $KAFKA_UI"
+    echo "  Trade API:    $API_BASE"
+    echo "  Auth service: $AUTH_BASE  (OpenAPI: $AUTH_BASE/docs)"
+    echo "  Account ID:   $ACCOUNT_ID ($SEED_EMAIL)"
+    echo "  Kafka UI:     $KAFKA_UI"
     echo ""
 
     pause
 
-    print_header "SECTION 1: Setup & Validation"
+    print_header "SECTION 1: The Auth Service"
+    auth_demo
+
+    print_header "SECTION 1.5: Trade API Connectivity"
     test_api_connectivity
 
     print_header "SECTION 2: Happy Paths - All Six Contract Endpoints"
     pause
+    login_seed_user
     happy_path_check_balance
     happy_path_buy_order
     happy_path_sell_order
@@ -220,30 +234,104 @@ EOF
 
     print_header "SECTION 3: Bad Paths - Synchronous Rejections (trade-api, no Kafka)"
     pause
+    login_seed_user
     bad_path_insufficient_funds
     bad_path_unknown_symbol
     bad_path_delisted_instrument
 
     print_header "SECTION 4: Bad Path - Asynchronous Rejection (trade-executor, via Kafka)"
     pause
+    login_seed_user
     bad_path_execution_time_reject
 
     print_header "SECTION 5: Idempotency Test - Duplicate Prevention"
     pause
+    login_seed_user
     test_idempotency
 
     print_header "SECTION 6: market-sim Profile - Partial Fills & Synthetic Liquidity"
     pause
+    login_seed_user
     market_sim_demo
 
     print_summary
 }
 
 # ============================================================================
-# SECTION 1: Connectivity Tests
+# SECTION 1: The Auth Service
+# ============================================================================
+auth_demo() {
+    local email password code response
+
+    print_subheader "1.1 Register a new user (no token, no trading account)"
+    email="demo.$(date +%s).$RANDOM@example.com"
+    password="demo-password-123"
+    CURL_CMD="curl -s -X POST $AUTH_BASE/auth/register -H 'Content-Type: application/json' \
+  -d '{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}'"
+    print_curl "$CURL_CMD"
+    response=$(curl -s -w $'\n%{http_code}' -X POST "$AUTH_BASE/auth/register" \
+        -H "Content-Type: application/json" \
+        -d "{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}")
+    code="${response##*$'\n'}"
+    print_response "${response%$'\n'*}"
+    if [[ "$code" == "201" ]]; then
+        echo -e "${GREEN}✓ 201 Created - a user, with no token and no accountId${NC}"
+    else
+        echo -e "${RED}✗ Expected 201, got $code${NC}"
+    fi
+    echo ""
+    pause
+
+    print_subheader "1.2 That user logs in before an account is opened for them"
+    code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$AUTH_BASE/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"$email\",\"password\":\"$password\"}")
+    if [[ "$code" == "401" ]]; then
+        echo -e "${GREEN}✓ 401 - no trading account yet, so no token to issue${NC}"
+    else
+        echo -e "${RED}✗ Expected 401, got $code${NC}"
+    fi
+    echo ""
+    pause
+
+    print_subheader "1.3 Log in as the holder of account $ACCOUNT_ID"
+    CURL_CMD="curl -s -X POST $AUTH_BASE/auth/login -H 'Content-Type: application/json' \
+  -d '{\"username\":\"$SEED_EMAIL\",\"password\":\"<seed password>\"}'"
+    print_curl "$CURL_CMD"
+    login_seed_user
+    echo -e "${GREEN}✓ Got an access token (${#JWT_TOKEN} chars). Its claims:${NC}"
+    print_response "$(jwt_claims "$JWT_TOKEN")"
+    echo "  sub, accountId, roles, iat, exp and iss - nothing else, and no email."
+    echo ""
+    pause
+
+    print_subheader "1.4 GET /auth/me with that token"
+    response=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "$AUTH_BASE/auth/me")
+    print_response "$response"
+    echo ""
+
+    print_subheader "1.5 trade-api refuses a request with no token, and one with a forged signature"
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$API_BASE/api/v1/accounts/$ACCOUNT_ID/balance")
+    [[ "$code" == "401" ]] \
+        && echo -e "${GREEN}✓ no token: 401${NC}" \
+        || echo -e "${RED}✗ no token: expected 401, got $code${NC}"
+    # Same header and claims, different signature: what a token signed with a
+    # key trade-api does not trust looks like to it.
+    local forged="${JWT_TOKEN%.*}.c2lnbmVkLXdpdGgtYW4tdW50cnVzdGVkLWtleQ"
+    code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $forged" \
+        "$API_BASE/api/v1/accounts/$ACCOUNT_ID/balance")
+    [[ "$code" == "401" ]] \
+        && echo -e "${GREEN}✓ forged signature: 401${NC}" \
+        || echo -e "${RED}✗ forged signature: expected 401, got $code${NC}"
+    echo ""
+    pause
+}
+
+# ============================================================================
+# SECTION 1.5: Trade API Connectivity
 # ============================================================================
 test_api_connectivity() {
-    print_subheader "1.1 Testing API Connectivity"
+    print_subheader "1.6 Testing API Connectivity"
 
     CURL_CMD="curl -s http://localhost:8094/actuator/health"
     print_curl "$CURL_CMD"
@@ -622,7 +710,7 @@ test_idempotency() {
 # (SPRING_PROFILES_ACTIVE, read from .env by both trade-executor and
 # trades-generator - see docker-compose.yml). This section only demonstrates
 # something different if that was market-sim: restart the stack first with
-#   SPRING_PROFILES_ACTIVE=market-sim docker compose up -d --build
+#   SPRING_PROFILES_ACTIVE=market-sim ./scripts/demo.sh
 # (or set it in .env and re-run this script) to see it. Under the default
 # profile this section still runs, honestly, against fill-or-reject instead -
 # see logic.md (gitignored) for the full explanation of both profiles.
@@ -634,7 +722,7 @@ market_sim_demo() {
         echo ""
         echo "To actually see order-book matching, partial fills and the synthetic RANDOMIZER"
         echo "counterparty, restart the stack with:"
-        echo -e "  ${BLUE}SPRING_PROFILES_ACTIVE=market-sim docker compose up -d --build${NC}"
+        echo -e "  ${BLUE}SPRING_PROFILES_ACTIVE=market-sim ./scripts/demo.sh${NC}"
         echo "then re-run this script."
         echo ""
         pause
@@ -708,6 +796,11 @@ print_summary() {
     print_header "DEMO COMPLETE - Summary & Next Steps"
 
     cat << 'EOF'
+🔐 AUTH SERVICE (Section 1):
+   Register (no token, no account), login refused until an account exists,
+   login as an account holder, /auth/me, and trade-api refusing a missing or
+   forged token. OpenAPI: http://localhost:8096/docs
+
 ✅ ALL SIX CONTRACT ENDPOINTS EXERCISED:
    POST   /api/v1/orders                    - place (Section 2.2, 2.3)
    DELETE /api/v1/orders/{id}                - cancel (Section 2.7)
@@ -749,7 +842,7 @@ EOF
 
    Trade API:
    - REST endpoint for order placement, cancellation and account reads
-   - JWT authentication (minted directly this sprint, no auth service yet)
+   - JWT verification of tokens issued by the auth service
    - Idempotency key handling
    - Request validation
 
