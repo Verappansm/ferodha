@@ -1,16 +1,21 @@
 <div class="app-container">
   <nav class="navbar">
     <div class="nav-brand">Trading Platform</div>
+    @if (session.isSignedIn()) {
     <ul class="nav-links">
-      <li><a href="/dashboard">Dashboard</a></li>
-      <li><a href="/portfolio">Portfolio</a></li>
-      <li><a href="/instruments">Instruments</a></li>
-      <li><a href="/order">Order</a></li>
-      <li><a href="/orders">Orders</a></li>
-      <li><a href="/watchlist">Watchlist</a></li>
-      <li><a href="/bank">Bank</a></li>
-      <li><a href="/settings">Settings</a></li>
+      <li><a routerLink="/dashboard">Dashboard</a></li>
+      <li><a routerLink="/portfolio">Portfolio</a></li>
+      <li><a routerLink="/instruments">Instruments</a></li>
+      <li><a routerLink="/order">Order</a></li>
+      <li><a routerLink="/orders">Orders</a></li>
+      <li><a routerLink="/watchlist">Watchlist</a></li>
+      <li><a routerLink="/bank">Bank</a></li>
+      <li><a routerLink="/settings">Settings</a></li>
     </ul>
+    <button type="button" class="sign-out" data-testid="sign-out" (click)="signOut()">
+      Sign out
+    </button>
+    }
   </nav>
 
   <main class="main-content">

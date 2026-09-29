@@ -4,10 +4,12 @@
 # shebang line can fail outright on Linux with "bad interpreter").
 *.sh text eol=lf
 
-# TypeScript/JS/JSON: Prettier formats to LF, so check them out as LF on every
+# TypeScript/JS/JSON/HTML/CSS: Prettier formats to LF, so check them out as LF on every
 # OS. Without this, core.autocrlf=true on Windows turns every file into a
 # Prettier failure on a fresh clone.
 *.ts   text eol=lf
 *.mjs  text eol=lf
 *.js   text eol=lf
 *.json text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
