@@ -115,7 +115,7 @@ the auto-create default in disguise, because:
 ## 6. Where the creation commands live and what runs them
 
 - Scripts: `kafka_pipeline/create_topics.sh` and `kafka_pipeline/create_dlt_topics.sh`,
-  on the Linux Docker host (see `kafka_setup.md`).
+  on the Linux Docker host (see `kafka-topic-setup.md`).
 - Execution: manual, via SSH into the Linux host, `./create_topics.sh` then
   `./create_dlt_topics.sh`. Not currently wired into CI or a bootstrap step.
 - Idempotency: both scripts use `--if-not-exists`, so rerunning is safe and won't error

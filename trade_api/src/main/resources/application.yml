@@ -38,6 +38,7 @@ mybatis:
 app:
   jwt:
     secret: ${JWT_SECRET}
+    issuer: auth-service
 
 logging:
   level:

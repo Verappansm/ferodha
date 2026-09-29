@@ -1,7 +1,7 @@
 """
 DASHBOARD
 Builds report.html: three self-contained plotly charts, one per business
-claim in claims.md. Reads only from the DuckDB store the pipeline already
+claim in design/analytics-claims.md. Reads only from the DuckDB store the pipeline already
 loaded -- no network, no key. plotly's JS is inlined once, so the file opens
 in a browser with no network and no build step.
 
@@ -194,7 +194,7 @@ PAGE_TEMPLATE = """<!DOCTYPE html>
 <body>
 <h1>Sprint 4 &mdash; market data analytics: three claims</h1>
 <p class="meta">Source: Fauxnance end-of-day candles for {universe}, cached locally, cleaned and loaded
-by this package's ETL pipeline. Generated {generated}. See claims.md for the full claim table and notes
+by this package's ETL pipeline. Generated {generated}. See design/analytics-claims.md for the full claim table and notes
 on scope and rejected rows.</p>
 
 <section id="hdfc-icici-sync">

@@ -2,7 +2,7 @@ package com.trade.dto;
 
 import java.math.BigDecimal;
 
-//account portfolio's instrument and quantity 
+//account portfolio's instrument and quantity
 public record PositionResponseDto(
         Long accountId,
         String symbol,

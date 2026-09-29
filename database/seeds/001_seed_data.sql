@@ -1,5 +1,8 @@
 -- 2. USERS
 -- ============================================================
+-- Every seeded user's password is `seed-password-change-me` (bcrypt, cost 12),
+-- so the seeded account holders can log in through the auth service in
+-- development. Never reuse these rows outside a local database.
 
 INSERT INTO Users
     (user_id, name, email, phone_number, password_hash, status, role_id)
@@ -9,7 +12,7 @@ VALUES
         'John Carter',
         'john.carter@example.com',
         '+1-202-555-0101',
-        '$2b$12$john_dummy_password_hash',
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'client')
     ),
@@ -18,7 +21,7 @@ VALUES
         'Emily Stone',
         'emily.stone@example.com',
         '+1-202-555-0102',
-        '$2b$12$emily_dummy_password_hash',
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'client')
     ),
@@ -27,7 +30,7 @@ VALUES
         'Robert Wilson',
         'robert.wilson@example.com',
         '+1-202-555-0103',
-        '$2b$12$robert_dummy_password_hash',
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'advisor')
     ),
@@ -36,7 +39,7 @@ VALUES
         'Sarah Johnson',
         'sarah.johnson@example.com',
         '+1-202-555-0104',
-        '$2b$12$sarah_dummy_password_hash',
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'analyst')
     ),
@@ -45,7 +48,7 @@ VALUES
         'Michael Brown',
         'michael.brown@example.com',
         '+1-202-555-0105',
-        '$2b$12$michael_dummy_password_hash',
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'admin')
     );
@@ -516,7 +519,3 @@ VALUES
         '{"type":"TRADE_EXECUTED","message":"Your TSLA buy order was executed.","ticker":"TSLA","quantity":8}',
         'NOTIFY-IDEMP-0004'
     );
-
-
-
-

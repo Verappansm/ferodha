@@ -1,0 +1,19 @@
+# Layered on top of application.yml when SPRING_PROFILES_ACTIVE includes
+# "windows": this service runs natively on Windows and the Kafka broker runs
+# in Docker on a separate Linux host - see windows/windows-setup.md.
+#
+# KAFKA_BOOTSTRAP_SERVERS has no default here on purpose. The broker is never
+# on localhost in this setup, so a missing value fails at startup instead of
+# silently pointing the producer at a broker that doesn't exist.
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+      properties:
+        # send() blocks for metadata while the broker is unreachable; across
+        # hosts, fail an order request in 10s rather than the 60s default.
+        max.block.ms: ${KAFKA_MAX_BLOCK_MS:10000}

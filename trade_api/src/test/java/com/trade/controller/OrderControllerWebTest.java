@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.kafka.core.KafkaTemplate;
+import com.trade.event.OrderPlacedPublisher;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -55,12 +55,11 @@ class OrderControllerWebTest {
     @MockitoBean
     private OrderService orderService;
 
-    // OrderController's constructor has always required a KafkaTemplate (to
-    // publish ORDER_PLACED) - @WebMvcTest's slice doesn't bring in Kafka's
-    // autoconfiguration, so without this mock bean the context fails to
-    // start with a NoSuchBeanDefinitionException before any test method runs.
+    // OrderController publishes ORDER_PLACED through OrderPlacedPublisher,
+    // which @WebMvcTest's slice does not load; the send itself (topic, key,
+    // acknowledgement) is covered by OrderPlacedPublisherTest.
     @MockitoBean
-    private KafkaTemplate<String, String> kafkaTemplate;
+    private OrderPlacedPublisher orderPlacedPublisher;
 
     @Test
     void placingAnOrderWithAValidTokenReturnsTheContractShapedResponse() throws Exception {
@@ -94,7 +93,9 @@ class OrderControllerWebTest {
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isOk());
 
-        verify(kafkaTemplate).send(eq("orders"), eq("1"), anyString());
+        verify(orderPlacedPublisher).publish(argThat(payload ->
+                payload.accountId() == 1L
+                        && payload.orderId().equals("ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e")));
     }
 
     // Full proof that the publish happens only once the transaction inside
@@ -102,7 +103,7 @@ class OrderControllerWebTest {
     // trade_executor's SettlementServiceIT for that pattern applied to
     // Story 2's settlement) - orderService is mocked here, so this instead
     // pins the one thing a web-layer slice actually can: the controller
-    // calls placeOrder() and only then kafkaTemplate.send(), never the
+    // calls placeOrder() and only then publishes, never the
     // other way round, matching what OrderController.placeOrder's source
     // does (publish sits after the call that returns once its own
     // @Transactional method has committed).
@@ -118,9 +119,9 @@ class OrderControllerWebTest {
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isOk());
 
-        InOrder inOrder = inOrder(orderService, kafkaTemplate);
+        InOrder inOrder = inOrder(orderService, orderPlacedPublisher);
         inOrder.verify(orderService).placeOrder(any(), eq(1L));
-        inOrder.verify(kafkaTemplate).send(anyString(), anyString(), anyString());
+        inOrder.verify(orderPlacedPublisher).publish(any());
     }
 
     @Test
@@ -134,7 +135,7 @@ class OrderControllerWebTest {
                         .content(objectMapper.writeValueAsString(invalid)))
                 .andExpect(status().isUnprocessableEntity());
 
-        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
+        verify(orderPlacedPublisher, never()).publish(any());
     }
 
     @Test

@@ -1,0 +1,10 @@
+# The builder runs its own `npm ci`; a host node_modules (often built on
+# Windows) must not be copied over it, and nothing secret or generated belongs
+# in the build context.
+node_modules
+dist
+coverage
+.env
+.env.*
+*.log
+.git

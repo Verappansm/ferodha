@@ -48,6 +48,15 @@ public interface OrderMapper {
     // second, as two statements, would race the Sprint 7 Trade Executor.
     int cancelIfNew(@Param("orderId") UUID orderId);
 
+    // Marks the order's ORDER_PLACED event as acknowledged by Kafka. Called
+    // from the producer's completion callback; a second call is a no-op.
+    int markPublished(@Param("orderId") UUID orderId);
+
+    // Portal orders still NEW whose event Kafka never acknowledged, placed
+    // before the cutoff - see event.UnpublishedOrderSweeper.
+    List<UnpublishedOrderRow> findUnpublished(@Param("placedBefore") OffsetDateTime placedBefore,
+                                              @Param("limit") int limit);
+
     List<OrderHistoryRow> findHistory(@Param("accountId") long accountId,
                                        @Param("status") String status,
                                        @Param("from") OffsetDateTime from,

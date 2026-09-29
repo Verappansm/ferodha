@@ -1,0 +1,64 @@
+# Kafka only - for the "windows" setup, where this file runs on a Linux Docker
+# host and everything else (postgres, trade-api, trade-executor,
+# trades-generator, auth-service) runs natively on Windows. See
+# windows/windows-setup.md. Start it with windows/kafka-linux.sh, which sets
+# KAFKA_ADVERTISED_HOST and creates the topics.
+#
+# kafka-linux.sh runs it as its own compose project (-p trade-kafka-windows),
+# so it never shares containers or networks with the root docker-compose.yml's
+# full Docker stack. The project name is passed with -p rather than a
+# top-level `name:`, which older standalone docker-compose versions reject.
+# Like the root compose, the broker keeps no volume: `down` then `up` starts
+# empty, and kafka-linux.sh recreates the topics every time.
+
+services:
+
+  kafka:
+    image: apache/kafka:latest
+    # Same name as the root compose's broker, so kafka_pipeline/create_*.sh
+    # work against it unchanged.
+    container_name: trade-kafka
+    ports:
+      # The Windows services connect to this port over the network. It must be
+      # published on the same number it's advertised on (see below), because
+      # clients reconnect to whatever address the broker advertises.
+      - "${KAFKA_EXTERNAL_PORT:-9092}:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # PLAINTEXT (29092): container-to-container (kafka-ui, topic scripts).
+      # EXTERNAL (9092): the Windows machine, over the LAN.
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      # EXTERNAL must be an address the WINDOWS machine can reach - the Linux
+      # host's LAN IP, or localhost if Docker runs in WSL2 on that same PC.
+      # Advertising localhost from a separate Linux box is the classic failure:
+      # the first connection works, then every client tries its own localhost.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://${KAFKA_ADVERTISED_HOST:?set KAFKA_ADVERTISED_HOST to the IP the Windows machine uses to reach this host}:${KAFKA_EXTERNAL_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Same as the root compose: topics are created explicitly by
+      # kafka_pipeline/create_topics.sh and create_dlt_topics.sh.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:29092"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8091:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: trade-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy

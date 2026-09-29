@@ -1,0 +1,32 @@
+meta {
+  name: refresh missing field
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.errorCode: eq VAL-422
+}

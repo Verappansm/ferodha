@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 // the same production code path" the sprint-06 brief asks for.
 class JwtServiceTest {
 
-    private final JwtService jwtService = new JwtService(JwtTestFixture.SECRET);
+    private final JwtService jwtService = new JwtService(JwtTestFixture.SECRET, "auth-service");
 
     @Test
     @DisplayName("A validly signed, unexpired token is accepted and its claims are readable")
@@ -59,6 +59,6 @@ class JwtServiceTest {
     @Test
     @DisplayName("Startup fails fast when JWT_SECRET has not been configured")
     void blankSecretFailsFast() {
-        assertThrows(IllegalStateException.class, () -> new JwtService(" "));
+        assertThrows(IllegalStateException.class, () -> new JwtService(" ", "auth-service"));
     }
 }

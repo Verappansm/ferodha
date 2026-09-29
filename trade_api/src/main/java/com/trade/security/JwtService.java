@@ -23,8 +23,11 @@ public class JwtService {
     private static final String EXPECTED_ALGORITHM = "HS256";
 
     private final SecretKey signingKey;
+    private final String expectedIssuer;
 
-    public JwtService(@Value("${app.jwt.secret}") String secret) {
+    public JwtService(
+            @Value("${app.jwt.secret}") String secret,
+            @Value("${app.jwt.issuer}") String issuer) {
         if (secret == null || secret.isBlank()) {
             // Fail fast at startup rather than accepting every token at
             // request time because nobody configured JWT_SECRET.
@@ -32,6 +35,7 @@ public class JwtService {
                     "JWT_SECRET is not set. It must come from the environment, never a properties file.");
         }
         this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.expectedIssuer = issuer;
     }
 
     // Checks the signature, then the expiry, then the algorithm, all before
@@ -57,6 +61,11 @@ public class JwtService {
         }
 
         Claims claims = parsed.getPayload();
+
+        String tokenIssuer = claims.getIssuer();
+        if (tokenIssuer == null || !expectedIssuer.equals(tokenIssuer)) {
+            throw new JwtVerificationException("Token issuer mismatch: expected " + expectedIssuer + ", got " + tokenIssuer);
+        }
 
         Number accountIdClaim = claims.get("accountId", Number.class);
         if (accountIdClaim == null) {

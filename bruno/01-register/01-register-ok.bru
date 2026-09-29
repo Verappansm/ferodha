@@ -1,0 +1,48 @@
+meta {
+  name: register ok
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno Tester",
+    "username": "{{testEmail}}",
+    "password": "correct horse battery staple"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:pre-request {
+  // Fresh email every run, so the collection stays repeatable. Runtime
+  // variables only: nothing is written back into environments/*.bru.
+  const email = `bruno.t${Date.now()}.${Math.floor(Math.random() * 1000000)}@example.com`;
+  bru.setVar("testEmail", email);
+  bru.setVar("testEmailUpper", email.toUpperCase());
+}
+
+script:post-response {
+  const b = res.getBody();
+  if (b.accessToken !== undefined || b.refreshToken !== undefined) {
+    throw new Error("registration must not mint a session (no token keys allowed)");
+  }
+  if (b.username !== bru.getVar("testEmail") || b.id === undefined) {
+    throw new Error("registration must answer the UserResponse for the new user");
+  }
+  if (b.accountId !== undefined) {
+    throw new Error("a new user has no trading account yet, so no accountId");
+  }
+}
