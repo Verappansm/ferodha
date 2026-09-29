@@ -54,7 +54,8 @@ export class AuthController {
   @Post('register')
   @ApiOperation({
     operationId: 'register',
-    summary: 'Register a user. Issues no tokens and opens no trading account.',
+    summary:
+      'Register a user and file a pending account-opening request. Issues no tokens; login waits for an admin to approve the account.',
   })
   @ApiCreatedResponse({ type: UserResponseDto })
   @ApiConflictResponse({

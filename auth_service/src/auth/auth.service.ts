@@ -64,9 +64,10 @@ export class AuthService {
   ) {}
 
   /**
-   * POST /auth/register. Creates the user only. A trading account is opened
-   * for them afterwards, and until then they cannot log in, so registration
-   * never returns an accountId and never issues a token.
+   * POST /auth/register. Creates the user and a PENDING account-opening
+   * request. The trading account is opened only when an admin approves that
+   * request, and until then the user cannot log in, so registration never
+   * returns an accountId and never issues a token.
    */
   async register(body: RegisterRequestDto): Promise<UserResponse> {
     const passwordHash = await this.passwords.hash(body.password);
@@ -74,7 +75,7 @@ export class AuthService {
     try {
       // Whatever `roles` the body declared is ignored: the repository pins
       // every self-registered user to the `client` role.
-      const user = await this.users.create({
+      const user = await this.users.createWithAccountRequest({
         name: body.name ?? body.username.split('@')[0],
         email: body.username,
         passwordHash,

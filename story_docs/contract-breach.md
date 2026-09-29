@@ -18,10 +18,10 @@ below is a decision the team has taken and will defend at review.
 | B02 | Auth: register body | `auth-api.yaml` RegisterRequest, `additionalProperties: false` | Only `username`, `password`, `accountId`, optional `roles` | Also accepts an optional `name` |
 | B03 | Auth: refresh reuse | `auth-api.yaml` `/auth/refresh`; architecture auth page | A consumed token presented again revokes **every** refresh token for that user | Revokes only that login's chain (its family); see LEAP-005 |
 | B04 | Auth: login throttle | Architecture auth page | "five attempts a minute per address" | 5 **failed** attempts per IP per **15 minutes**; successful logins are not counted |
-| B05 | Auth: data ownership | Architecture auth page, HLD | Auth owns a Users table and a refresh-tokens table, "nothing else", in a separate `auth` schema, and never reads accounts | Uses the platform's Sprint 3 `Users` table, keeps `auth_refresh_tokens` in `public`, and reads `Accounts` to find the account a user owns |
+| B05 | Auth: data ownership | Architecture auth page, HLD | Auth owns a Users table and a refresh-tokens table, "nothing else", in a separate `auth` schema, and never reads accounts | Uses the platform's Sprint 3 `Users` table, keeps `auth_refresh_tokens` in `public`, reads `Accounts` to find the account a user owns, and files a row in `account_requests` at registration |
 | B06 | Auth: error codes | `auth-api.yaml` ErrorResponse enum | `errorCode` is one of `AUTH-401`, `AUTH-409`, `VAL-422` | Also `INTERNAL-500` for an unexpected fault; an unknown path answers **404** with `VAL-422` |
 | B07 | Auth: folder | Sprint 8 README | "One NestJS project rooted in this folder" (`sprint-08-auth-service/`) | `auth_service/` |
-| B08 | Auth: registration and accounts | `auth-api.yaml` RegisterRequest, UserResponse; Sprint 8 README | Register takes a required `accountId` naming an existing account, and `UserResponse.accountId` is required | The user is registered first and an account is opened for them afterwards. Register takes no `accountId` (sending one is `VAL-422`), its response has none, and login is refused until the user owns an account |
+| B08 | Auth: registration and accounts | `auth-api.yaml` RegisterRequest, UserResponse; Sprint 8 README | Register takes a required `accountId` naming an existing account, and `UserResponse.accountId` is required | The user is registered first and an account is opened for them afterwards. Register takes no `accountId` (sending one is `VAL-422`), its response has none, and it files a PENDING account request. Login is refused until an admin approves the request and the account is opened |
 | B09 | Issuer validation | Story 3 vs `auth-api.yaml` | Story 3: "do not require a particular issuer value in any consumer". Contract: "Consumers must validate the configured issuer" | trade_api accepts only tokens whose `iss` is `auth-service` (`app.jwt.issuer`) |
 | B10 | Ports | `infra/README.md`; contract `servers` | Postgres `localhost:5432`, Kafka `localhost:9092`, auth `localhost:3000`, trade API `:8080` | Host ports 8090 (Postgres), 8092 (Kafka), 8094 (trade-api), 8093 (executor), 8096 (auth). Container ports are the contract's |
 | B11 | Env names | Neueda root `.env.example` | `FAUXNANCE_BASE_URL`, `POSTGRES_DB=trading` | `FAUXNANCE_API_URL`, `POSTGRES_DB=tradedb` |
@@ -84,9 +84,10 @@ check who owns it; that is how the account-takeover defect in the first Sprint
 8 build happened. The Sprint 3 schema already models ownership the other way
 round (`Accounts.user_id` points at the user), so the user is created first and
 the account is opened for them. No token is minted without a real `accountId`,
-so login waits for the account; the claim set is unchanged and trade_api needs
-nothing new. Opening an account through an API is not built yet (see the
-security review's outstanding items).
+so login waits for the account; the claim set is unchanged. Registration files
+a PENDING row in `account_requests` (trade_api Liquibase `008`) in the same
+transaction as the user; an admin approving it opens the `Accounts` row
+(LEAP-011, approval not built yet).
 
 **B09 (issuer).** The two sources disagree, and we follow the contract. The
 `iss` claim says which service minted a token. A consumer that checks it will

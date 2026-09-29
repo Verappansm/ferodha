@@ -20,5 +20,6 @@
     <include file="db/changelog/005-partial-fill-columns.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/006-market-maker-account.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/007-order-published-at.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/008-account-requests.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

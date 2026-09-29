@@ -1,8 +1,9 @@
 /**
- * Registration: plaintext is never stored, the user is created on its own
- * (no trading account, no accountId, no token), and a missing display name
- * falls back to the email's local part. Runs the real PasswordService at the
- * real cost; only the database is stubbed.
+ * Registration: plaintext is never stored, the user is created with a
+ * pending account request and nothing more (no trading account, no accountId,
+ * no token), and a missing display name falls back to the email's local
+ * part. Runs the real PasswordService at the real cost; only the database is
+ * stubbed.
  */
 import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '../config/config.service';
@@ -18,7 +19,7 @@ jest.setTimeout(30_000);
 const PLAINTEXT = 'a-password-that-must-never-be-stored';
 
 function setup() {
-  const create = jest.fn(
+  const createWithAccountRequest = jest.fn(
     (input: { name: string; email: string; passwordHash: string }) =>
       Promise.resolve({
         id: '7d9f6f2c-9a1b-4e3f-8c2a-5b6d7e8f9a0b',
@@ -31,19 +32,19 @@ function setup() {
   );
   const findAccountIdForUser = jest.fn();
   const service = new AuthService(
-    { create } as unknown as UsersRepository,
+    { createWithAccountRequest } as unknown as UsersRepository,
     { findAccountIdForUser } as unknown as AccountsRepository,
     {} as unknown as RefreshTokensRepository,
     new PasswordService(),
     new JwtService({}),
     {} as unknown as AppConfigService,
   );
-  return { service, create, findAccountIdForUser };
+  return { service, createWithAccountRequest, findAccountIdForUser };
 }
 
 describe('registration', () => {
   it('passes only a bcrypt hash (cost >= 12) to the credential store', async () => {
-    const { service, create } = setup();
+    const { service, createWithAccountRequest } = setup();
 
     const response = await service.register({
       name: 'Credential Spec',
@@ -51,8 +52,8 @@ describe('registration', () => {
       password: PLAINTEXT,
     });
 
-    expect(create).toHaveBeenCalledTimes(1);
-    const stored = create.mock.calls[0][0];
+    expect(createWithAccountRequest).toHaveBeenCalledTimes(1);
+    const stored = createWithAccountRequest.mock.calls[0][0];
 
     // What reaches the store: a bcrypt string, never the password.
     expect(stored.passwordHash).toMatch(
@@ -65,7 +66,7 @@ describe('registration', () => {
     expect(JSON.stringify(response)).not.toContain(PLAINTEXT);
   });
 
-  it('creates the user only: no account lookup, no accountId, no token', async () => {
+  it('opens no account on registration: no account lookup, no accountId, no token', async () => {
     const { service, findAccountIdForUser } = setup();
 
     const response = await service.register({
@@ -83,13 +84,13 @@ describe('registration', () => {
   });
 
   it('uses the part of the email before the @ when no name is given', async () => {
-    const { service, create } = setup();
+    const { service, createWithAccountRequest } = setup();
 
     await service.register({
       username: 'priya.menon@example.com',
       password: PLAINTEXT,
     });
 
-    expect(create.mock.calls[0][0].name).toBe('priya.menon');
+    expect(createWithAccountRequest.mock.calls[0][0].name).toBe('priya.menon');
   });
 });

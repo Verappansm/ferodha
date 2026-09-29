@@ -74,17 +74,24 @@ export class UsersRepository {
   constructor(@Inject(PG_POOL) private readonly pool: Pool) {}
 
   /**
-   * Registers into the existing Users table as an ACTIVE `client`. A public
-   * route cannot let the caller pick a role, so a declared `roles` array never
-   * reaches this method.
+   * Registers into the existing Users table as an ACTIVE `client`, and files
+   * a PENDING account-opening request for them (`account_requests`, LEAP-011)
+   * in the same transaction, so there is never a registered user with no
+   * request or a request with no user. The Accounts row is opened only when
+   * an admin approves the request; until then the user cannot log in.
+   *
+   * A public route cannot let the caller pick a role, so a declared `roles`
+   * array never reaches this method.
    */
-  async create(input: {
+  async createWithAccountRequest(input: {
     name: string;
     email: string;
     passwordHash: string;
   }): Promise<AuthUser> {
+    const client = await this.pool.connect();
     try {
-      const result = await this.pool.query<AuthUserRow>(
+      await client.query('BEGIN');
+      const result = await client.query<AuthUserRow>(
         `INSERT INTO Users (name, email, password_hash, status, role_id)
          VALUES ($1, $2, $3, 'ACTIVE',
                  (SELECT role_id FROM Roles WHERE role_name = 'client'))
@@ -92,13 +99,21 @@ export class UsersRepository {
                    'client' AS role_name, created_at`,
         [input.name, input.email, input.passwordHash],
       );
-      return toAuthUser(result.rows[0]);
+      const user = toAuthUser(result.rows[0]);
+      await client.query('INSERT INTO account_requests (user_id) VALUES ($1)', [
+        user.id,
+      ]);
+      await client.query('COMMIT');
+      return user;
     } catch (error) {
+      await client.query('ROLLBACK');
       if ((error as { code?: string }).code === '23505') {
         // unique_violation on Users.email - the contract's AUTH-409.
         throw new UsernameTakenError();
       }
       throw error;
+    } finally {
+      client.release();
     }
   }
 

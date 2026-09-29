@@ -22,7 +22,7 @@ SELECT LEFT(password_hash, 7) AS prefix, COUNT(*) FROM Users GROUP BY 1;
 
 | Row | prefix | Notes |
 |---|---|---|
-| 5 users in `database/seeds/001_seed_data.sql` | `$2b$12# Decision: password storage, cost factor and log hygiene
+| 6 users in `database/seeds/001_seed_data.sql` | `$2b$12# Decision: password storage, cost factor and log hygiene
 
 ## 1. Algorithm: bcrypt, cost 12
 

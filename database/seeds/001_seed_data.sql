@@ -51,6 +51,17 @@ VALUES
         '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
         'ACTIVE',
         (SELECT role_id FROM Roles WHERE role_name = 'admin')
+    ),
+    -- The trading UI's Playwright journeys sign in as this user
+    -- (E2E_USERNAME), so they never touch the demo customers' data.
+    (
+        '66666666-6666-6666-6666-666666666666',
+        'E2E Trader',
+        'e2e.trader@example.com',
+        NULL,
+        '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2',
+        'ACTIVE',
+        (SELECT role_id FROM Roles WHERE role_name = 'client')
     );
 
 
@@ -72,6 +83,12 @@ VALUES
         'emily.stone@example.com',
         '$2b$12$dummy_pin_hash_002',
         40000.0000
+    ),
+    (
+        'BANK-100003',
+        'e2e.trader@example.com',
+        '$2b$12$dummy_pin_hash_003',
+        100000.0000
     );
 
 
@@ -97,6 +114,14 @@ VALUES
         'BANK-100002',
         'USD',
         22000.0000
+    ),
+    (
+        'cccccccc-cccc-cccc-cccc-cccccccccccc',
+        '66666666-6666-6666-6666-666666666666',
+        NULL,
+        'BANK-100003',
+        'USD',
+        100000.0000
     );
 
 

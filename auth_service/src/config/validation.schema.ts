@@ -11,6 +11,9 @@ export const validationSchema = Joi.object({
   POSTGRES_DB: Joi.string().required(),
   POSTGRES_USER: Joi.string().required(),
   POSTGRES_PASSWORD: Joi.string().required(),
+  // Comma-separated browser origins allowed to call this service (the
+  // trading UI). An allow list, never "*".
+  CORS_ALLOWED_ORIGINS: Joi.string().default('http://localhost:4200'),
   // FAUXNANCE_* also sits in the repo-root .env (read via ../.env). It is not
   // validated or read here: only the market-data side holds that key.
 });
