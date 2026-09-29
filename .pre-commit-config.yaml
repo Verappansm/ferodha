@@ -5,8 +5,12 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # The generated API clients are machine output and never edited by
+      # hand, not even for whitespace; the next generation would revert it.
       - id: trailing-whitespace
+        exclude: ^trading-ui/src/app/api/generated/
       - id: end-of-file-fixer
+        exclude: ^trading-ui/src/app/api/generated/
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: check-yaml

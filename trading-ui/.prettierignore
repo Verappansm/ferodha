@@ -1,0 +1,5 @@
+# Machine output from openapi-generator: never formatted or edited by hand.
+src/app/api/generated/
+# Build output and npm's own file.
+dist/
+package-lock.json
