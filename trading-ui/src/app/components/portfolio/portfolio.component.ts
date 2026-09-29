@@ -1,0 +1,15 @@
+import { Component, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+
+@Component({
+  selector: 'app-portfolio',
+  standalone: true,
+  imports: [CommonModule],
+  templateUrl: './portfolio.component.html',
+  styleUrls: ['./portfolio.component.css']
+})
+export class PortfolioComponent {
+  holdings = signal<any[]>([]);
+  totalValue = signal(0);
+  isLoading = signal(false);
+}
