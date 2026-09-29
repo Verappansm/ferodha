@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './bank.component.html',
-  styleUrls: ['./bank.component.css']
+  styleUrls: ['./bank.component.css'],
 })
 export class BankComponent {
   transactionType = signal('DEPOSIT');

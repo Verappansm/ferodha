@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './ordering.component.html',
-  styleUrls: ['./ordering.component.css']
+  styleUrls: ['./ordering.component.css'],
 })
 export class OrderingComponent {
   account = signal('');

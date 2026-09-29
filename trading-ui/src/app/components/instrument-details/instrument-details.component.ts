@@ -6,7 +6,7 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './instrument-details.component.html',
-  styleUrls: ['./instrument-details.component.css']
+  styleUrls: ['./instrument-details.component.css'],
 })
 export class InstrumentDetailsComponent {
   instrumentId = signal('');

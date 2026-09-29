@@ -6,7 +6,7 @@ import { CommonModule } from '@angular/common';
   standalone: true,
   imports: [CommonModule],
   templateUrl: './watchlist.component.html',
-  styleUrls: ['./watchlist.component.css']
+  styleUrls: ['./watchlist.component.css'],
 })
 export class WatchlistComponent {
   watchlistItems = signal<any[]>([]);

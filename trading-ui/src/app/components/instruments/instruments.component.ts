@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './instruments.component.html',
-  styleUrls: ['./instruments.component.css']
+  styleUrls: ['./instruments.component.css'],
 })
 export class InstrumentsComponent {
   searchQuery = signal('');

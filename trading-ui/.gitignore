@@ -1,0 +1,11 @@
+# node_modules/, dist/, coverage/, .env and editor files are ignored by the
+# root .gitignore. These are the Angular and Playwright extras.
+/.angular/
+/out-tsc/
+/test-results/
+/playwright-report/
+/blob-report/
+
+# The generated API clients (src/app/api/generated/) are committed on purpose:
+# a clone builds without Java or network, and a contract change arrives as a
+# reviewable diff. Do not add that directory here.
