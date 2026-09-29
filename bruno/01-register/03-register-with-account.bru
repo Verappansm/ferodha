@@ -1,0 +1,37 @@
+meta {
+  name: register with an accountId is refused
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "account.probe@example.com",
+    "password": "correct horse battery staple",
+    "accountId": 1
+  }
+}
+
+script:post-response {
+  // A user is registered before any account is opened for them, so the body
+  // cannot name one - and nobody can attach themselves to someone else's.
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.errorCode: eq VAL-422
+}

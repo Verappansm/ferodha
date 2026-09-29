@@ -1,0 +1,61 @@
+meta {
+  name: login ok
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{seedEmail}}",
+    "password": "{{seedPassword}}"
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  bru.setVar("accessToken", b.accessToken);
+  bru.setVar("refreshToken", b.refreshToken);
+
+  // Story: exact claim set, verified payload, no claim outside the contract.
+  const payload = JSON.parse(
+    atob(b.accessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+  );
+  const keys = Object.keys(payload).sort().join(",");
+  if (keys !== "accountId,exp,iat,iss,roles,sub") {
+    throw new Error("claims outside the contract set: " + keys);
+  }
+  if (payload.iss !== "auth-service") {
+    throw new Error("iss must be auth-service, got: " + payload.iss);
+  }
+  if (payload.exp - payload.iat !== 900) {
+    throw new Error("exp - iat must be 900, got: " + (payload.exp - payload.iat));
+  }
+  if (!Number.isInteger(payload.accountId) || payload.accountId !== 1) {
+    throw new Error("accountId claim must be the numeric Accounts.id (1)");
+  }
+  if (JSON.stringify(payload.roles) !== '["CUSTOMER"]') {
+    throw new Error("roles must be [CUSTOMER], got: " + JSON.stringify(payload.roles));
+  }
+  if (typeof payload.sub !== "string" || payload.sub.length === 0) {
+    throw new Error("sub claim must be the user's id");
+  }
+  bru.setVar("userId", payload.sub);
+  if (JSON.stringify(payload).includes("@")) {
+    throw new Error("an email address must never appear in the token payload");
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.tokenType: eq Bearer
+  res.body.expiresIn: eq 900
+}

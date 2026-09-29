@@ -1,0 +1,63 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: pricing-generator
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# market-data already exists - see kafka_pipeline/create_topics.sh.
+# This service only ever publishes pricing ticks; it never touches orders.
+kafka:
+  topics:
+    market-data: ${KAFKA_TOPIC_MARKET_DATA:market-data}
+
+# Same convention as trade_executor: read from the environment only, never
+# given a real value in any committed file.
+fauxnance:
+  base-url: ${FAUXNANCE_API_URL}
+  api-key: ${FAUXNANCE_API_KEY}
+
+generator:
+  candle:
+    refresh-interval-seconds: ${GENERATOR_CANDLE_REFRESH_SECONDS:86400}
+  quote:
+    refresh-interval-seconds: ${GENERATOR_QUOTE_REFRESH_SECONDS:300}
+  tick:
+    interval-seconds: ${GENERATOR_TICK_INTERVAL_SECONDS:5}
+    # Per-symbol hardcoded volatility, deliberately not computed - see
+    # RandomizerModel. A symbol with no entry here falls back to default.
+    default-volatility: ${GENERATOR_DEFAULT_VOLATILITY:0.0015}
+  market-data:
+    daily-quota: ${GENERATOR_DAILY_QUOTA:2000}
+    batch-size: ${GENERATOR_BATCH_SIZE:25}
+
+logging:
+  level:
+    com.trade.pricing.generator: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

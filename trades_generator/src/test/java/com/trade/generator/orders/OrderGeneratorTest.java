@@ -1,12 +1,12 @@
 package com.trade.generator.orders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trade.generator.client.GeneratorQuoteClient;
 import com.trade.generator.fauxnance.Quote;
 import com.trade.generator.mapper.InstrumentRow;
 import com.trade.generator.mapper.MarketMakerAccountRow;
 import com.trade.generator.mapper.OrderPlacementMapper;
 import com.trade.generator.mapper.PollableSymbolMapper;
-import com.trade.generator.pricing.CurrentTickStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ class OrderGeneratorTest {
 
     private final PollableSymbolMapper symbolMapper = mock(PollableSymbolMapper.class);
     private final OrderPlacementMapper orderPlacementMapper = mock(OrderPlacementMapper.class);
-    private final CurrentTickStore currentTickStore = mock(CurrentTickStore.class);
+    private final GeneratorQuoteClient quoteClient = mock(GeneratorQuoteClient.class);
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -51,11 +51,11 @@ class OrderGeneratorTest {
         when(orderPlacementMapper.findMarketMaker(anyString())).thenReturn(Optional.of(MARKET_MAKER));
         when(orderPlacementMapper.findInstrumentBySymbol("AAPL")).thenReturn(
                 Optional.of(new InstrumentRow(INSTRUMENT_ID, "USD")));
-        when(currentTickStore.get("AAPL")).thenReturn(Optional.of(TICK));
+        when(quoteClient.fetchQuote("AAPL")).thenReturn(Optional.of(TICK));
     }
 
     private OrderGenerator generator(double probability) {
-        return new OrderGenerator(symbolMapper, orderPlacementMapper, currentTickStore, kafkaTemplate,
+        return new OrderGenerator(symbolMapper, orderPlacementMapper, quoteClient, kafkaTemplate,
                 objectMapper, "orders", probability, 1, 20);
     }
 
@@ -94,7 +94,7 @@ class OrderGeneratorTest {
     @DisplayName("a symbol with no tick yet is skipped, not guessed at")
     void skipsSymbolWithNoTickYet() {
         when(symbolMapper.findPollableSymbols()).thenReturn(List.of("MSFT"));
-        when(currentTickStore.get("MSFT")).thenReturn(Optional.empty());
+        when(quoteClient.fetchQuote("MSFT")).thenReturn(Optional.empty());
         OrderGenerator generator = generator(1.0);
 
         generator.generate();

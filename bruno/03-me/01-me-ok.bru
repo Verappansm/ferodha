@@ -1,0 +1,33 @@
+meta {
+  name: me with access token
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+}
+
+headers {
+  Authorization: Bearer {{accessToken}}
+}
+
+script:post-response {
+  const b = res.getBody();
+  if (b.id !== bru.getVar("userId")) {
+    throw new Error("profile id must equal the token's sub");
+  }
+  if (b.username !== bru.getEnvVar("seedEmail")) {
+    throw new Error("profile username must be the email the user logged in with");
+  }
+  if (b.accountId !== 1) {
+    throw new Error("profile accountId must be the numeric Accounts.id (1)");
+  }
+  if (JSON.stringify(b.roles) !== '["CUSTOMER"]') {
+    throw new Error("roles must be [CUSTOMER], got: " + JSON.stringify(b.roles));
+  }
+}
+
+assert {
+  res.status: eq 200
+}

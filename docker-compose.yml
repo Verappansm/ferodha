@@ -104,6 +104,37 @@ services:
     networks:
       - trade-net
 
+  # NestJS auth service. Issues the HS256 access tokens trade-api verifies
+  # (same JWT_SECRET, iss=auth-service). Waits for trade-api, not just
+  # postgres: it links users to Accounts.id, which trade-api's Liquibase adds.
+  auth-service:
+    container_name: auth-service
+    build:
+      context: ./auth_service
+      dockerfile: Dockerfile
+    ports:
+      - "8096:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-signing-secret-please-change-later}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-tradedb}
+      POSTGRES_USER: ${POSTGRES_USER:-trade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 20s
+      retries: 5
+    depends_on:
+      trade-api:
+        condition: service_healthy
+    networks:
+      - trade-net
+
   trade-executor:
     container_name: trade-executor
     build:
@@ -128,10 +159,10 @@ services:
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
       # Empty/unset = the spec-exact story this repo was built against (real
       # Fauxnance, fill-or-reject, no partial fills). Set to market-sim to
-      # switch trade_executor onto trades-generator's simulated prices
+      # switch trade_executor onto pricing-generator's simulated prices
       # instead - see TradesGeneratorQuoteSource / FauxnanceQuoteClient.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
-      TRADES_GENERATOR_URL: http://trades-generator:8083
+      TRADES_GENERATOR_URL: http://pricing-generator:8084
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
       interval: 10s
@@ -149,15 +180,46 @@ services:
     networks:
       - trade-net
 
+  # Only calls Fauxnance and publishes to market-data under market-sim -
+  # otherwise trade-executor's MarketDataPoller does, so the quota is never
+  # spent twice.
+  pricing-generator:
+    container_name: pricing-generator
+    build:
+      context: ./pricing_generator
+      dockerfile: Dockerfile
+    ports:
+      - "8097:8084"
+    environment:
+      SERVER_PORT: 8084
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-tradedb}
+      POSTGRES_USER: ${POSTGRES_USER:-trade}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
+      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 40s
+      retries: 5
+    depends_on:
+      trade-api:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - trade-net
+
   trades-generator:
     container_name: trades-generator
     build:
       context: ./trades_generator
       dockerfile: Dockerfile
-    # Runs always, regardless of SPRING_PROFILES_ACTIVE - its own tick
-    # generator/market-data publisher has no profile gate (see
-    # TickGenerator); only whether trade_executor actually fills against it
-    # is profile-gated, on trade_executor's side.
     ports:
       - "8095:8083"
     environment:
@@ -168,8 +230,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-trade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
-      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
+      PRICING_GENERATOR_URL: http://pricing-generator:8084
       # Needed here too, not just on trade-executor - OrderGenerator
       # (synthetic RANDOMIZER orders) and OrderExpiryScheduler are both
       # @Profile("market-sim") on trade-executor's side, but trade-executor
@@ -188,6 +249,8 @@ services:
       trade-api:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      pricing-generator:
         condition: service_healthy
     networks:
       - trade-net

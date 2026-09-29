@@ -21,7 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 //account read operations (4) from contracts trade-api yaml
-//only handles the REST end points 
+//only handles the REST end points
 @RestController
 @RequestMapping("/api/v1/accounts")
 public class AccountController {

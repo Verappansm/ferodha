@@ -9,13 +9,13 @@ import java.math.BigDecimal;
 // The quote details are directly in data, not nested under a "quote" field.
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record FauxnanceQuoteData(
-    String symbol, 
-    BigDecimal price, 
-    BigDecimal bid, 
+    String symbol,
+    BigDecimal price,
+    BigDecimal bid,
     BigDecimal ask,
     String currency
 ) {
-    
+
     // Adapter method to convert this to a FauxnanceQuoteDetail
     public FauxnanceQuoteDetail quote() {
         return new FauxnanceQuoteDetail(symbol, price, bid, ask, currency);

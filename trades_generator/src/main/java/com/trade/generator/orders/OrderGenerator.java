@@ -1,13 +1,13 @@
 package com.trade.generator.orders;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trade.generator.client.GeneratorQuoteClient;
 import com.trade.generator.event.EventEnvelope;
 import com.trade.generator.fauxnance.Quote;
 import com.trade.generator.mapper.InstrumentRow;
 import com.trade.generator.mapper.MarketMakerAccountRow;
 import com.trade.generator.mapper.OrderPlacementMapper;
 import com.trade.generator.mapper.PollableSymbolMapper;
-import com.trade.generator.pricing.CurrentTickStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,11 +29,11 @@ import java.util.UUID;
 // needs no changes at all to consume one - a synthetic order is simply
 // another resting order in the book once it lands.
 //
-// Priced off CurrentTickStore's own latest tick (always running regardless
-// of profile - see TickGenerator), quoted right at the current touch (BUY
-// at the tick's bid, SELL at its ask) so a portal order that crosses the
-// spread has a genuine chance to match it, the same way a resting quote at
-// the inside market would in a real book.
+// Priced off the pricing service's latest tick (fetched over HTTP per
+// symbol - see GeneratorQuoteClient), quoted right at the current touch
+// (BUY at the tick's bid, SELL at its ask) so a portal order that crosses
+// the spread has a genuine chance to match it, the same way a resting quote
+// at the inside market would in a real book.
 @Component
 @Profile("market-sim")
 public class OrderGenerator {
@@ -43,7 +43,7 @@ public class OrderGenerator {
 
     private final PollableSymbolMapper symbolMapper;
     private final OrderPlacementMapper orderPlacementMapper;
-    private final CurrentTickStore currentTickStore;
+    private final GeneratorQuoteClient quoteClient;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final String ordersTopic;
@@ -55,7 +55,7 @@ public class OrderGenerator {
     private volatile MarketMakerAccountRow marketMaker;
 
     public OrderGenerator(PollableSymbolMapper symbolMapper, OrderPlacementMapper orderPlacementMapper,
-                           CurrentTickStore currentTickStore, KafkaTemplate<String, String> kafkaTemplate,
+                           GeneratorQuoteClient quoteClient, KafkaTemplate<String, String> kafkaTemplate,
                            ObjectMapper objectMapper,
                            @Value("${kafka.topics.orders:orders}") String ordersTopic,
                            @Value("${generator.orders.probability:0.3}") double probabilityPerSymbol,
@@ -63,7 +63,7 @@ public class OrderGenerator {
                            @Value("${generator.orders.max-quantity:20}") int maxQuantity) {
         this.symbolMapper = symbolMapper;
         this.orderPlacementMapper = orderPlacementMapper;
-        this.currentTickStore = currentTickStore;
+        this.quoteClient = quoteClient;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.ordersTopic = ordersTopic;
@@ -98,7 +98,7 @@ public class OrderGenerator {
     }
 
     private void generateOne(String symbol, MarketMakerAccountRow account) {
-        Optional<Quote> tick = currentTickStore.get(symbol);
+        Optional<Quote> tick = quoteClient.fetchQuote(symbol);
         if (tick.isEmpty()) {
             return;
         }
