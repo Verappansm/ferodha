@@ -10,18 +10,19 @@ import { OrdersComponent } from './components/orders/orders.component';
 import { WatchlistComponent } from './components/watchlist/watchlist.component';
 import { BankComponent } from './components/bank/bank.component';
 import { SettingsComponent } from './components/settings/settings.component';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/login', pathMatch: 'full' },
   { path: 'login', component: LoginComponent },
   { path: 'register', component: RegistrationComponent },
-  { path: 'dashboard', component: DashboardComponent },
-  { path: 'portfolio', component: PortfolioComponent },
-  { path: 'instruments', component: InstrumentsComponent },
-  { path: 'instruments/:id', component: InstrumentDetailsComponent },
-  { path: 'order', component: OrderingComponent },
-  { path: 'orders', component: OrdersComponent },
-  { path: 'watchlist', component: WatchlistComponent },
-  { path: 'bank', component: BankComponent },
-  { path: 'settings', component: SettingsComponent },
+  { path: 'dashboard', component: DashboardComponent, canActivate: [authGuard] },
+  { path: 'portfolio', component: PortfolioComponent, canActivate: [authGuard] },
+  { path: 'instruments', component: InstrumentsComponent, canActivate: [authGuard] },
+  { path: 'instruments/:id', component: InstrumentDetailsComponent, canActivate: [authGuard] },
+  { path: 'order', component: OrderingComponent, canActivate: [authGuard] },
+  { path: 'orders', component: OrdersComponent, canActivate: [authGuard] },
+  { path: 'watchlist', component: WatchlistComponent, canActivate: [authGuard] },
+  { path: 'bank', component: BankComponent, canActivate: [authGuard] },
+  { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
 ];

@@ -5,6 +5,6 @@
  * Nothing secret belongs in this file: it ships in the public bundle.
  */
 export const environment = {
-  authApiUrl: 'http://localhost:8096',
-  tradeApiUrl: 'http://localhost:8094',
+  authApiUrl: 'http://localhost:3000',
+  tradeApiUrl: 'http://localhost:8080',
 };

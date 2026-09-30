@@ -1,6 +1,6 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Session } from '../../core/session/session';
 import { LoginComponent } from './login.component';
 
@@ -8,15 +8,27 @@ describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
   let signIn: ReturnType<typeof vi.fn>;
   let navigateByUrl: ReturnType<typeof vi.fn>;
+  let queryParamMap: Map<string, string>;
 
   beforeEach(async () => {
     signIn = vi.fn().mockResolvedValue(undefined);
     navigateByUrl = vi.fn().mockResolvedValue(true);
+    queryParamMap = new Map();
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
         { provide: Session, useValue: { signIn } },
         { provide: Router, useValue: { navigateByUrl } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: {
+              queryParamMap: {
+                get: (key: string) => queryParamMap.get(key) || null,
+              },
+            },
+          },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(LoginComponent);
@@ -39,7 +51,7 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
   }
 
-  it('valid credentials sign in and redirect', async () => {
+  it('valid credentials sign in and redirect to dashboard by default', async () => {
     type('login-username', 'e2e.trader@example.com');
     type('login-password', 'seed-password-change-me');
 
@@ -47,6 +59,18 @@ describe('LoginComponent', () => {
 
     expect(signIn).toHaveBeenCalledWith('e2e.trader@example.com', 'seed-password-change-me');
     expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
+    expect(byTestId('login-error')).toBeNull();
+  });
+
+  it('valid credentials sign in and redirect to return URL if provided', async () => {
+    queryParamMap.set('returnUrl', '/portfolio');
+    type('login-username', 'e2e.trader@example.com');
+    type('login-password', 'seed-password-change-me');
+
+    await submit();
+
+    expect(signIn).toHaveBeenCalledWith('e2e.trader@example.com', 'seed-password-change-me');
+    expect(navigateByUrl).toHaveBeenCalledWith('/portfolio');
     expect(byTestId('login-error')).toBeNull();
   });
 

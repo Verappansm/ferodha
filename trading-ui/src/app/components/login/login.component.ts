@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { errorMessage } from '../../core/errors/error-message';
 import { Session } from '../../core/session/session';
 
@@ -13,6 +13,7 @@ import { Session } from '../../core/session/session';
 export class LoginComponent {
   private readonly session = inject(Session);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   // The limits are the contract's LoginRequest maxLength values. The
   // username is an email address (story_docs/contract-breach.md, B01).
@@ -35,7 +36,9 @@ export class LoginComponent {
     const { username, password } = this.form.getRawValue();
     try {
       await this.session.signIn(username, password);
-      await this.router.navigateByUrl('/dashboard');
+      // Land the user where they were going, or at the dashboard if no return address.
+      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+      await this.router.navigateByUrl(returnUrl || '/dashboard');
     } catch (error) {
       this.error.set(errorMessage(error));
       this.form.controls.password.reset();
