@@ -13,7 +13,7 @@ const TOKENS = {
   tokenType: 'Bearer',
   expiresIn: 900,
 };
-const USER = { id: 'u1', username: 'e2e.trader@example.com', accountId: 3, roles: ['CUSTOMER'] };
+const USER = { id: 'u1', username: 'john.carter@example.com', accountId: 3, roles: ['CUSTOMER'] };
 
 function setup(): { session: Session; backend: HttpTestingController } {
   TestBed.configureTestingModule({
@@ -33,7 +33,7 @@ describe('Session', () => {
   it('signs in, learns the account from /auth/me and stores the session', async () => {
     const { session, backend } = setup();
 
-    const signingIn = session.signIn('e2e.trader@example.com', 'seed-password-change-me');
+    const signingIn = session.signIn('john.carter@example.com', 'seed-password-change-me');
     backend.expectOne(`${URLS.authApiUrl}/auth/login`).flush(TOKENS);
     await Promise.resolve();
     const me = backend.expectOne(`${URLS.authApiUrl}/auth/me`);
@@ -51,7 +51,7 @@ describe('Session', () => {
 
   it('signing out clears the session', async () => {
     const { session, backend } = setup();
-    const signingIn = session.signIn('e2e.trader@example.com', 'pw');
+    const signingIn = session.signIn('john.carter@example.com', 'pw');
     backend.expectOne(`${URLS.authApiUrl}/auth/login`).flush(TOKENS);
     await Promise.resolve();
     backend.expectOne(`${URLS.authApiUrl}/auth/me`).flush(USER);
@@ -68,7 +68,7 @@ describe('Session', () => {
   it('keeps nothing when the login is refused', async () => {
     const { session, backend } = setup();
 
-    const signingIn = session.signIn('e2e.trader@example.com', 'wrong');
+    const signingIn = session.signIn('john.carter@example.com', 'wrong');
     backend
       .expectOne(`${URLS.authApiUrl}/auth/login`)
       .flush(

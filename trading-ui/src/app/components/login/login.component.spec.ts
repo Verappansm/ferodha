@@ -52,24 +52,24 @@ describe('LoginComponent', () => {
   }
 
   it('valid credentials sign in and redirect to dashboard by default', async () => {
-    type('login-username', 'e2e.trader@example.com');
+    type('login-username', 'john.carter@example.com');
     type('login-password', 'seed-password-change-me');
 
     await submit();
 
-    expect(signIn).toHaveBeenCalledWith('e2e.trader@example.com', 'seed-password-change-me');
+    expect(signIn).toHaveBeenCalledWith('john.carter@example.com', 'seed-password-change-me');
     expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
     expect(byTestId('login-error')).toBeNull();
   });
 
   it('valid credentials sign in and redirect to return URL if provided', async () => {
     queryParamMap.set('returnUrl', '/portfolio');
-    type('login-username', 'e2e.trader@example.com');
+    type('login-username', 'john.carter@example.com');
     type('login-password', 'seed-password-change-me');
 
     await submit();
 
-    expect(signIn).toHaveBeenCalledWith('e2e.trader@example.com', 'seed-password-change-me');
+    expect(signIn).toHaveBeenCalledWith('john.carter@example.com', 'seed-password-change-me');
     expect(navigateByUrl).toHaveBeenCalledWith('/portfolio');
     expect(byTestId('login-error')).toBeNull();
   });
@@ -81,7 +81,7 @@ describe('LoginComponent', () => {
         error: { errorCode: 'AUTH-401', message: 'Unauthorised' },
       }),
     );
-    type('login-username', 'e2e.trader@example.com');
+    type('login-username', 'john.carter@example.com');
     type('login-password', 'wrong-password');
 
     await submit();
@@ -114,7 +114,7 @@ describe('LoginComponent', () => {
 
   it('an unreachable service shows a readable error', async () => {
     signIn.mockRejectedValue(new HttpErrorResponse({ status: 0 }));
-    type('login-username', 'e2e.trader@example.com');
+    type('login-username', 'john.carter@example.com');
     type('login-password', 'seed-password-change-me');
 
     await submit();
@@ -130,7 +130,7 @@ describe('LoginComponent', () => {
         error: { errorCode: 'AUTH-401', message: 'Unauthorised' },
       }),
     );
-    type('login-username', 'e2e.trader@example.com');
+    type('login-username', 'john.carter@example.com');
     type('login-password', 'wrong-password');
 
     await submit();
