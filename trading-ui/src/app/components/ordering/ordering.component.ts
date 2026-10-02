@@ -5,7 +5,6 @@ import { firstValueFrom } from 'rxjs';
 import { Session } from '../../core/session/session';
 import { TradeApi, OrderSide, OrderResponse } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
-import { HttpErrorResponse } from '@angular/common/http';
 
 /** Generates a UUID v4 for idempotency keys. */
 function generateUUID(): string {
@@ -15,6 +14,13 @@ function generateUUID(): string {
     return v.toString(16);
   });
 }
+
+// Placing an order meets ORD-409 for a sell larger than the holding. A reused
+// idempotency key cannot happen here, because every submit draws a new one.
+const PLACE_ORDER_MESSAGES = {
+  'ORD-409':
+    'You do not hold enough units to sell that quantity. Check your holdings, then try again.',
+};
 
 @Component({
   selector: 'app-ordering',
@@ -140,29 +146,9 @@ export class OrderingComponent {
       // Reset form after successful submission
       this.form.reset({ side: 'BUY' as OrderSide });
     } catch (error) {
-      this.errorMessage.set(this.formatOrderError(error));
+      this.errorMessage.set(errorMessage(error, PLACE_ORDER_MESSAGES));
     } finally {
       this.isSubmitting.set(false);
     }
-  }
-
-  private formatOrderError(error: unknown): string {
-    if (!(error instanceof HttpErrorResponse)) {
-      return errorMessage(error);
-    }
-
-    // Extract error code and message from response
-    const body: any = error.error;
-    if (body && body.errorCode && body.message) {
-      const errorCodeMap: Record<string, string> = {
-        'ORD-400': 'Insufficient funds to place this order.',
-        'ORD-409': 'Cannot place this order. Check your holdings and try again.',
-        'INS-404': 'The instrument symbol is not found or not tradable.',
-        'VAL-422': 'The order details are not valid. Check them and try again.',
-      };
-      return errorCodeMap[body.errorCode] || body.message || errorMessage(error);
-    }
-
-    return errorMessage(error);
   }
 }

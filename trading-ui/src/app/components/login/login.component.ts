@@ -4,6 +4,13 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { errorMessage } from '../../core/errors/error-message';
 import { Session } from '../../core/session/session';
 
+// Wrong email, wrong password and an account still awaiting approval all
+// answer the same AUTH-401 on purpose, so the sentence covers all three.
+const SIGN_IN_MESSAGES = {
+  'AUTH-401':
+    'That email and password did not sign you in. Check them and try again. A new account can sign in once an administrator has approved it.',
+};
+
 @Component({
   selector: 'app-login',
   imports: [ReactiveFormsModule],
@@ -40,7 +47,7 @@ export class LoginComponent {
       const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
       await this.router.navigateByUrl(returnUrl || '/dashboard');
     } catch (error) {
-      this.error.set(errorMessage(error));
+      this.error.set(errorMessage(error, SIGN_IN_MESSAGES));
       this.form.controls.password.reset();
     } finally {
       this.isLoading.set(false);

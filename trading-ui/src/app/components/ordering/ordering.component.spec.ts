@@ -186,7 +186,7 @@ describe('OrderingComponent', () => {
     await submit();
 
     fixture.detectChanges();
-    expect(byTestId('order-error')?.textContent).toContain('Insufficient funds to place this order');
+    expect(byTestId('order-error')?.textContent).toContain('Insufficient balance to place order');
   });
 
   it('an instrument not found rejection shows the mapped message', async () => {
@@ -211,10 +211,10 @@ describe('OrderingComponent', () => {
     await submit();
 
     fixture.detectChanges();
-    expect(byTestId('order-error')?.textContent).toContain('not found or not tradable');
+    expect(byTestId('order-error')?.textContent).toContain('not available to trade');
   });
 
-  it('duplicate order rejection shows the mapped message', async () => {
+  it('a sell beyond the holding shows the mapped message', async () => {
     placeOrder.mockReturnValue(
       throwError(
         () =>
@@ -222,7 +222,7 @@ describe('OrderingComponent', () => {
             status: 409,
             error: {
               errorCode: 'ORD-409',
-              message: 'Duplicate order',
+              message: 'Insufficient holdings',
             },
           }),
       ),
@@ -236,7 +236,7 @@ describe('OrderingComponent', () => {
     await submit();
 
     fixture.detectChanges();
-    expect(byTestId('order-error')?.textContent).toContain('Cannot place this order');
+    expect(byTestId('order-error')?.textContent).toContain('do not hold enough units');
   });
 
   it('empty symbol is blocked before submission', async () => {

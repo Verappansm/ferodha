@@ -1,28 +1,39 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { ErrorResponse as AuthErrorResponse } from '../../api/generated/auth/model/error-response';
+import { ErrorResponse as TradeErrorResponse } from '../../api/generated/trade/model/error-response';
 
-/**
- * Turns a failed call into a sentence a trader can act on. Branches on the
- * contract's `errorCode`, never on its `message`, which is written for a
- * developer and changes without notice.
- *
- * This starts with the codes sign-in can meet; Story 7 extends it to every
- * code in both catalogues.
- */
-const MESSAGES: Record<string, string> = {
-  // Wrong email, wrong password and an account still awaiting approval all
-  // answer the same AUTH-401 on purpose, so the sentence covers all three.
-  'AUTH-401':
-    'That email and password did not sign you in. Check them and try again. A new account can sign in once an administrator has approved it.',
+
+export type ErrorCode = AuthErrorResponse.ErrorCodeEnum | TradeErrorResponse.ErrorCodeEnum;
+
+
+// One sentence per code. Typed as a full Record over `ErrorCode`, so a code must have a corresponding message.
+export const ERROR_MESSAGES: Record<ErrorCode, string> = {
+  'AUTH-401': 'Your session has ended. Sign in again to continue.',
+  'AUTH-409':
+    'An account with that email address already exists. Sign in or register with a different email address.',
   'VAL-422': 'Some of the details entered are not valid. Check them and try again.',
+  'ACC-404':
+    'Trading account not found. Sign out and sign in again, and contact support if it continues.',
+  'ACC-403': 'Your account cannot trade right now. It may be suspended or closed. Contact support.',
+  'INS-404': 'Instrument is not available to trade. Check the symbol and try again.',
+  'ORD-400': 'Insufficient balance to place order.',
+  // One code, three causes: too few units to sell, a reused idempotency key,
+  // or an order that is no longer cancellable.
+  'ORD-409':
+    'This order cannot go ahead. If you are selling, check you hold enough units. If you were cancelling, the order may already be filled or cancelled, so refresh your orders.',
 };
 
-const UNREACHABLE =
-  'The trading service could not be reached. Check your connection, then try again in a moment.';
+export const UNREACHABLE =
+  'The trading service could not be reached. Check your connection, then try again.';
 
-const FALLBACK =
-  'Something went wrong on our side. Try again, and contact support if it keeps happening.';
+export const FALLBACK =
+  'Something went wrong on our side. Try again, and contact support if it continues.';
 
-export function errorMessage(error: unknown): string {
+
+export function errorMessage(
+  error: unknown,
+  overrides: Partial<Record<ErrorCode, string>> = {},
+): string {
   if (!(error instanceof HttpErrorResponse)) return FALLBACK;
   // Status 0: the request never got an answer (service down, or a CORS rule
   // that does not allow this origin).
@@ -32,14 +43,19 @@ export function errorMessage(error: unknown): string {
   if (code === 'AUTH-401' && error.headers.has('Retry-After')) {
     return tooManyAttempts(error.headers.get('Retry-After'));
   }
-  return (code && MESSAGES[code]) || FALLBACK;
+  if (!code) return FALLBACK;
+  return overrides[code] ?? ERROR_MESSAGES[code];
 }
 
-function errorCodeOf(error: HttpErrorResponse): string | null {
+function isErrorCode(value: unknown): value is ErrorCode {
+  return typeof value === 'string' && Object.hasOwn(ERROR_MESSAGES, value);
+}
+
+function errorCodeOf(error: HttpErrorResponse): ErrorCode | null {
   const body: unknown = error.error;
   if (body && typeof body === 'object' && 'errorCode' in body) {
     const code = (body as { errorCode: unknown }).errorCode;
-    return typeof code === 'string' ? code : null;
+    return isErrorCode(code) ? code : null;
   }
   return null;
 }
