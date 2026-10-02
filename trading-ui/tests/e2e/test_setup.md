@@ -57,23 +57,23 @@ npx playwright show-report
 ### Sign-In Journey (6 tests)
 Located in `sign-in.spec.ts`
 
-- ✅ Guard redirect: Unauthenticated access redirects to login with returnUrl
-- ✅ Refused sign-in: Invalid credentials show error, password cleared
-- ✅ Successful sign-in: Valid credentials sign in and navigate to dashboard
-- ✅ Arriving where you were going: Return URL preserved after sign-in
-- ✅ Sign-in preserves destination: Specific returnUrl is honored
-- ✅ Sign-out clears session: Session removed from sessionStorage
+-  Guard redirect: Unauthenticated access redirects to login with returnUrl
+-  Refused sign-in: Invalid credentials show error, password cleared
+-  Successful sign-in: Valid credentials sign in and navigate to dashboard
+-  Arriving where you were going: Return URL preserved after sign-in
+-  Sign-in preserves destination: Specific returnUrl is honored
+-  Sign-out clears session: Session removed from sessionStorage
 
 ### Place Order Journey (7 tests)
 Located in `place-order.spec.ts`
 
-- ✅ Read-only account: Account field displays user account and is read-only
-- ✅ Rejection before submission (empty form): Validation prevents submission
-- ✅ Rejection before submission (invalid quantity): Quantity must be whole number
-- ✅ Rejection before submission (invalid price): Price must be positive
-- ✅ Placed order with status: Successful placement shows NEW/FILLED/REJECTED
-- ✅ Placed order (explicit NEW): Order placement with any valid status
-- ✅ Order isolation: Tests leave no shared state for next test
+-  Read-only account: Account field displays user account and is read-only
+-  Rejection before submission (empty form): Validation prevents submission
+-  Rejection before submission (invalid quantity): Quantity must be whole number
+-  Rejection before submission (invalid price): Price must be positive
+-  Placed order with status: Successful placement shows NEW/FILLED/REJECTED
+-  Placed order (explicit NEW): Order placement with any valid status
+-  Order isolation: Tests leave no shared state for next test
 
 ## File Structure
 
@@ -87,24 +87,24 @@ tests/e2e/
 
 ## Key Features
 
-### ✅ Real Stack Testing
+###  Real Stack Testing
 - Tests run against actual auth service, trade API, and database
 - No mocking of services or API responses
 - Full integration testing
 
-### ✅ Isolated Tests
+###  Isolated Tests
 - Each test runs in its own process
 - Session storage cleared between tests
 - No shared state between tests
 - Every test is independent
 
-### ✅ Environment-Based Configuration
+###  Environment-Based Configuration
 All sensitive data comes from environment variables:
 - `TEST_USERNAME`: Email for login
 - `TEST_PASSWORD`: Password for login
 - All URLs are configurable
 
-### ✅ Comprehensive Coverage
+###  Comprehensive Coverage
 **Sign-in Journey**:
 - Authentication guard redirects
 - Error handling for invalid credentials
