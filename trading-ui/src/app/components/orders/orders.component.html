@@ -1,1 +1,68 @@
-<div class="orders-container"></div>
+<section class="orders-container">
+  <header class="orders-header">
+    <h2>Orders</h2>
+    <button
+      type="button"
+      class="refresh"
+      data-testid="orders-refresh"
+      [disabled]="isLoading()"
+      (click)="refresh()"
+    >
+      Refresh
+    </button>
+  </header>
+
+  @if (isPolling()) {
+    <p class="note" data-testid="orders-polling">Checking orders that are in process…</p>
+  }
+  @if (isStalled()) {
+    <p class="note" data-testid="orders-stalled">
+      Some orders are still in process. Press Refresh to check again.
+    </p>
+  }
+
+  @if (error()) {
+    <p class="error" role="alert" data-testid="orders-error">{{ error() }}</p>
+  }
+
+  @if (!hasLoaded() && isLoading()) {
+    <p data-testid="orders-loading">Loading orders…</p>
+  } @else if (hasLoaded() && orders().length === 0) {
+    <p data-testid="orders-empty">You have not placed any orders yet.</p>
+  } @else if (orders().length > 0) {
+    <div class="table-scroll">
+      <table data-testid="orders-table">
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Placed</th>
+            <th>Symbol</th>
+            <th>Side</th>
+            <th class="num">Qty</th>
+            <th class="num">Limit price</th>
+            <th class="num">Executed price</th>
+            <th class="num">Value</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of orders(); track order.orderId) {
+            <tr data-testid="order-row">
+              <td class="mono" data-testid="order-id">{{ order.orderId }}</td>
+              <td>{{ order.createdOn | date: 'd MMM y, HH:mm' }}</td>
+              <td>{{ order.symbol }}</td>
+              <td>{{ order.side }}</td>
+              <td class="num">{{ order.quantity | number }}</td>
+              <td class="num">{{ order.price | number: '1.2-2' }}</td>
+              <td class="num">
+                {{ order.executedPrice != null ? (order.executedPrice | number: '1.2-2') : '—' }}
+              </td>
+              <td class="num">{{ value(order) | number: '1.2-2' }}</td>
+              <td><app-order-status-badge [status]="order.status" /></td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</section>
