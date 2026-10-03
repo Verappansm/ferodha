@@ -1,0 +1,619 @@
+/*
+ * The operations console's design system. Dense, table-first and neutral,
+ * so status colour carries meaning; every status also carries its word.
+ *
+ * Theme: <html data-theme="light|dark"> forces one; with no attribute the
+ * operating system's preference decides (see core/theme/theme.ts).
+ */
+:root {
+  /* The sidebar is dark green in both themes. */
+  --side-900: #0a2b1f;
+  --side-700: #134231;
+  --side-text: #b7d7c8;
+  --side-muted: #6f9a87;
+  --side-accent: #3cc28f;
+
+  --brand-700: #0f6446;
+  --brand-600: #12805c;
+  --brand-500: #17a072;
+  --brand-100: #e7f6ef;
+
+  --ink-900: #111c18;
+  --ink-700: #364540;
+  --ink-500: #64746e;
+  --ink-300: #cfd8d4;
+  --ink-200: #e3e9e6;
+  --ink-100: #f2f5f4;
+  --surface: #ffffff;
+  --page: #f5f7f6;
+  --row-hover: #f8faf9;
+
+  --positive: #067647;
+  --positive-bg: #ecfdf3;
+  --info: #175cd3;
+  --info-bg: #eff8ff;
+  --warning: #b54708;
+  --warning-bg: #fffaeb;
+  --warning-border: #fedf89;
+  --negative: #b42318;
+  --negative-bg: #fef3f2;
+  --negative-border: #fda29b;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 6%);
+  --focus-ring: 0 0 0 3px rgb(23 160 114 / 30%);
+
+  --font-sans:
+    'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --side-900: #06150f;
+  --side-700: #10291f;
+
+  --brand-700: #2cc08a;
+  --brand-600: #22a874;
+  --brand-500: #2cc08a;
+  --brand-100: #10261f;
+
+  --ink-900: #e5eeea;
+  --ink-700: #bfcdc7;
+  --ink-500: #8a9c95;
+  --ink-300: #33443e;
+  --ink-200: #22302b;
+  --ink-100: #172320;
+  --surface: #101917;
+  --page: #0a1210;
+  --row-hover: #13201c;
+
+  --positive: #47d697;
+  --positive-bg: #0f2a20;
+  --info: #84caff;
+  --info-bg: #102035;
+  --warning: #fdb022;
+  --warning-bg: #2a2010;
+  --warning-border: #5c4512;
+  --negative: #f97066;
+  --negative-bg: #2a1513;
+  --negative-border: #5c2420;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+  --focus-ring: 0 0 0 3px rgb(44 192 138 / 35%);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --side-900: #06150f;
+    --side-700: #10291f;
+
+    --brand-700: #2cc08a;
+    --brand-600: #22a874;
+    --brand-500: #2cc08a;
+    --brand-100: #10261f;
+
+    --ink-900: #e5eeea;
+    --ink-700: #bfcdc7;
+    --ink-500: #8a9c95;
+    --ink-300: #33443e;
+    --ink-200: #22302b;
+    --ink-100: #172320;
+    --surface: #101917;
+    --page: #0a1210;
+    --row-hover: #13201c;
+
+    --positive: #47d697;
+    --positive-bg: #0f2a20;
+    --info: #84caff;
+    --info-bg: #102035;
+    --warning: #fdb022;
+    --warning-bg: #2a2010;
+    --warning-border: #5c4512;
+    --negative: #f97066;
+    --negative-bg: #2a1513;
+    --negative-border: #5c2420;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%);
+    --focus-ring: 0 0 0 3px rgb(44 192 138 / 35%);
+
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-900);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--brand-600);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- Page structure ---------------------------------------------------- */
+
+.page {
+  display: grid;
+  gap: 20px;
+  padding: 28px 32px 48px;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.page-header p {
+  margin: 4px 0 0;
+  color: var(--ink-500);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.card-header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.card-body {
+  padding: 18px;
+}
+
+/* ---- Filters ----------------------------------------------------------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.filters .field {
+  min-width: 160px;
+}
+
+.filters .field.grow {
+  flex: 1;
+  min-width: 220px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--ink-100);
+  border-radius: var(--radius-sm);
+}
+
+.segmented button {
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-500);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed='true'] {
+  color: var(--ink-900);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* ---- Forms ------------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--negative);
+}
+
+.textarea {
+  height: auto;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.field-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--negative);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-sm {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.btn-primary {
+  color: #fff;
+  background: var(--brand-600);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-700);
+}
+
+.btn-secondary {
+  color: var(--ink-900);
+  background: var(--surface);
+  border-color: var(--ink-300);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--ink-100);
+}
+
+.btn-danger {
+  color: #fff;
+  background: var(--negative);
+}
+
+.btn-link {
+  height: auto;
+  padding: 0;
+  color: var(--brand-600);
+  background: none;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* ---- Tables ------------------------------------------------------------ */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--ink-100);
+  border-bottom: 1px solid var(--ink-200);
+}
+
+td {
+  padding: 11px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.muted {
+  color: var(--ink-500);
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.cell-stack small {
+  color: var(--ink-500);
+}
+
+/* ---- Status pills, notices, states --------------------------------------- */
+
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.pill-positive {
+  color: var(--positive);
+  background: var(--positive-bg);
+}
+
+.pill-info {
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+.pill-warning {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.pill-negative {
+  color: var(--negative);
+  background: var(--negative-bg);
+}
+
+.pill-neutral {
+  color: var(--ink-500);
+  background: var(--ink-100);
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+
+.notice-success {
+  color: var(--positive);
+  background: var(--positive-bg);
+}
+
+.notice-error {
+  color: var(--negative);
+  background: var(--negative-bg);
+}
+
+.notice-warning {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.state {
+  padding: 40px 18px;
+  color: var(--ink-500);
+  text-align: center;
+}
+
+.pager {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 18px;
+}
+
+.pager-range {
+  margin-right: auto;
+  color: var(--ink-500);
+}
+
+/* ---- Dialogs ------------------------------------------------------------- */
+
+.dialog {
+  width: min(480px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(16 24 40 / 16%);
+}
+
+.dialog::backdrop {
+  background: rgb(16 44 31 / 45%);
+}
+
+.dialog h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.dialog form {
+  display: grid;
+  gap: 12px;
+}
+
+.dialog-text {
+  margin: 0 0 6px;
+  color: var(--ink-700);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ---- Stat tiles --------------------------------------------------------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.tile {
+  display: block;
+  padding: 16px 18px;
+  color: inherit;
+  text-decoration: none;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+a.tile:hover {
+  border-color: var(--brand-500);
+}
+
+.tile-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tile-value {
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-attention {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- System health ------------------------------------------------------ */
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.health-down {
+  border-color: var(--negative-border);
+}
+
+.health-detail {
+  margin: 0;
+}
+
+.health-latency {
+  margin: 8px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

@@ -6,6 +6,7 @@
 /playwright-report/
 /blob-report/
 
-# The generated API clients (src/app/api/generated/) are committed on purpose:
+# The generated API clients (src/app/api/generated/ and
+# projects/admin/src/app/api/generated/) are committed on purpose:
 # a clone builds without Java or network, and a contract change arrives as a
 # reviewable diff. Do not add that directory here.

@@ -30,11 +30,12 @@ describe('App', () => {
     expect(app).toBeTruthy();
   });
 
-  it('should render navbar', async () => {
+  it('should render navbar once signed in', async () => {
+    isSignedIn.set(true);
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.nav-brand')?.textContent).toContain('Trading Platform');
+    expect(compiled.querySelector('.nav-brand')?.textContent).toContain('Ferodha');
   });
 
   it('offers no navigation or sign-out while signed out', async () => {

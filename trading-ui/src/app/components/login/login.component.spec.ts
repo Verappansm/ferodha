@@ -2,7 +2,15 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Session } from '../../core/session/session';
+import { Component, input } from '@angular/core';
 import { LoginComponent } from './login.component';
+import { AuthLayoutComponent } from '../auth-layout/auth-layout.component';
+
+/** The layout's tabs need a real router; these tests are about the form only. */
+@Component({ selector: 'app-auth-layout', template: '<ng-content />' })
+class AuthLayoutStub {
+  readonly active = input<string>();
+}
 
 describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
@@ -30,7 +38,12 @@ describe('LoginComponent', () => {
           },
         },
       ],
-    }).compileComponents();
+    })
+      .overrideComponent(LoginComponent, {
+        remove: { imports: [AuthLayoutComponent] },
+        add: { imports: [AuthLayoutStub] },
+      })
+      .compileComponents();
     fixture = TestBed.createComponent(LoginComponent);
     await fixture.whenStable();
   });

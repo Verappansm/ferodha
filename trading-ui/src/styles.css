@@ -1,1 +1,451 @@
-/* You can add global styles to this file, and also import other style files */
+/*
+ * Design tokens and base styles shared by every customer screen. Component
+ * stylesheets use these variables, never raw colours, so light and dark mode
+ * are one set of values each.
+ *
+ * Theme: <html data-theme="light|dark"> forces one; with no attribute the
+ * operating system's preference decides (see core/theme/theme.ts).
+ */
+:root {
+  --brand-950: #06291d;
+  --brand-900: #0a3a2a;
+  --brand-800: #0d4c37;
+  --brand-700: #0f6446;
+  --brand-600: #12805c;
+  --brand-500: #17a072;
+  --brand-400: #3cc28f;
+  --brand-200: #bfe9d6;
+  --brand-100: #e7f6ef;
+  --accent: #d99a1e;
+
+  --ink-900: #0f1c17;
+  --ink-700: #33443d;
+  --ink-500: #5f7169;
+  --ink-300: #c9d3cf;
+  --ink-200: #e1e8e5;
+  --ink-100: #f1f5f3;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --page: #f5f7f6;
+
+  --positive: #0e7a50;
+  --positive-bg: #e7f6ef;
+  --negative: #c4320a;
+  --negative-bg: #fef3f2;
+  --negative-border: #fecdca;
+  --warning: #b54708;
+  --warning-bg: #fffaeb;
+  --info: #175cd3;
+  --info-bg: #eff8ff;
+
+  --nav-bg: #ffffff;
+  --nav-text: #33443d;
+  --nav-border: #e1e8e5;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 1px 2px rgb(15 28 23 / 5%), 0 8px 24px rgb(15 28 23 / 6%);
+  --focus-ring: 0 0 0 3px rgb(23 160 114 / 30%);
+
+  --font-sans:
+    'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+
+  color-scheme: light;
+}
+
+/* Dark values, used when chosen explicitly or when the system prefers dark. */
+:root[data-theme='dark'] {
+  --brand-950: #04140e;
+  --brand-900: #071d15;
+  --brand-800: #0c2b20;
+  --brand-700: #2cc08a;
+  --brand-600: #22a874;
+  --brand-500: #2cc08a;
+  --brand-400: #4fd6a2;
+  --brand-200: #1d4a3b;
+  --brand-100: #10261f;
+  --accent: #f0b43c;
+
+  --ink-900: #e6efeb;
+  --ink-700: #c1cec8;
+  --ink-500: #8a9c95;
+  --ink-300: #33443e;
+  --ink-200: #22302b;
+  --ink-100: #172320;
+  --surface: #101917;
+  --surface-raised: #15201d;
+  --page: #0a1210;
+
+  --positive: #3ccf91;
+  --positive-bg: #10261f;
+  --negative: #f97066;
+  --negative-bg: #2a1513;
+  --negative-border: #5c2420;
+  --warning: #fdb022;
+  --warning-bg: #2a2010;
+  --info: #84caff;
+  --info-bg: #102035;
+
+  --nav-bg: #0e1715;
+  --nav-text: #c1cec8;
+  --nav-border: #1e2b27;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+  --focus-ring: 0 0 0 3px rgb(44 192 138 / 35%);
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --brand-950: #04140e;
+    --brand-900: #071d15;
+    --brand-800: #0c2b20;
+    --brand-700: #2cc08a;
+    --brand-600: #22a874;
+    --brand-500: #2cc08a;
+    --brand-400: #4fd6a2;
+    --brand-200: #1d4a3b;
+    --brand-100: #10261f;
+    --accent: #f0b43c;
+
+    --ink-900: #e6efeb;
+    --ink-700: #c1cec8;
+    --ink-500: #8a9c95;
+    --ink-300: #33443e;
+    --ink-200: #22302b;
+    --ink-100: #172320;
+    --surface: #101917;
+    --surface-raised: #15201d;
+    --page: #0a1210;
+
+    --positive: #3ccf91;
+    --positive-bg: #10261f;
+    --negative: #f97066;
+    --negative-bg: #2a1513;
+    --negative-border: #5c2420;
+    --warning: #fdb022;
+    --warning-bg: #2a2010;
+    --info: #84caff;
+    --info-bg: #102035;
+
+    --nav-bg: #0e1715;
+    --nav-text: #c1cec8;
+    --nav-border: #1e2b27;
+
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 40%);
+    --focus-ring: 0 0 0 3px rgb(44 192 138 / 35%);
+
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  transition: background-color 0.2s ease;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-900);
+  background: var(--page);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--brand-600);
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---- Form controls ------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--ink-500);
+}
+
+.input:hover {
+  border-color: var(--ink-500);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--negative);
+}
+
+.field-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--negative);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+.form-error {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--negative);
+  background: var(--negative-bg);
+  border: 1px solid var(--negative-border);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-primary {
+  color: #fff;
+  background: var(--brand-600);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-700);
+}
+
+.btn-secondary {
+  color: var(--ink-900);
+  background: var(--surface);
+  border-color: var(--ink-300);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--ink-500);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- Sign-in and create-account forms (inside app-auth-layout) ----------- */
+
+.form-header h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.form-header p {
+  margin: 0 0 24px;
+  color: var(--ink-500);
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap .input {
+  padding-right: 72px;
+}
+
+.reveal {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  height: 32px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-600);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.reveal:hover {
+  background: var(--brand-100);
+}
+
+.footnote {
+  text-align: center;
+}
+
+.strength {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.strength span {
+  height: 4px;
+  background: var(--ink-200);
+  border-radius: 2px;
+}
+
+.strength[data-level='1'] span:nth-child(1) {
+  background: var(--negative);
+}
+
+.strength[data-level='2'] span:nth-child(-n + 2) {
+  background: var(--warning);
+}
+
+.strength[data-level='3'] span {
+  background: var(--positive);
+}
+
+.submitted {
+  text-align: center;
+}
+
+.submitted h1 {
+  margin: 12px 0 8px;
+  font-size: 22px;
+}
+
+.submitted p {
+  margin: 0 0 20px;
+  color: var(--ink-700);
+}
+
+.submitted-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  font-size: 26px;
+  color: #fff;
+  background: var(--positive);
+  border-radius: 50%;
+}
+
+.steps {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 24px;
+  padding: 16px;
+  text-align: left;
+  list-style: none;
+  background: var(--ink-100);
+  border-radius: var(--radius);
+}
+
+.steps li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--ink-500);
+}
+
+.steps span {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-500);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: 50%;
+}
+
+.steps .done,
+.steps .current {
+  color: var(--ink-900);
+}
+
+.steps .done span {
+  color: #fff;
+  background: var(--positive);
+  border-color: var(--positive);
+}
+
+.steps .current span {
+  color: #fff;
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}

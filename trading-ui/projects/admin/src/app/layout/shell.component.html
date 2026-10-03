@@ -1,0 +1,65 @@
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">F</span>
+      <div>
+        <div class="brand-name">Ferodha</div>
+        <div class="brand-sub">Operations</div>
+      </div>
+    </div>
+
+    <nav aria-label="Console">
+      <p class="nav-group">Operations</p>
+      @for (item of operations; track item.path) {
+        <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          {{ item.label }}
+          @if (item.path === '/account-requests' && pending()) {
+            <span class="nav-badge" data-testid="pending-badge"
+              >{{ pending() }}<span class="visually-hidden"> pending</span></span
+            >
+          }
+        </a>
+      }
+      <p class="nav-group">Markets</p>
+      @for (item of markets; track item.path) {
+        <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          {{ item.label }}
+        </a>
+      }
+      <p class="nav-group">System</p>
+      @for (item of system; track item.path) {
+        <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          {{ item.label }}
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="env-badge">Internal · Restricted</span>
+      <div class="operator">
+        <adm-theme-toggle />
+        @if (session.profile(); as profile) {
+          <span class="operator-name">{{ profile.name }}</span>
+          <span class="operator-mail">{{ profile.email }}</span>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="signOut()">
+            Sign out
+          </button>
+        } @else {
+          <a class="btn btn-secondary btn-sm" routerLink="/sign-in">Sign in</a>
+        }
+      </div>
+    </header>
+
+    @if (!signInRequired) {
+      <p class="dev-banner" role="status" data-testid="dev-banner">
+        Development mode: console sign-in is not enforced (environment.requireSignIn is off).
+      </p>
+    }
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

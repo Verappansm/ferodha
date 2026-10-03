@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { AuthService as GeneratedAuthService } from './generated/auth/api/auth.service';
 import { ProfileService } from './generated/auth/api/profile.service';
+import { RegisterRequest } from './generated/auth/model/register-request';
 import { TokenResponse } from './generated/auth/model/token-response';
 import { UserResponse } from './generated/auth/model/user-response';
 
@@ -19,6 +20,20 @@ export class AuthApi {
 
   login(username: string, password: string): Observable<TokenResponse> {
     return this.auth.login({ username, password });
+  }
+
+  /**
+   * Registers a user, which also files their account-opening request.
+   *
+   * The one place the UI departs from the generated RegisterRequest
+   * (story_docs/contract-breach.md, B01, B02, B08): our auth service takes an
+   * email as the username and an optional display name, and refuses the
+   * contract's required `accountId`, because a user is registered before any
+   * account is opened for them. The cast is confined to this method.
+   */
+  register(name: string, email: string, password: string): Observable<UserResponse> {
+    const body = { name, username: email, password } as unknown as RegisterRequest;
+    return this.auth.register(body);
   }
 
   refresh(refreshToken: string): Observable<TokenResponse> {

@@ -6,8 +6,8 @@ import { Session } from '../session/session';
 import { authTokenInterceptor } from './auth-token.interceptor';
 import { TOKEN_ALLOW_LIST, tokenAllowList } from './token-allow-list';
 
-const TRADE = 'http://localhost:8094';
-const AUTH = 'http://localhost:8096';
+const TRADE = 'http://localhost:8080';
+const AUTH = 'http://localhost:3000';
 const TOKEN = 'header.payload.signature';
 
 describe('authTokenInterceptor', () => {
@@ -65,11 +65,11 @@ describe('authTokenInterceptor', () => {
   });
 
   it('a look-alike of a platform origin does not carry the bearer token', () => {
-    expect(authorizationSentTo('http://localhost:8094.evil.example/api/v1/orders')).toBeNull();
-    expect(authorizationSentTo('https://localhost:8094/api/v1/orders')).toBeNull();
+    expect(authorizationSentTo('http://localhost:8080.evil.example/api/v1/orders')).toBeNull();
+    expect(authorizationSentTo('https://localhost:8080/api/v1/orders')).toBeNull();
     expect(authorizationSentTo('http://localhost:9999/api/v1/orders')).toBeNull();
     expect(
-      authorizationSentTo('http://evil.example/?next=http://localhost:8094/api/v1/'),
+      authorizationSentTo('http://evil.example/?next=http://localhost:8080/api/v1/'),
     ).toBeNull();
   });
 

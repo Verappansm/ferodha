@@ -31,6 +31,8 @@ below is a decision the team has taken and will defend at review.
 | B15 | Fauxnance key holder | Architecture HLD | The Trade Executor is the "only holder of FAUXNANCE_API_KEY" | Under `market-sim`, `pricing_generator` holds it and the executor does not (LEAP-002) |
 | B16 | Order-flow scope | `trade-api.yaml` / Sprint 7 README | One order, one quote: fill-or-reject | Under `market-sim`, orders match against a resting book, rest if unmatched, and expire by TTL (LEAP-003/004) |
 | B17 | Where the claims live | Sprint 4 README | `claims.md` in the analytics folder | `design/analytics-claims.md`; `analytics_etl/README.md` points to it |
+| B18 | Admin tokens | `auth-api.yaml` JWT claims contract | Every token carries an integer `accountId`; `roles` is `CUSTOMER` or `ADMIN` | `POST /auth/admin/login` issues an admin console token: `roles: [ADMIN]`, `aud: admin-console`, no `accountId`, no refresh token. Customer `/auth/login` refuses admin users; trade_api accepts each kind only on its own routes |
+| B19 | Admin routes and error codes | `trade-api.yaml`, `auth-api.yaml` | No admin routes; catalogues as listed | `/api/v1/admin/**` in trade_api and `/admin/**` in the auth service (`design/admin-trade-api.yaml`, `design/admin-auth-api.yaml`), adding `AUTH-403`, `ADM-404` and `ADM-409` |
 
 ## Why
 
@@ -124,3 +126,19 @@ generated from `trade-api.yaml` cannot deserialise.
 and the analytics claims are one of them. `analytics_etl/README.md` says the
 sprint asked for them and where they are, and the dashboard text points there
 too, so nothing is harder to find.
+
+**B18 (admin tokens).** An operator does not trade, so an honest admin token
+has no account to name; giving every admin a fake operations account would put
+a trading key on a token that must never trade. The `admin-console` audience
+keeps the two kinds apart in both directions: trade_api's customer routes
+refuse a token with that audience, and its admin routes refuse one without it.
+No refresh token, so an operator's session ends after 15 minutes.
+
+**B19 (admin routes and codes).** The contracts have no administration
+surface, and LEAP-011 and LEAP-021 to LEAP-023 need one. Each admin route
+lives in the service that owns the data it changes (`Accounts`, `Orders` and
+`Instruments` in trade_api; `Users` and refresh tokens in the auth service).
+`AUTH-403` separates "not signed in" from "signed in, but not an admin";
+`ADM-404` and `ADM-409` cover a missing target and a target whose state does
+not allow the action. Both services write their decisions to the one
+`admin_audit` table (trade_api Liquibase `009`).

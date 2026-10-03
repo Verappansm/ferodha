@@ -45,21 +45,21 @@ const BADGES: Record<BlotterStatus, { label: string; symbol: string; css: string
       white-space: nowrap;
     }
     .badge-new {
-      color: #1d4ed8;
-      background: #dbeafe;
+      color: var(--info);
+      background: var(--info-bg);
     }
     .badge-filled {
-      color: #15803d;
-      background: #dcfce7;
+      color: var(--positive);
+      background: var(--positive-bg);
     }
     .badge-rejected {
-      color: #b91c1c;
-      background: #fee2e2;
+      color: var(--negative);
+      background: var(--negative-bg);
     }
     .badge-cancelled,
     .badge-unknown {
-      color: #4b5563;
-      background: #f3f4f6;
+      color: var(--ink-500);
+      background: var(--ink-100);
     }
   `,
 })

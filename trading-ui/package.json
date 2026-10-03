@@ -3,15 +3,16 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
-    "build": "ng build",
+    "start": "ng serve trading-ui",
+    "build": "ng build trading-ui && ng build admin",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
+    "test": "ng test trading-ui --watch=false && ng test admin --watch=false",
     "generate:api": "openapi-generator-cli generate",
     "check:api": "node scripts/check-api.mjs",
     "e2e": "playwright test",
     "e2e:debug": "playwright test --debug",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "start:admin": "ng serve admin"
   },
   "private": true,
   "packageManager": "npm@11.16.0",

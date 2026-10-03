@@ -3,6 +3,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { ActivatedRoute, Router } from '@angular/router';
 import { errorMessage } from '../../core/errors/error-message';
 import { Session } from '../../core/session/session';
+import { AuthLayoutComponent } from '../auth-layout/auth-layout.component';
 
 // Wrong email, wrong password and an account still awaiting approval all
 // answer the same AUTH-401 on purpose, so the sentence covers all three.
@@ -13,9 +14,8 @@ const SIGN_IN_MESSAGES = {
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, AuthLayoutComponent],
   templateUrl: './login.component.html',
-  styleUrls: ['./login.component.css'],
 })
 export class LoginComponent {
   private readonly session = inject(Session);
@@ -31,6 +31,7 @@ export class LoginComponent {
 
   readonly isLoading = signal(false);
   readonly error = signal('');
+  readonly showPassword = signal(false);
 
   async submit(): Promise<void> {
     if (this.form.invalid) {
