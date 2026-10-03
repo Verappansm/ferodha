@@ -23,7 +23,7 @@ below is a decision the team has taken and will defend at review.
 | B07 | Auth: folder | Sprint 8 README | "One NestJS project rooted in this folder" (`sprint-08-auth-service/`) | `auth_service/` |
 | B08 | Auth: registration and accounts | `auth-api.yaml` RegisterRequest, UserResponse; Sprint 8 README | Register takes a required `accountId` naming an existing account, and `UserResponse.accountId` is required | The user is registered first and an account is opened for them afterwards. Register takes no `accountId` (sending one is `VAL-422`), its response has none, and it files a PENDING account request. Login is refused until an admin approves the request and the account is opened |
 | B09 | Issuer validation | Story 3 vs `auth-api.yaml` | Story 3: "do not require a particular issuer value in any consumer". Contract: "Consumers must validate the configured issuer" | trade_api accepts only tokens whose `iss` is `auth-service` (`app.jwt.issuer`) |
-| B10 | Ports | `infra/README.md`; contract `servers` | Postgres `localhost:5432`, Kafka `localhost:9092`, auth `localhost:3000`, trade API `:8080` | Host ports 8090 (Postgres), 8092 (Kafka), 8094 (trade-api), 8093 (executor), 8096 (auth). Container ports are the contract's |
+| B10 | Ports (retired) | `infra/README.md`; contract `servers` | Postgres `localhost:5432`, Kafka `localhost:9092`, auth `localhost:3000`, trade API `:8080` | No longer a departure: since 2026-10-03 the Docker host ports are the contract's, the same as the Windows profile |
 | B11 | Env names | Neueda root `.env.example` | `FAUXNANCE_BASE_URL`, `POSTGRES_DB=trading` | `FAUXNANCE_API_URL`, `POSTGRES_DB=tradedb` |
 | B12 | Container count | Top-level README | Five containers: Postgres, Kafka, Trade REST API, Trade Executor, auth service | Also `kafka-ui`, `pricing-generator` and `trades-generator` |
 | B13 | Order status | `contracts/trade-api.yaml` OrderStatus | `NEW, FILLED, REJECTED, CANCELLED`; "There is no partial-fill state" | Adds `PARTIALLY_FILLED`, plus `Orders.source` and `Orders.filled_quantity` (LEAP-003) |
@@ -98,10 +98,12 @@ several instances, since they all sign as `auth-service`; what it buys is that
 adding a second, different issuer later is a deliberate configuration change
 rather than an accident.
 
-**B10 (host ports).** Chosen for clarity: every published port sits in one
-8090-8096 block, so what belongs to this stack is obvious at a glance and
-nothing collides with a native Postgres or dev server on the same machine.
-Inside the compose network every service uses its contract port.
+**B10 (host ports, retired).** Docker used to publish every port in an
+8090-8097 block, while the Windows profile used the contract's numbers, so
+the trading UI, Playwright and the bundle scan could only match one of the
+two. Since 2026-10-03 Docker publishes the contract's ports as well, and every
+way of running the stack uses one set of numbers (root README, "Ports"). The
+cost: a native Postgres on 5432 must be stopped before `docker compose up`.
 
 **B11 (env names).** Team preference. Renaming would mean touching every
 service and script in one commit.

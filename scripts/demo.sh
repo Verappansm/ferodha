@@ -8,12 +8,17 @@
 # rejected paths, with real tokens from the auth service and real Kafka
 # verification.
 #
-#   ./scripts/demo.sh                    # start (or reuse) the stack, run the demo
+# It also starts the trading UI (Angular, `ng serve`) on the host and finishes
+# with a guided tour of it in the browser.
+#
+#   ./scripts/demo.sh                    # start (or reuse) the stack and the UI, run the demo
 #   ./scripts/demo.sh --fresh            # wipe the database volume first
+#   ./scripts/demo.sh --no-ui            # backend only, do not start the UI
+#   ./scripts/demo.sh --stop-ui          # stop a UI this script started, then exit
 #   NONINTERACTIVE=1 ./scripts/demo.sh   # no pauses
 #
 # Requires on the host: docker with either `docker compose` or
-# `docker-compose`, curl and jq.
+# `docker-compose`, curl and jq; for the UI, Node 20.19+, 22.12+ or 24+ and npm.
 
 set +e  # Don't exit on errors - we want to show bad cases
 
@@ -21,10 +26,16 @@ set +e  # Don't exit on errors - we want to show bad cases
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT" || exit 1
 
-API_BASE="http://localhost:8094"
-EXECUTOR_BASE="http://localhost:8093"
-AUTH_BASE="http://localhost:8096"
+API_BASE="http://localhost:8080"
+EXECUTOR_BASE="http://localhost:8082"
+AUTH_BASE="http://localhost:3000"
 KAFKA_UI="http://localhost:8091"
+UI_BASE="http://localhost:4200"
+
+# The UI's process id and log, so a later run (or --stop-ui) can find it.
+RUN_DIR="$REPO_ROOT/.run"
+UI_PID_FILE="$RUN_DIR/trading-ui.pid"
+UI_LOG="$RUN_DIR/trading-ui.log"
 
 # The seeded holder of account 1 (database/seeds/001_seed_data.sql). A user
 # registered through the auth service has no trading account yet, so the
@@ -34,7 +45,16 @@ SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
 ACCOUNT_ID=1
 
 FRESH=0
-[[ "${1:-}" == "--fresh" ]] && FRESH=1
+START_UI=1
+STOP_UI_ONLY=0
+for arg in "$@"; do
+    case "$arg" in
+        --fresh) FRESH=1 ;;
+        --no-ui) START_UI=0 ;;
+        --stop-ui) STOP_UI_ONLY=1 ;;
+        *) echo "Unknown option: $arg (use --fresh, --no-ui or --stop-ui)"; exit 1 ;;
+    esac
+done
 
 # ------------------------------------------------------------
 # Load .env (same convention as database/apply.sh)
@@ -185,6 +205,103 @@ setup_stack() {
     echo ""
 }
 
+
+# ============================================================================
+# UI: the Angular trading UI, served by `ng serve` on the host
+# ============================================================================
+
+# True when something already answers on the UI port.
+ui_is_up() {
+    curl -s -o /dev/null "$UI_BASE"
+}
+
+# Node major.minor must satisfy Angular 21: 20.19+, 22.12+ or 24+.
+node_version_ok() {
+    command -v node >/dev/null 2>&1 || return 1
+    local major minor
+    IFS=. read -r major minor _ <<< "$(node -v | tr -d v)"
+    (( major >= 24 )) && return 0
+    (( major == 22 && minor >= 12 )) && return 0
+    (( major == 20 && minor >= 19 )) && return 0
+    return 1
+}
+
+start_ui() {
+    print_header "SETUP: Starting the trading UI"
+
+    if ui_is_up; then
+        echo -e "${GREEN}✓ Something already serves $UI_BASE - reusing it${NC}"
+        return 0
+    fi
+    if ! node_version_ok; then
+        echo -e "${YELLOW}⚠ Node 20.19+, 22.12+ or 24+ is needed for the UI (found: $(node -v 2>/dev/null || echo none)).${NC}"
+        echo -e "${YELLOW}  Skipping the UI; the backend demo still runs. Install Node and re-run.${NC}"
+        START_UI=0
+        return 0
+    fi
+
+    mkdir -p "$RUN_DIR"
+    if [[ ! -d "$REPO_ROOT/trading-ui/node_modules" ]]; then
+        print_subheader "npm ci (first run only)"
+        (cd "$REPO_ROOT/trading-ui" && npm ci) || { echo -e "${RED}✗ npm ci failed${NC}"; START_UI=0; return 0; }
+    fi
+
+    print_subheader "ng serve on $UI_BASE (log: $UI_LOG)"
+    (cd "$REPO_ROOT/trading-ui" && nohup npx ng serve --port 4200 > "$UI_LOG" 2>&1 & echo $! > "$UI_PID_FILE")
+
+    local _
+    for _ in $(seq 1 90); do
+        if ui_is_up; then
+            echo -e "${GREEN}✓ trading UI is UP at $UI_BASE${NC}"
+            return 0
+        fi
+        sleep 2
+    done
+    echo -e "${RED}✗ The UI did not come up in 3 minutes - see $UI_LOG${NC}"
+    START_UI=0
+}
+
+stop_ui() {
+    if [[ ! -f "$UI_PID_FILE" ]]; then
+        echo "No UI started by this script (no $UI_PID_FILE)."
+        return 0
+    fi
+    local pid
+    pid="$(cat "$UI_PID_FILE")"
+    # ng serve runs under npx: stop the children first, then the parent.
+    pkill -P "$pid" 2>/dev/null
+    kill "$pid" 2>/dev/null
+    rm -f "$UI_PID_FILE"
+    echo -e "${GREEN}✓ trading UI stopped${NC}"
+}
+
+ui_tour() {
+    if [[ "$START_UI" != "1" ]]; then
+        echo "The UI was not started (--no-ui, or Node missing). Start it with:"
+        echo "  cd trading-ui && npm ci && npm start"
+        return 0
+    fi
+    echo "Open $UI_BASE in a browser and try:"
+    echo ""
+    echo "  1. Open $UI_BASE/orders while signed out - you are sent to sign-in,"
+    echo "     with ?returnUrl=%2Forders in the address bar (the route guard)."
+    echo "  2. Sign in with a wrong password - a readable error, no token stored."
+    echo "  3. Sign in as $SEED_EMAIL / $SEED_PASSWORD - you land on /orders,"
+    echo "     where you were going. The blotter lists every order the demo placed,"
+    echo "     newest first, rejections included."
+    echo "  4. Order: the account field is read-only. Try quantity 0 or price 1.234 -"
+    echo "     refused before anything is sent. Then place BUY 1 AAPL at 150.00 and"
+    echo "     watch it on Orders: NEW (IN PROCESS) until the executor resolves it."
+    echo "  5. DevTools > Network: /auth/login carries no Authorization header;"
+    echo "     /auth/me and every /api/v1 call do (the interceptor's allow list)."
+    echo "  6. Sign out - back to sign-in, and /orders is guarded again."
+    echo ""
+    echo "Other seeded logins (same password): emily.stone@example.com (account 2),"
+    echo "e2e.trader@example.com (account 3, used by the Playwright journeys)."
+    echo ""
+    echo "Stop the UI later with: ./scripts/demo.sh --stop-ui"
+}
+
 # ============================================================================
 # Main demo flow
 # ============================================================================
@@ -205,8 +322,10 @@ EOF
     echo -e "${NC}"
 
     setup_stack
+    [[ "$START_UI" == "1" ]] && start_ui
 
     echo -e "${YELLOW}Configuration:${NC}"
+    echo "  Trading UI:   $UI_BASE$([[ "$START_UI" == "1" ]] || echo '  (not started)')"
     echo "  Trade API:    $API_BASE"
     echo "  Auth service: $AUTH_BASE  (OpenAPI: $AUTH_BASE/docs)"
     echo "  Account ID:   $ACCOUNT_ID ($SEED_EMAIL)"
@@ -253,6 +372,10 @@ EOF
     pause
     login_seed_user
     market_sim_demo
+
+    print_header "SECTION 7: The Trading UI"
+    ui_tour
+    pause
 
     print_summary
 }
@@ -333,10 +456,10 @@ auth_demo() {
 test_api_connectivity() {
     print_subheader "1.6 Testing API Connectivity"
 
-    CURL_CMD="curl -s http://localhost:8094/actuator/health"
+    CURL_CMD="curl -s http://localhost:8080/actuator/health"
     print_curl "$CURL_CMD"
 
-    RESPONSE=$(curl -s http://localhost:8094/actuator/health)
+    RESPONSE=$(curl -s http://localhost:8080/actuator/health)
     print_response "$RESPONSE"
 
     if echo "$RESPONSE" | grep -q "UP"; then
@@ -358,12 +481,12 @@ happy_path_check_balance() {
 
     CURL_CMD="curl -s -X GET \
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
-  http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/balance"
+  http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/balance"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X GET \
         -H "Authorization: Bearer $JWT_TOKEN" \
-        http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/balance)
+        http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/balance)
     print_response "$RESPONSE"
 
     echo "📌 Note the current balance - it will change after successful orders"
@@ -380,14 +503,14 @@ happy_path_buy_order() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":10,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":10,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
@@ -415,14 +538,14 @@ happy_path_sell_order() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":5,\"price\":160.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":5,\"price\":160.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
@@ -441,12 +564,12 @@ happy_path_view_account() {
 
     CURL_CMD="curl -s -X GET \
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
-  http://localhost:8094/api/v1/accounts/$ACCOUNT_ID"
+  http://localhost:8080/api/v1/accounts/$ACCOUNT_ID"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X GET \
         -H "Authorization: Bearer $JWT_TOKEN" \
-        http://localhost:8094/api/v1/accounts/$ACCOUNT_ID)
+        http://localhost:8080/api/v1/accounts/$ACCOUNT_ID)
     print_response "$RESPONSE"
     pause
 }
@@ -456,12 +579,12 @@ happy_path_view_positions() {
 
     CURL_CMD="curl -s -X GET \
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
-  http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/positions"
+  http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/positions"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X GET \
         -H "Authorization: Bearer $JWT_TOKEN" \
-        http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/positions)
+        http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/positions)
     print_response "$RESPONSE"
     echo "📌 If empty, the executor may not have settled the orders above yet - it's async."
     echo ""
@@ -473,12 +596,12 @@ happy_path_view_order_history() {
 
     CURL_CMD="curl -s -X GET \
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
-  http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/orders"
+  http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X GET \
         -H "Authorization: Bearer $JWT_TOKEN" \
-        http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/orders)
+        http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/orders)
     print_response "$RESPONSE"
     pause
 }
@@ -494,18 +617,18 @@ happy_path_cancel_order() {
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":1,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     CANCEL_ORDER_ID=$(echo "$PLACE_RESPONSE" | jq -r '.orderId' 2>/dev/null)
     echo "Placed order to cancel: $CANCEL_ORDER_ID"
 
     CURL_CMD="curl -s -X DELETE \
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
-  http://localhost:8094/api/v1/orders/$CANCEL_ORDER_ID"
+  http://localhost:8080/api/v1/orders/$CANCEL_ORDER_ID"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -w '\nHTTP_STATUS:%{http_code}' -X DELETE \
         -H "Authorization: Bearer $JWT_TOKEN" \
-        "http://localhost:8094/api/v1/orders/$CANCEL_ORDER_ID")
+        "http://localhost:8080/api/v1/orders/$CANCEL_ORDER_ID")
     print_response "$RESPONSE"
 
     if echo "$RESPONSE" | grep -q "CANCELLED"; then
@@ -533,14 +656,14 @@ bad_path_insufficient_funds() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":100000,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":100000,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     echo -e "${YELLOW}📌 This is checked by OrderLogic (Sprint 5 rule 6) BEFORE the order is ever written.${NC}"
@@ -558,14 +681,14 @@ bad_path_unknown_symbol() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"NOSUCHTICKER\",\"side\":\"BUY\",\"quantity\":5,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"NOSUCHTICKER\",\"side\":\"BUY\",\"quantity\":5,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     echo -e "${YELLOW}📌 errorCode INS-404 - the instrument doesn't exist at all.${NC}"
@@ -586,14 +709,14 @@ bad_path_delisted_instrument() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"TSLA\",\"side\":\"BUY\",\"quantity\":5,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"TSLA\",\"side\":\"BUY\",\"quantity\":5,\"price\":100.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     run_sql "UPDATE Instruments SET tradable = true WHERE ticker = 'TSLA';" > /dev/null
@@ -619,14 +742,14 @@ bad_path_execution_time_reject() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":1,\"price\":0.01,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":1,\"price\":0.01,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
@@ -640,7 +763,7 @@ bad_path_execution_time_reject() {
     echo -n "Polling order history for a terminal status"
     STATUS="NEW"
     for _ in $(seq 1 20); do
-        HIST=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/orders")
+        HIST=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/orders")
         STATUS=$(echo "$HIST" | jq -r --arg id "$ORDER_ID" '.[] | select(.orderId == $id) | .status' 2>/dev/null)
         [[ "$STATUS" != "NEW" && -n "$STATUS" ]] && break
         echo -n "."
@@ -669,14 +792,14 @@ test_idempotency() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":3,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE1=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":3,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE1"
 
     ORDER_ID_1=$(echo "$RESPONSE1" | jq -r '.orderId' 2>/dev/null)
@@ -690,7 +813,7 @@ test_idempotency() {
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"BUY\",\"quantity\":3,\"price\":150.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE2"
 
     if echo "$RESPONSE2" | jq -e '.errorCode == "ORD-409"' > /dev/null 2>&1; then
@@ -742,14 +865,14 @@ market_sim_demo() {
   -H \"Authorization: Bearer \$JWT_TOKEN\" \
   -H \"Content-Type: application/json\" \
   -d '{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":2,\"price\":1.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}' \
-  http://localhost:8094/api/v1/orders"
+  http://localhost:8080/api/v1/orders"
     print_curl "$CURL_CMD"
 
     RESPONSE=$(curl -s -X POST \
         -H "Authorization: Bearer $JWT_TOKEN" \
         -H "Content-Type: application/json" \
         -d "{\"accountId\":$ACCOUNT_ID,\"symbol\":\"AAPL\",\"side\":\"SELL\",\"quantity\":2,\"price\":1.00,\"idempotencyKey\":\"$IDEMPOTENCY_KEY\"}" \
-        http://localhost:8094/api/v1/orders)
+        http://localhost:8080/api/v1/orders)
     print_response "$RESPONSE"
 
     ORDER_ID=$(echo "$RESPONSE" | jq -r '.orderId' 2>/dev/null)
@@ -764,7 +887,7 @@ market_sim_demo() {
     echo -n "Waiting for OrderGenerator's next synthetic order"
     STATUS="NEW"
     for _ in $(seq 1 18); do
-        HIST=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "http://localhost:8094/api/v1/accounts/$ACCOUNT_ID/orders")
+        HIST=$(curl -s -H "Authorization: Bearer $JWT_TOKEN" "http://localhost:8080/api/v1/accounts/$ACCOUNT_ID/orders")
         STATUS=$(echo "$HIST" | jq -r --arg id "$ORDER_ID" '.[] | select(.orderId == $id) | .status' 2>/dev/null)
         [[ "$STATUS" != "NEW" && -n "$STATUS" ]] && break
         echo -n "."
@@ -799,7 +922,7 @@ print_summary() {
 🔐 AUTH SERVICE (Section 1):
    Register (no token, no account), login refused until an account exists,
    login as an account holder, /auth/me, and trade-api refusing a missing or
-   forged token. OpenAPI: http://localhost:8096/docs
+   forged token. OpenAPI: http://localhost:3000/docs
 
 ✅ ALL SIX CONTRACT ENDPOINTS EXERCISED:
    POST   /api/v1/orders                    - place (Section 2.2, 2.3)
@@ -872,4 +995,8 @@ EOF
 }
 
 # Run the demo
+if [[ "$STOP_UI_ONLY" == "1" ]]; then
+    stop_ui
+    exit 0
+fi
 main

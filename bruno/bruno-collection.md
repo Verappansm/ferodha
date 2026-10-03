@@ -13,7 +13,8 @@ dialog / older builds) and `collection.bru` (current builds).
 2. Pick an environment, top right:
    - **local**: `http://localhost:3000`, the service run with
      `npm run start:dev` or by `windows/start-windows.ps1`.
-   - **docker**: `http://localhost:8096`, the service in `docker compose`.
+   - **docker**: `http://localhost:3000`, the service in `docker compose`
+     (the same port since the host ports were standardised; see the root README).
 3. **Run Collection**. Requests run in the numbered order.
 
 ## Prerequisites

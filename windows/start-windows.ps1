@@ -10,9 +10,11 @@
   2. Preflight: java/mvn/node/npm/psql present, Kafka reachable over the LAN,
      Postgres reachable
   3. Creates the database if missing; applies the Sprint 3 schema + seed once
-  4. Builds the two Spring jars and the NestJS service (skip with -SkipBuild)
+  4. Builds the two Spring jars and the NestJS service, and installs the
+     trading UI's packages (skip with -SkipBuild)
   5. Starts them in dependency order, waits for each health endpoint, and
      checks that trade-executor actually joined its Kafka consumer group
+  6. Starts the trading UI (Angular, ng serve) on port 4200 (skip with -SkipUi)
 
   Logs:  windows/.run/logs/<service>.log (+ .err.log)
   Stop:  windows/stop-windows.ps1
@@ -20,9 +22,11 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1
   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipBuild
+  powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipUi
 #>
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$SkipUi
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +77,7 @@ function Get-Setting([string]$Name, [string]$Default) {
 $KafkaBootstrap = Get-Setting 'KAFKA_BOOTSTRAP_SERVERS' ''
 $PgHost = Get-Setting 'POSTGRES_HOST' 'localhost'
 $PgPort = Get-Setting 'POSTGRES_PORT' '5432'
+$UiPort = '4200'
 $PgDb = Get-Setting 'POSTGRES_DB' 'tradedb'
 $PgUser = Get-Setting 'POSTGRES_USER' 'postgres'
 $JwtSecret = Get-Setting 'JWT_SECRET' ''
@@ -255,7 +260,9 @@ $script:Psql = Find-Psql
 if (-not $script:Psql) { Fail 'psql.exe not found. Add PostgreSQL\<version>\bin to PATH or set PSQL_BIN_DIR.' }
 Write-Pass "tools found (psql: $script:Psql)"
 
-foreach ($port in $TradeApiPort, $ExecutorPort, $AuthPort) {
+$PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort)
+if (-not $SkipUi) { $PortsToCheck += $UiPort }
+foreach ($port in $PortsToCheck) {
     if (Test-Tcp 'localhost' ([int]$port) 500) { Fail "Port $port is already in use on this machine." }
 }
 
@@ -322,6 +329,14 @@ if ($SkipBuild) {
         if ($LASTEXITCODE -ne 0) { Fail 'npm run build failed in auth_service' }
     } finally { Pop-Location }
     Write-Pass 'auth_service built'
+    if (-not $SkipUi) {
+        Push-Location (Join-Path $RepoDir 'trading-ui')
+        try {
+            & npm ci --no-audit --no-fund
+            if ($LASTEXITCODE -ne 0) { Fail 'npm ci failed in trading-ui' }
+        } finally { Pop-Location }
+        Write-Pass 'trading-ui packages installed'
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -349,6 +364,20 @@ Start-AppProcess 'auth-service' (Join-Path $RepoDir 'auth_service') 'node' `
 Wait-Http 'trade-executor' "http://localhost:$ExecutorPort/actuator/health" '"status":"UP"' 'trade-executor'
 Wait-Http 'auth-service' "http://localhost:$AuthPort/health" '"status":"ok"' 'auth-service' 60
 
+# The trading UI, last: it only needs the two APIs above to be answering.
+# Started through node directly (not npm/npx) so the recorded PID is the
+# server itself and stop-windows.ps1 can stop it.
+if (-not $SkipUi) {
+    $UiDir = Join-Path $RepoDir 'trading-ui'
+    if (-not (Test-Path (Join-Path $UiDir 'node_modules\@angular\cli\bin\ng.js'))) {
+        Fail 'trading-ui has no node_modules - run without -SkipBuild once, or npm ci in trading-ui.'
+    }
+    Start-AppProcess 'trading-ui' $UiDir 'node' `
+        @('node_modules/@angular/cli/bin/ng.js', 'serve', '--port', $UiPort) `
+        @{ NG_CLI_ANALYTICS = 'false' }
+    Wait-Http 'trading-ui' "http://localhost:$UiPort/" 'app-root' 'trading-ui' 240
+}
+
 # ---------------------------------------------------------------------------
 # Stage: Kafka connectivity from Windows
 # ---------------------------------------------------------------------------
@@ -374,6 +403,9 @@ if ($assigned) {
 
 Write-Host ''
 Write-Host '== ALL SERVICES RUNNING ==' -ForegroundColor Green
+if (-not $SkipUi) {
+    Write-Host "  trading-ui        http://localhost:$UiPort   (sign in: john.carter@example.com / seed-password-change-me)"
+}
 Write-Host "  trade-api         http://localhost:$TradeApiPort"
 Write-Host "  trade-executor    http://localhost:$ExecutorPort/actuator/health"
 Write-Host "  auth-service      http://localhost:$AuthPort"

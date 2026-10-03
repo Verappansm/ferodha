@@ -11,7 +11,7 @@ npm run start:dev   # port 3000; needs Postgres with the Sprint 3 schema
 ```
 
 Configuration is read from the repository-root `.env` (template:
-`.env.example`). In `docker compose` the service is on host port 8096.
+`.env.example`). In `docker compose` the service is on host port 3000 too.
 
 ## What Sprint 8 asked us to record
 

@@ -11,6 +11,7 @@ It runs the **main (default) profile only**: trades-generator and market-sim are
 | **Windows** (native) | trade-api | 8080 |
 | **Windows** (native) | trade-executor | 8082 |
 | **Windows** (native) | auth-service | 3000 |
+| **Windows** (native) | trading-ui (Angular, `ng serve`) | 4200 |
 
 ```
 Windows                                           Linux (Docker)

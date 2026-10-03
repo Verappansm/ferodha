@@ -27,6 +27,7 @@ build/
 
 # Runtime state of the windows profile (windows/windows-setup.md)
 windows/.run/
+/.run/
 
 # Logs
 *.log

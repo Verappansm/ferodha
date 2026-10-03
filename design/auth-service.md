@@ -25,7 +25,7 @@ characters, the same value trade_api verifies with), `POSTGRES_HOST`,
 `PORT` (default 3000).
 
 In `docker compose` the service is `auth-service`, on port 3000 inside the
-network and 8096 on the host. On the Windows setup it runs natively on 3000.
+network and on the host. On the Windows setup it runs natively on 3000.
 
 `npm run test:e2e` runs `auth_service/test/app.e2e-spec.ts` against a real database.
 
@@ -46,8 +46,6 @@ controller and DTO decorators (`auth_service/src/openapi.ts`):
 
 - Human page: `http://localhost:3000/docs`
 - JSON document: `http://localhost:3000/docs/json`
-
-(8096 instead of 3000 under docker compose.)
 
 ## Registration and accounts
 

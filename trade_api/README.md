@@ -11,7 +11,7 @@ mvn test                  # unit and slice tests; *IT tests need Docker
 mvn spring-boot:run       # port 8080; env vars listed in manifest.env
 ```
 
-In `docker compose` it is on host port 8094.
+In `docker compose` it is on host port 8080 too.
 
 ## Where the design lives
 

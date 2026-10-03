@@ -31,8 +31,8 @@ The tests require the full stack to be running:
 
 - Auth service on http://localhost:3000
 - Trade API on http://localhost:8080
-- Postgres on localhost:8090
-- Kafka on localhost:8092
+- Postgres on localhost:5432
+- Kafka on localhost:9092
 
 Start with: `docker compose up`
 
