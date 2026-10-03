@@ -201,6 +201,12 @@ export class AuthService {
       this.logger.warn(`Session refused: user ${user.id} is ${user.status}`);
       return null;
     }
+    // Administrators sign in to the operations console (/auth/admin/login),
+    // never here: one sign-in never yields both kinds of token.
+    if (user.roles.includes(Role.ADMIN)) {
+      this.logger.warn(`Session refused: user ${user.id} is an administrator`);
+      return null;
+    }
     const accountId = await this.accounts.findAccountIdForUser(user.id);
     if (accountId === null) {
       this.logger.warn(`Session refused: user ${user.id} has no account yet`);

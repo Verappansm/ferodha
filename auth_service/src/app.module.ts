@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { createValidationPipe } from './common/validation.pipe';
@@ -15,7 +16,7 @@ import { PersistenceModule } from './persistence/persistence.module';
  * failure in the same envelope.
  */
 @Module({
-  imports: [AppConfigModule, PersistenceModule, AuthModule],
+  imports: [AppConfigModule, PersistenceModule, AuthModule, AdminModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_PIPE, useFactory: createValidationPipe },
