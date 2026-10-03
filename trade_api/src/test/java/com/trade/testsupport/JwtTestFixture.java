@@ -69,6 +69,37 @@ public final class JwtTestFixture {
                 .compact();
     }
 
+    public static final String ADMIN_USER_ID = "55555555-5555-5555-5555-555555555555";
+
+    // An operations console token, as design/admin-auth-api.yaml describes:
+    // ADMIN role, admin-console audience, no accountId.
+    public static String adminToken() {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(ADMIN_USER_ID)
+                .claim("roles", List.of("ADMIN"))
+                .audience().add("admin-console").and()
+                .issuer("auth-service")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(900)))
+                .signWith(key())
+                .compact();
+    }
+
+    // The admin audience without the ADMIN role: must not open the console.
+    public static String adminAudienceWithoutAdminRole() {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(ADMIN_USER_ID)
+                .claim("roles", List.of("CUSTOMER"))
+                .audience().add("admin-console").and()
+                .issuer("auth-service")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(900)))
+                .signWith(key())
+                .compact();
+    }
+
     public static String missingAccountIdClaim() {
         Instant now = Instant.now();
         return Jwts.builder()

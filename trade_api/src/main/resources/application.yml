@@ -40,6 +40,13 @@ app:
     secret: ${JWT_SECRET}
     issuer: auth-service
 
+  # Where the operations console's health page probes (LEAP-023). Service
+  # names inside Docker; the defaults suit the Windows profile.
+  admin:
+    health:
+      auth-url: ${AUTH_HEALTH_URL:http://localhost:3000/health}
+      executor-url: ${EXECUTOR_HEALTH_URL:http://localhost:8082/actuator/health}
+
 logging:
   level:
     com.trade: INFO

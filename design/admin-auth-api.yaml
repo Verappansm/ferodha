@@ -1,0 +1,385 @@
+openapi: 3.1.0
+
+info:
+  title: Auth service - administration
+  version: 0.1.0
+  summary: Admin sign-in and user management, served by the auth service.
+  description: |
+    Team 2 extension (LEAP-011, LEAP-021), not part of Neueda's contracts. The auth service owns
+    `Users` and the refresh tokens, so user actions live here; account actions live in trade_api
+    (`admin-trade-api.yaml`).
+
+    ## Admin tokens
+
+    `POST /auth/admin/login` accepts only users whose role is `admin`, and issues an access token
+    with `roles: ["ADMIN"]`, `aud: "admin-console"`, no `accountId`, and a 15-minute lifetime. No
+    refresh token is issued: an operator signs in again. The customer `/auth/login` refuses admin
+    users, so one person never holds both kinds of token from one sign-in. The departure from the
+    contract's "every token carries an accountId" is recorded in `contract-breach.md`.
+
+    Admin sign-in has its own failed-attempt throttle, separate from the customer one.
+
+    ## Errors
+
+    | Code | HTTP | Meaning |
+    |---|---|---|
+    | `AUTH-401` | 401 | Refused sign-in, or a missing, expired or invalid token |
+    | `AUTH-403` | 403 | A valid token that is not an admin token |
+    | `VAL-422` | 422 | A field is not acceptable |
+    | `ADM-404` | 404 | The user does not exist |
+    | `ADM-409` | 409 | The user's state does not allow this action (for example suspending a suspended user, or acting on yourself) |
+  contact:
+    name: Team 2
+  license:
+    name: Instructional use only
+
+servers:
+  - url: http://localhost:3000
+    description: Local development (Docker and the Windows profile).
+
+security:
+  - adminBearer: []
+
+tags:
+  - name: AdminAuth
+  - name: AdminUsers
+
+paths:
+  /auth/admin/login:
+    post:
+      tags: [AdminAuth]
+      operationId: adminLogin
+      security: []
+      summary: Sign an administrator in to the console
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        '200':
+          description: Signed in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminTokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /admin/me:
+    get:
+      tags: [AdminAuth]
+      operationId: getAdminProfile
+      summary: The signed-in administrator
+      responses:
+        '200':
+          description: The administrator named by the token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users:
+    get:
+      tags: [AdminUsers]
+      operationId: listUsers
+      summary: Users, searchable by name or email
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 100
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/UserStatus'
+        - name: role
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/PlatformRole'
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        '200':
+          description: One page of users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/users/{id}/suspend:
+    post:
+      tags: [AdminUsers]
+      operationId: suspendUser
+      summary: Suspend a user; their sign-in and refresh are refused and every refresh token is revoked
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/User'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /admin/users/{id}/reactivate:
+    post:
+      tags: [AdminUsers]
+      operationId: reactivateUser
+      summary: Return a SUSPENDED user to ACTIVE
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/User'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /admin/users/{id}/force-password-reset:
+    post:
+      tags: [AdminUsers]
+      operationId: forcePasswordReset
+      summary: Require a new password at the user's next sign-in, and end their current sessions
+      description: |
+        Sets the user to change their password before anything else, and revokes every refresh
+        token they hold. No password is generated, emailed or shown.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/User'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+components:
+  securitySchemes:
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  requestBodies:
+    Reason:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReasonRequest'
+
+  responses:
+    User:
+      description: The user after the change.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AdminUser'
+    Unauthorised:
+      description: Refused sign-in, or a missing, expired or invalid token. Identical body in every case.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The token is valid but is not an admin token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The user does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: The user's state does not allow this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidInput:
+      description: A field is not acceptable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    AdminLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+          description: The administrator's email address.
+        password:
+          type: string
+          maxLength: 128
+          writeOnly: true
+
+    AdminTokenResponse:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          example: 900
+
+    AdminProfile:
+      type: object
+      additionalProperties: false
+      required: [id, name, email]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    UserStatus:
+      type: string
+      enum: [PENDING, ACTIVE, SUSPENDED, CLOSED]
+
+    PlatformRole:
+      type: string
+      enum: [client, admin, analyst, advisor]
+      description: The platform's role names, from the Sprint 3 `Roles` table.
+
+    AdminUser:
+      type: object
+      additionalProperties: false
+      required: [id, name, email, role, status, mustChangePassword, createdOn]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: '#/components/schemas/PlatformRole'
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        mustChangePassword:
+          type: boolean
+        accountCount:
+          type: integer
+        createdOn:
+          type: string
+          format: date-time
+        lastLogin:
+          type: [string, 'null']
+          format: date-time
+
+    UserPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUser'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, AUTH-403, VAL-422, ADM-404, ADM-409]
+        message:
+          type: string

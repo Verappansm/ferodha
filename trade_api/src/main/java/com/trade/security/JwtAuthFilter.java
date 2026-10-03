@@ -27,7 +27,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     // when, in the filter chain, request scope actually becomes available.
     public static final String PRINCIPAL_ATTRIBUTE = "com.trade.security.PRINCIPAL";
 
+    // The verified operator on /api/v1/admin/** (an AdminPrincipal).
+    public static final String ADMIN_PRINCIPAL_ATTRIBUTE = "com.trade.security.ADMIN_PRINCIPAL";
+
     private static final String PROTECTED_PREFIX = "/api/v1/";
+    // Admin routes take an admin console token instead of a customer one.
+    private static final String ADMIN_PREFIX = "/api/v1/admin/";
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
@@ -53,6 +58,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
 
         String token = header.substring(BEARER_PREFIX.length()).trim();
+
+        if (request.getRequestURI().startsWith(ADMIN_PREFIX)) {
+            AdminPrincipal admin;
+            try {
+                admin = jwtService.verifyAdmin(token);
+            } catch (NotAdminTokenException e) {
+                writeError(response, HttpStatus.FORBIDDEN, "AUTH-403", "Forbidden");
+                return;
+            } catch (JwtVerificationException e) {
+                writeUnauthorised(response);
+                return;
+            }
+            request.setAttribute(ADMIN_PRINCIPAL_ATTRIBUTE, admin);
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         AuthenticatedPrincipal principal;
         try {
             principal = jwtService.verify(token);
@@ -66,8 +88,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     }
 
     private void writeUnauthorised(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        writeError(response, HttpStatus.UNAUTHORIZED, "AUTH-401", "Unauthorised");
+    }
+
+    private void writeError(HttpServletResponse response, HttpStatus status, String code, String message)
+            throws IOException {
+        response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), new ErrorResponseDto("AUTH-401", "Unauthorised"));
+        objectMapper.writeValue(response.getWriter(), new ErrorResponseDto(code, message));
     }
 }
