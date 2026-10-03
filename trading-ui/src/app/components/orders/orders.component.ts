@@ -1,10 +1,13 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
-import { OrderHistoryEntry, OrderStatus, TradeApi } from '../../api/trade-api';
+import { OrderHistoryEntry, TradeApi } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
 import { Session } from '../../core/session/session';
-import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
+import {
+  OrderStatusBadgeComponent,
+  WORKING_STATUSES,
+} from '../order-status-badge/order-status-badge.component';
 
 /**
  * While any order is at NEW the blotter re-reads order history on this
@@ -31,7 +34,8 @@ export class OrdersComponent {
   readonly isPolling = signal(false);
   private readonly pollsLeft = signal(MAX_POLLS);
 
-  readonly hasWorking = computed(() => this.orders().some((o) => o.status === OrderStatus.NEW));
+  /** NEW, or PARTIALLY_FILLED under market-sim: the executor has not finished with it. */
+  readonly hasWorking = computed(() => this.orders().some((o) => WORKING_STATUSES.has(o.status)));
   /** Something is still at NEW but the re-read budget is spent. */
   readonly isStalled = computed(
     () => this.hasWorking() && !this.isPolling() && this.pollsLeft() === 0,

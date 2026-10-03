@@ -1,158 +1,86 @@
 import { test, expect } from '@playwright/test';
-import {
-  getTestConfig,
-  signIn,
-  expectSignedIn,
-  expectSignedOut,
-  expectLoginError,
-  clearSession,
-} from './fixtures';
+import { getTestConfig, signIn, expectSignedIn, expectSignedOut, clearSession } from './fixtures';
 
 test.describe('Sign-in Journey', () => {
-  let config = getTestConfig();
+  const config = getTestConfig();
+
+  test.beforeEach(async ({ page }) => {
+    // Navigate to app first to establish origin, then clear session
+    await page.goto('/');
+    await clearSession(page);
+  });
 
   test('Guard redirect: unauthenticated user is redirected to login with returnUrl', async ({
     page,
   }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
-    
-    // Try to access a protected route
-    await page.goto('/dashboard');
+    await page.goto('/orders');
 
-    // Should be redirected to login with returnUrl query parameter
-    expect(page.url()).toContain('/login');
-    expect(page.url()).toContain('returnUrl=%2Fdashboard');
+    // toHaveURL waits for the guard's redirect instead of racing it.
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2Forders$/);
+    await expectSignedOut(page);
   });
 
   test('Refused sign-in: invalid credentials show error and password is cleared', async ({
     page,
   }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
-
-    // Navigate to login
     await page.goto('/login');
     await expectSignedOut(page);
 
-    // Enter invalid credentials
-    const username = config.username;
-    const invalidPassword = 'invalid-password-12345';
+    await signIn(page, config.username, 'invalid-password-12345');
 
-    await page.fill('[data-testid="login-username"]', username);
-    await page.fill('[data-testid="login-password"]', invalidPassword);
-
-    // Submit the form
-    await page.click('[data-testid="login-submit"]');
-
-    // Wait for response
-    await page.waitForLoadState('networkidle');
-
-    // Should remain on login page
-    expect(page.url()).toContain('/login');
-
-    // Should display an error message
-    const errorElement = await page.locator('[data-testid="login-error"]');
+    await expect(page).toHaveURL(/\/login/);
+    const errorElement = page.locator('[data-testid="login-error"]');
     await expect(errorElement).toBeVisible();
-    const errorText = await errorElement.textContent();
-    expect(errorText).toContain('did not sign you in');
-
-    // Password field should be cleared
-    const passwordInput = page.locator('[data-testid="login-password"]');
-    const passwordValue = await passwordInput.inputValue();
-    expect(passwordValue).toBe('');
-
-    // Should not be signed in
+    await expect(errorElement).toContainText('did not sign you in');
+    await expect(page.locator('[data-testid="login-password"]')).toHaveValue('');
     await expectSignedOut(page);
   });
 
   test('Successful sign-in: valid credentials sign in and navigate to dashboard', async ({
     page,
   }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
-
-    // Navigate to login
     await page.goto('/login');
-    await expectSignedOut(page);
 
-    // Enter valid credentials
     await signIn(page, config.username, config.password);
 
-    // Should be navigated to dashboard
-    expect(page.url()).toContain('/dashboard');
-
-    // Should be signed in
+    await expect(page).toHaveURL(/\/dashboard$/);
     await expectSignedIn(page);
   });
 
-  test('Arriving where you were going: authenticated redirect returns to destination', async ({
+  test('Arriving where you were going: sign-in lands on the page the guard stopped', async ({
     page,
   }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
+    // /orders, not /dashboard: the dashboard is where sign-in lands anyway,
+    // so only a different page proves the return address was followed.
+    await page.goto('/orders');
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2Forders$/);
 
-    // Try to access a protected route
-    await page.goto('/dashboard');
-
-    // Should be redirected to login with returnUrl
-    expect(page.url()).toContain('/login');
-
-    // Sign in
     await signIn(page, config.username, config.password);
 
-    // Should be automatically redirected to the original destination (dashboard)
-    expect(page.url()).toContain('/dashboard');
-
-    // Should be signed in
+    await expect(page).toHaveURL(/\/orders$/);
     await expectSignedIn(page);
   });
 
-  test('Sign-in preserves intended destination from returnUrl query param', async ({ page }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
+  test('Sign-in follows a returnUrl given on the login link', async ({ page }) => {
+    await page.goto('/login?returnUrl=%2Forders');
 
-    // Navigate to login with a specific returnUrl (dashboard instead of portfolio)
-    // Note: The app currently redirects to /dashboard after any successful login,
-    // regardless of the returnUrl query parameter. This test verifies the current behavior.
-    await page.goto('/login?returnUrl=%2Fdashboard');
-
-    // Sign in
     await signIn(page, config.username, config.password);
 
-    // Should be redirected to dashboard (the app's default post-login destination)
-    expect(page.url()).toContain('/dashboard');
-
-    // Should be signed in
+    await expect(page).toHaveURL(/\/orders$/);
     await expectSignedIn(page);
   });
 
-  test('Sign-out clears session and session storage', async ({ page }) => {
-    // Navigate to app first to establish origin, then clear session
-    await page.goto('/');
-    await clearSession(page);
-
-    // Sign in first
-    await page.goto('/login');
+  test('Sign-out button clears the session and returns to sign-in', async ({ page }) => {
     await signIn(page, config.username, config.password);
     await expectSignedIn(page);
 
-    // Sign out (by clearing session storage, simulating the sign-out behavior)
-    await clearSession(page);
+    await page.click('[data-testid="sign-out"]');
 
-    // Reload to refresh the app state
-    await page.reload();
-
-    // Should be signed out
+    await expect(page).toHaveURL(/\/login/);
     await expectSignedOut(page);
 
-    // Should be redirected to login on next navigation attempt to protected route
+    // The guard now stops a protected page again.
     await page.goto('/dashboard');
-    expect(page.url()).toContain('/login');
+    await expect(page).toHaveURL(/\/login\?returnUrl=%2Fdashboard$/);
   });
 });

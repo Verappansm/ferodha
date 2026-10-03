@@ -16,10 +16,19 @@
 #>
 
 param(
-    [string]$BundleDir = ".\trading-ui\dist\trading-ui\browser",
+    # Every file of the production build is scanned, not only main-*.js:
+    # a secret in a lazy chunk, the HTML, a licence file or a source map is
+    # published just the same.
+    [string]$BundleDir = "",
     [switch]$FailFast = $false,
     [switch]$Verbose = $false
 )
+
+# Paths are resolved from this script's location, so the scan works from any
+# working directory.
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+if (-not $BundleDir) { $BundleDir = Join-Path $RepoRoot "trading-ui\dist\trading-ui" }
+$SourceRoot = Join-Path $RepoRoot "trading-ui\src"
 
 # Configuration
 $ErrorActionPreference = "Continue"
@@ -121,14 +130,33 @@ function Test-Prerequisites {
     Write-AuditTest "Bundle Directory Exists" "PASS" "$BundleDir"
 
     # Check main bundle file exists
-    $mainBundle = Get-ChildItem $BundleDir -Filter "main-*.js" | Select-Object -First 1
+    $mainBundle = Get-ChildItem $BundleDir -Recurse -Filter "main-*.js" | Select-Object -First 1
     if (-not $mainBundle) {
         Write-AuditTest "Main Bundle File Exists" "FAIL" "No main-*.js file found"
         exit 1
     }
     Write-AuditTest "Main Bundle File Exists" "PASS" $mainBundle.Name
 
-    return $mainBundle
+    $files = @(Get-ChildItem $BundleDir -Recurse -File)
+    Write-AuditTest "Build Files Collected" "PASS" "$($files.Count) files under $BundleDir"
+    return $files
+}
+
+# All build output as one searchable text, each file headed by its name.
+function Get-BundleText {
+    param([System.IO.FileInfo[]]$Files)
+    ($Files | ForEach-Object { "`n=== $($_.Name) ===`n" + (Get-Content $_.FullName -Raw) }) -join ""
+}
+
+# The value of KEY=value in an env file, or "" when absent or a placeholder.
+function Get-EnvValue {
+    param([string]$File, [string]$Key)
+    if (-not (Test-Path $File)) { return "" }
+    $line = Get-Content $File | Where-Object { $_ -match "^\s*$Key\s*=" } | Select-Object -First 1
+    if (-not $line) { return "" }
+    $value = ($line -replace "^\s*$Key\s*=", "").Trim().Trim('"').Trim("'")
+    if ($value.Length -lt 8 -or $value -match "^(replace|change|your-|<)") { return "" }
+    return $value
 }
 
 # ============================================================================
@@ -136,22 +164,26 @@ function Test-Prerequisites {
 # ============================================================================
 
 function Test-SecretPatterns {
-    param([System.IO.FileInfo]$BundleFile)
+    param([System.IO.FileInfo[]]$Files)
 
     Write-AuditHeader "PHASE 2: SECRET PATTERN SCANNING"
 
-    # Read bundle content
-    Write-Host "Reading bundle file..." -ForegroundColor $ColorInfo
-    $bundleContent = Get-Content $BundleFile.FullName -Raw
-    $bundleSize = "{0:N2}" -f ($BundleFile.Length / 1MB)
-    Write-Host "Bundle size: $bundleSize MB" -ForegroundColor $ColorInfo
+    $bundleContent = Get-BundleText $Files
+    $bundleSize = "{0:N2}" -f (($Files | Measure-Object Length -Sum).Sum / 1MB)
+    Write-Host "Build output size: $bundleSize MB" -ForegroundColor $ColorInfo
 
-    # Define patterns to search for
-    $dangerousPatterns = @{
-        "FAUXNANCE_API_KEY" = "API Key Environment Variable"
-        "FAUXNANCE_API_URL" = "API URL Environment Variable"
-        "JWT_SECRET" = "JWT Signing Secret"
-        "singing.*secret" = "Signing Secret Pattern (regex)"
+    # The patterns the Sprint 9 brief names, matched case-insensitively.
+    # Any hit fails the scan.
+    $dangerousPatterns = [ordered]@{
+        'x-api-key'                                       = "Market-data key header name"
+        'api_key'                                         = "API key name (api_key)"
+        'api-key'                                         = "API key name (api-key)"
+        'fauxnance'                                       = "Fauxnance name or host"
+        'execute-api\.[a-z0-9-]+\.amazonaws\.com'         = "Market-data host (execute-api.<region>.amazonaws.com)"
+        'jwt_secret'                                      = "JWT signing secret name"
+        'signing.?secret'                                 = "Signing secret name"
+        'eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}' = "A three-part JWT written into source"
+        '(secret|token|password|api.?key)["'']?\s*[:=]\s*["''][A-Za-z0-9+/=_.-]{24,}["'']' = "A secret assigned a long literal"
     }
 
     Write-Host ""
@@ -159,28 +191,39 @@ function Test-SecretPatterns {
 
     $allPass = $true
     foreach ($pattern in $dangerousPatterns.GetEnumerator()) {
-        $patternName = $pattern.Key
-        $patternDesc = $pattern.Value
-
-        try {
-            if ($patternName -like "*.*") {
-                # Regex pattern
-                $found = $bundleContent -match $patternName
-            } else {
-                # Literal string
-                $found = $bundleContent -like "*$patternName*"
-            }
-
-            if ($found) {
-                Write-AuditTest "Pattern Not Found: $patternDesc" "FAIL" "CRITICAL: $patternName found in bundle!"
-                $allPass = $false
-                if ($FailFast) { exit 1 }
-            } else {
-                Write-AuditTest "Pattern Not Found: $patternDesc" "PASS"
-            }
+        $hits = [regex]::Matches($bundleContent, $pattern.Key, "IgnoreCase")
+        if ($hits.Count -gt 0) {
+            Write-AuditTest "Pattern Not Found: $($pattern.Value)" "FAIL" "CRITICAL: $($hits.Count) match(es) in the build"
+            $allPass = $false
+            if ($FailFast) { exit 1 }
+        } else {
+            Write-AuditTest "Pattern Not Found: $($pattern.Value)" "PASS"
         }
-        catch {
-            Write-AuditTest "Pattern Test: $patternDesc" "WARN" "Error testing pattern"
+    }
+
+    # The literal values of the team's own key and signing secret, from the
+    # local env files. Catches a value pasted in under a name none of the
+    # patterns above would match. The values are never printed.
+    Write-Host ""
+    Write-Host "Scanning for the literal values of our own secrets..." -ForegroundColor $ColorInfo
+
+    $envFiles = @(
+        (Join-Path $RepoRoot ".env"),
+        (Join-Path $RepoRoot "windows\.env.windows")
+    )
+    foreach ($key in @("FAUXNANCE_API_KEY", "JWT_SECRET")) {
+        $values = @($envFiles | ForEach-Object { Get-EnvValue $_ $key } | Where-Object { $_ } | Select-Object -Unique)
+        if ($values.Count -eq 0) {
+            Write-AuditTest "Literal Value Not Found: $key" "WARN" "No value set in .env or windows\.env.windows, so this check could not run"
+            continue
+        }
+        $found = $values | Where-Object { $bundleContent.IndexOf($_, [StringComparison]::OrdinalIgnoreCase) -ge 0 }
+        if ($found) {
+            Write-AuditTest "Literal Value Not Found: $key" "FAIL" "CRITICAL: the value of $key is in the build. Revoke it; do not just delete the line."
+            $allPass = $false
+            if ($FailFast) { exit 1 }
+        } else {
+            Write-AuditTest "Literal Value Not Found: $key" "PASS"
         }
     }
 
@@ -192,20 +235,26 @@ function Test-SecretPatterns {
 # ============================================================================
 
 function Test-APIEndpoints {
-    param([System.IO.FileInfo]$BundleFile)
+    param([System.IO.FileInfo[]]$Files)
 
     Write-AuditHeader "PHASE 3: API ENDPOINT VERIFICATION"
 
-    $bundleContent = Get-Content $BundleFile.FullName -Raw
+    $bundleContent = Get-BundleText $Files
 
     Write-Host "Checking authorized API endpoints..." -ForegroundColor $ColorInfo
 
     $allPass = $true
 
-    # Check for authorized endpoints (should exist)
-    $authorizedEndpoints = @{
-        "localhost:3000" = "Auth Service"
-        "localhost:8080" = "Trade API"
+    # The platform's own APIs, read from environment.ts rather than hard-coded,
+    # so the check follows whichever ports the build was made for.
+    $authorizedEndpoints = @{}
+    $envTs = Join-Path $SourceRoot "environments\environment.ts"
+    if (Test-Path $envTs) {
+        $envTsContent = Get-Content $envTs -Raw
+        foreach ($name in @("authApiUrl", "tradeApiUrl")) {
+            $m = [regex]::Match($envTsContent, $name + '\s*:\s*[''"]https?://([^''"/]+)')
+            if ($m.Success) { $authorizedEndpoints[$m.Groups[1].Value] = $name }
+        }
     }
 
     foreach ($endpoint in $authorizedEndpoints.GetEnumerator()) {
@@ -254,7 +303,7 @@ function Test-APIEndpoints {
 # ============================================================================
 
 function Test-SourceCode {
-    param([string]$SourceDir = ".\src")
+    param([string]$SourceDir = $SourceRoot)
 
     Write-AuditHeader "PHASE 4: SOURCE CODE VERIFICATION"
 
@@ -268,8 +317,8 @@ function Test-SourceCode {
     # Check for Fauxnance references (should only be in comments)
     try {
         $fauxnanceRefs = Get-ChildItem -Path $SourceDir -Recurse -Include "*.ts" |
-            Select-String -Pattern "fauxnance|FAUXNANCE" |
-            Where-Object { $_ -notmatch "//.*fauxnance" } # Exclude comments
+            Select-String -Pattern "fauxnance" |
+            Where-Object { $_.Line -notmatch '^\s*(//|/\*|\*)' } # Exclude comment lines
 
         if ($fauxnanceRefs) {
             Write-AuditTest "No Direct Fauxnance Calls" "FAIL" "Found non-comment references"
@@ -289,7 +338,7 @@ function Test-SourceCode {
     try {
         $secretRefs = Get-ChildItem -Path $SourceDir -Recurse -Include "*.ts" |
             Select-String -Pattern "api_key|apiKey|secret|JWT" |
-            Where-Object { $_ -notmatch "^.*//.*" } # Exclude comments
+            Where-Object { $_.Line -notmatch '^\s*(//|/\*|\*)' } # Exclude comment lines
 
         if ($secretRefs) {
             Write-AuditTest "No Hardcoded Secrets" "WARN" "Found potential secrets (review manually)"
@@ -335,11 +384,12 @@ function Test-BuildConfiguration {
     }
 
     # Check environment configuration
-    $envFile = ".\src\environments\environment.ts"
+    $envFile = Join-Path $SourceRoot "environments\environment.ts"
     if (Test-Path $envFile) {
-        $envContent = Get-Content $envFile -Raw
+        # Code only: block and line comments removed before matching.
+        $envContent = (Get-Content $envFile -Raw) -replace '(?s)/\*.*?\*/', '' -replace '//[^\n]*', ''
 
-        if ($envContent -match "(api_key|apiKey|secret|password)" -and $envContent -notmatch "comment") {
+        if ($envContent -match "(api_key|apiKey|secret|password)") {
             Write-AuditTest "No Secrets in Environment" "FAIL" "Potential secrets in environment.ts"
         } else {
             Write-AuditTest "No Secrets in Environment" "PASS"
@@ -391,9 +441,9 @@ function Main {
     Write-Host "Date: $(Get-Date -Format `"yyyy-MM-dd HH:mm:ss`")" -ForegroundColor $ColorInfo
 
     # Run all tests
-    $mainBundle = Test-Prerequisites
-    $phase2Pass = Test-SecretPatterns $mainBundle
-    $phase3Pass = Test-APIEndpoints $mainBundle
+    $buildFiles = Test-Prerequisites
+    $phase2Pass = Test-SecretPatterns $buildFiles
+    $phase3Pass = Test-APIEndpoints $buildFiles
     Test-SourceCode
     Test-BuildConfiguration
     $overallPass = Test-ComplianceSummary

@@ -2,21 +2,33 @@ import { Component, computed, input } from '@angular/core';
 import { OrderStatus } from '../../api/trade-api';
 
 /**
+ * Every status the Trade REST API can return. The contract's four, plus
+ * PARTIALLY_FILLED, which trade_api returns under the `market-sim` profile
+ * (story_docs/contract-breach.md, B13) and the generated client does not know.
+ */
+export type BlotterStatus = OrderStatus | 'PARTIALLY_FILLED';
+
+/** Statuses at which an order is still working, not finished. */
+export const WORKING_STATUSES: ReadonlySet<string> = new Set<BlotterStatus>([
+  'NEW',
+  'PARTIALLY_FILLED',
+]);
+
+/**
  * Every badge carries a word and a symbol as well as a colour, because
  * roughly one man in twelve cannot separate red from green.
  */
-const BADGES: Record<OrderStatus, { label: string; symbol: string }> = {
-  NEW: { label: 'IN PROCESS', symbol: '⟳' },
-  FILLED: { label: 'FILLED', symbol: '✓' },
-  REJECTED: { label: 'REJECTED', symbol: '✕' },
-  CANCELLED: { label: 'CANCELLED', symbol: '–' },
+const BADGES: Record<BlotterStatus, { label: string; symbol: string; css: string }> = {
+  NEW: { label: 'NEW (IN PROCESS)', symbol: '⟳', css: 'new' },
+  PARTIALLY_FILLED: { label: 'PARTIALLY FILLED (IN PROCESS)', symbol: '◐', css: 'new' },
+  FILLED: { label: 'FILLED', symbol: '✓', css: 'filled' },
+  REJECTED: { label: 'REJECTED', symbol: '✕', css: 'rejected' },
+  CANCELLED: { label: 'CANCELLED', symbol: '–', css: 'cancelled' },
 };
 
 @Component({
   selector: 'app-order-status-badge',
-  template: `<span
-    [class]="'badge badge-' + status().toLowerCase()"
-    data-testid="order-status-badge"
+  template: `<span [class]="'badge badge-' + badge().css" data-testid="order-status-badge"
     ><span aria-hidden="true">{{ badge().symbol }}</span> {{ badge().label }}</span
   >`,
   styles: `
@@ -44,13 +56,22 @@ const BADGES: Record<OrderStatus, { label: string; symbol: string }> = {
       color: #b91c1c;
       background: #fee2e2;
     }
-    .badge-cancelled {
+    .badge-cancelled,
+    .badge-unknown {
       color: #4b5563;
       background: #f3f4f6;
     }
   `,
 })
 export class OrderStatusBadgeComponent {
-  readonly status = input.required<OrderStatus>();
-  readonly badge = computed(() => BADGES[this.status()]);
+  readonly status = input.required<string>();
+  /** A status nobody planned for still renders its own word, never a crash. */
+  readonly badge = computed(
+    () =>
+      BADGES[this.status() as BlotterStatus] ?? {
+        label: this.status(),
+        symbol: '?',
+        css: 'unknown',
+      },
+  );
 }

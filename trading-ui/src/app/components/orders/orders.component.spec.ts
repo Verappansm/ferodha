@@ -135,7 +135,7 @@ describe('OrdersComponent', () => {
     await open();
 
     const words = allByTestId('order-status-badge').map((b) => b.textContent);
-    expect(words[0]).toContain('IN PROCESS');
+    expect(words[0]).toContain('NEW (IN PROCESS)');
     expect(words[1]).toContain('FILLED');
     expect(words[2]).toContain('REJECTED');
     expect(words[3]).toContain('CANCELLED');
@@ -146,8 +146,38 @@ describe('OrdersComponent', () => {
 
     await open();
 
-    expect(allByTestId('order-status-badge')[0].textContent).toContain('IN PROCESS');
+    expect(allByTestId('order-status-badge')[0].textContent).toContain('NEW (IN PROCESS)');
     expect(byTestId('orders-polling')).toBeTruthy();
+  });
+
+  it('a partially filled order renders as still working instead of crashing', async () => {
+    // trade_api returns PARTIALLY_FILLED under market-sim (contract-breach.md, B13);
+    // the generated client's OrderStatus does not include it.
+    const partial = order('ORD-1', OrderStatus.NEW, '2026-09-30T09:00:00Z', {
+      status: 'PARTIALLY_FILLED' as OrderStatus,
+    });
+    orderHistory.mockReturnValue(of([partial]));
+
+    await open();
+
+    expect(allByTestId('order-status-badge')[0].textContent).toContain(
+      'PARTIALLY FILLED (IN PROCESS)',
+    );
+    expect(byTestId('orders-polling')).toBeTruthy();
+  });
+
+  it('a status nobody planned for renders its own word', async () => {
+    orderHistory.mockReturnValue(
+      of([
+        order('ORD-1', OrderStatus.FILLED, '2026-09-30T09:00:00Z', {
+          status: 'EXPIRED' as OrderStatus,
+        }),
+      ]),
+    );
+
+    await open();
+
+    expect(allByTestId('order-status-badge')[0].textContent).toContain('EXPIRED');
   });
 
   it('the re-read stops when nothing is at NEW', async () => {

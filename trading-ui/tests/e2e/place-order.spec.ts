@@ -1,13 +1,8 @@
 import { test, expect } from '@playwright/test';
-import {
-  getTestConfig,
-  signIn,
-  expectSignedIn,
-  clearSession,
-} from './fixtures';
+import { getTestConfig, signIn, expectSignedIn, clearSession, sessionAccountId } from './fixtures';
 
 test.describe('Place Order Journey', () => {
-  let config = getTestConfig();
+  const config = getTestConfig();
 
   test.beforeEach(async ({ page }) => {
     // Navigate to app first, then clear session to ensure proper origin
@@ -21,23 +16,19 @@ test.describe('Place Order Journey', () => {
   test('Read-only account: account field displays signed-in user account and is read-only', async ({
     page,
   }) => {
-    // Navigate to ordering page
     await page.goto('/order');
+    await expect(page).toHaveURL(/\/order$/);
 
-    // Verify page loaded
-    expect(page.url()).toContain('/order');
-
-    // Get the account field
+    // The field shows exactly the account the signed-in session holds.
     const accountInput = page.locator('input[data-testid="order-account"]');
-    
-    // Account should have a value (from the token)
-    const accountValue = await accountInput.inputValue();
-    expect(accountValue).toBeTruthy();
-    expect(accountValue).toMatch(/^[0-9a-f-]+$/i); // UUID format
+    await expect(accountInput).toHaveValue(await sessionAccountId(page));
 
-    // Account field should be readonly
-    const isReadonly = await accountInput.evaluate((el: HTMLInputElement) => el.readOnly);
-    expect(isReadonly).toBe(true);
+    // ...and the customer cannot change it.
+    await expect(accountInput).toHaveJSProperty('readOnly', true);
+    // Real key presses, as a customer would type; a read-only field ignores them.
+    await accountInput.click();
+    await page.keyboard.type('999');
+    await expect(accountInput).toHaveValue(await sessionAccountId(page));
   });
 
   test('Rejection before submission: validation errors prevent order placement', async ({
@@ -138,10 +129,10 @@ test.describe('Place Order Journey', () => {
 
     const messageText = await successMessage.textContent();
     expect(messageText).toBeTruthy();
-    
+
     // Verify status is one of the expected values
     expect(messageText).toMatch(/status (NEW|FILLED|REJECTED)/i);
-    
+
     // Extract and verify the status
     const statusMatch = messageText!.match(/status (\w+)/i);
     const status = statusMatch?.[1];
@@ -165,18 +156,18 @@ test.describe('Place Order Journey', () => {
     // Wait for response from server
     await page.waitForTimeout(1000);
     await page.waitForLoadState('networkidle');
-    
+
     // Verify that either success, error, or result is shown
     // (order was submitted and backend responded)
     const successMessage = page.locator('[data-testid="order-success"]');
     const errorMessage = page.locator('[data-testid="order-error"]');
     const orderResult = page.locator('[data-testid="order-result"]');
-    
+
     // At least one of these should be visible after submission
     const successVisible = await successMessage.isVisible().catch(() => false);
     const errorVisible = await errorMessage.isVisible().catch(() => false);
     const resultVisible = await orderResult.isVisible().catch(() => false);
-    
+
     expect(successVisible || errorVisible || resultVisible).toBe(true);
   });
 
@@ -185,7 +176,7 @@ test.describe('Place Order Journey', () => {
     context,
   }) => {
     // This test verifies isolation by checking that clearing session in beforeEach works
-    
+
     // Sign in (done in beforeEach)
     await expectSignedIn(page);
 
@@ -206,12 +197,12 @@ test.describe('Place Order Journey', () => {
     const successMessage = page.locator('[data-testid="order-success"]');
     const errorMessage = page.locator('[data-testid="order-error"]');
     const orderResult = page.locator('[data-testid="order-result"]');
-    
-    const anyVisible = 
+
+    const anyVisible =
       (await successMessage.isVisible().catch(() => false)) ||
       (await errorMessage.isVisible().catch(() => false)) ||
       (await orderResult.isVisible().catch(() => false));
-    
+
     expect(anyVisible).toBe(true);
 
     // Verify that clearing session actually clears it

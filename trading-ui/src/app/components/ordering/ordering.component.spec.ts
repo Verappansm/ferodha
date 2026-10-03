@@ -274,6 +274,119 @@ describe('OrderingComponent', () => {
     expect(byTestId<HTMLInputElement>('order-price')?.value).toBe('');
   });
 
+  function fillValidOrder(): void {
+    input('order-symbol', 'AAPL');
+    select('order-side', OrderSide.BUY);
+    input('order-quantity', '10');
+    input('order-price', '150.00');
+  }
+
+  const networkFailure = () => throwError(() => new HttpErrorResponse({ status: 0 }));
+
+  it('a retry after a network failure reuses the same idempotency key', async () => {
+    placeOrder.mockReturnValueOnce(networkFailure()).mockReturnValueOnce(
+      of({
+        orderId: 'ORD-1',
+        status: OrderStatus.NEW,
+        message: 'Order accepted',
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      }),
+    );
+    fillValidOrder();
+
+    await submit();
+    expect(byTestId('order-error')?.textContent).toContain('could not confirm');
+    await submit();
+
+    expect(placeOrder).toHaveBeenCalledTimes(2);
+    const firstKey = placeOrder.mock.calls[0][0].idempotencyKey;
+    expect(placeOrder.mock.calls[1][0].idempotencyKey).toBe(firstKey);
+  });
+
+  it('a retry that meets ORD-409 says the order was already placed', async () => {
+    placeOrder.mockReturnValueOnce(networkFailure()).mockReturnValueOnce(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { errorCode: 'ORD-409', message: 'Duplicate' },
+          }),
+      ),
+    );
+    fillValidOrder();
+
+    await submit();
+    await submit();
+
+    expect(byTestId('order-error')?.textContent).toContain('already placed');
+  });
+
+  it('editing the ticket after a network failure gives the order a new key', async () => {
+    placeOrder.mockReturnValueOnce(networkFailure()).mockReturnValueOnce(networkFailure());
+    fillValidOrder();
+
+    await submit();
+    input('order-quantity', '11');
+    await submit();
+
+    expect(placeOrder.mock.calls[1][0].idempotencyKey).not.toBe(
+      placeOrder.mock.calls[0][0].idempotencyKey,
+    );
+  });
+
+  it('every new order gets a fresh random UUID as its key', async () => {
+    fillValidOrder();
+    await submit();
+    fillValidOrder();
+    await submit();
+
+    const [first, second] = placeOrder.mock.calls.map((call) => call[0].idempotencyKey);
+    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(second).not.toBe(first);
+  });
+
+  it('a symbol longer than the contract allows is blocked before submission', async () => {
+    fillValidOrder();
+    input('order-symbol', 'A'.repeat(21));
+
+    await submit();
+
+    expect(placeOrder).not.toHaveBeenCalled();
+    expect(byTestId('order-symbol-error')?.textContent).toContain('at most 20');
+  });
+
+  it('a symbol in the wrong shape is blocked before submission', async () => {
+    fillValidOrder();
+    input('order-symbol', 'AA PL!');
+
+    await submit();
+
+    expect(placeOrder).not.toHaveBeenCalled();
+    expect(byTestId('order-symbol-error')?.textContent).toContain('such as AAPL');
+  });
+
+  it('accepts the prefixed and suffixed symbol forms and sends them upper-case', async () => {
+    fillValidOrder();
+    input('order-symbol', 'fx:eurusd');
+
+    await submit();
+
+    expect(placeOrder.mock.calls[0][0].symbol).toBe('FX:EURUSD');
+  });
+
+  it('a tiny price written in exponent form is blocked before submission', async () => {
+    fillValidOrder();
+    input('order-price', '0.0000001');
+
+    await submit();
+
+    expect(placeOrder).not.toHaveBeenCalled();
+    expect(byTestId('order-price-error')?.textContent).toContain('2 decimal places');
+  });
+
   it('shows the order message from the API response', async () => {
     const orderResponse: OrderResponse = {
       orderId: 'ORD-12345',

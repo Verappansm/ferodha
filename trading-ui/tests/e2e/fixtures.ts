@@ -12,9 +12,7 @@ export function getTestConfig() {
   const tradeApiUrl = process.env.TRADE_API_URL || 'http://localhost:8080';
 
   if (!username || !password) {
-    throw new Error(
-      'TEST_USERNAME and TEST_PASSWORD environment variables must be set'
-    );
+    throw new Error('TEST_USERNAME and TEST_PASSWORD environment variables must be set');
   }
 
   return { username, password, uiBaseUrl, authApiUrl, tradeApiUrl };
@@ -22,23 +20,37 @@ export function getTestConfig() {
 
 /**
  * Helper to perform a sign-in from the login page.
+ * Stays on the current page when it is already the login page, so a
+ * `returnUrl` the guard put there survives; otherwise opens /login.
+ * Returns once the app has either left /login or shown its error.
  * @param page The Playwright Page object
  * @param username Email address
  * @param password Password
  */
 export async function signIn(page: Page, username: string, password: string) {
-  // Navigate to login page
-  await page.goto('/login');
-  
+  if (new URL(page.url()).pathname !== '/login') {
+    await page.goto('/login');
+  }
+
   // Fill in credentials using data-testid selectors to match the login component
   await page.fill('[data-testid="login-username"]', username);
   await page.fill('[data-testid="login-password"]', password);
-  
+
   // Submit the form
   await page.click('[data-testid="login-submit"]');
-  
-  // Wait for navigation to complete (either to dashboard or error)
-  await page.waitForLoadState('networkidle');
+
+  // Wait for the outcome: navigation away from /login, or the error message.
+  await Promise.race([
+    page.waitForURL((url) => url.pathname !== '/login'),
+    page.locator('[data-testid="login-error"]').waitFor(),
+  ]);
+}
+
+/** The account id the signed-in session holds, read from sessionStorage. */
+export async function sessionAccountId(page: Page): Promise<string> {
+  const raw = await page.evaluate(() => sessionStorage.getItem('trading-ui.session'));
+  expect(raw).toBeTruthy();
+  return String(JSON.parse(raw!).user.accountId);
 }
 
 /**
@@ -48,14 +60,14 @@ export async function signIn(page: Page, username: string, password: string) {
 export async function expectSignedIn(page: Page) {
   // Check that we're on a protected route (not login page)
   expect(page.url()).not.toContain('/login');
-  
+
   // Verify sessionStorage has a session
   const sessionData = await page.evaluate(() => {
     return sessionStorage.getItem('trading-ui.session');
   });
-  
+
   expect(sessionData).toBeTruthy();
-  
+
   // Verify it's valid JSON with accessToken
   const session = JSON.parse(sessionData!);
   expect(session.accessToken).toBeTruthy();
@@ -70,7 +82,7 @@ export async function expectSignedOut(page: Page) {
   const sessionData = await page.evaluate(() => {
     return sessionStorage.getItem('trading-ui.session');
   });
-  
+
   expect(sessionData).toBeNull();
 }
 
