@@ -1,7 +1,7 @@
 # `windows` profile: services on Windows, Kafka on Linux
 
 The root `docker-compose.yml` runs everything in Docker. This profile splits it across two machines.
-It runs the **main (default) profile only**: trades-generator and market-sim are not part of this setup.
+pricing-generator is the live price feed under both profiles: it publishes a tick for every tradable instrument to `market-data` every 5 seconds and records the history behind the instrument charts. The profiles differ only in how trade-executor settles an order. By default (the **main profile**) each order fills or is rejected at one real Fauxnance quote. Add `-MarketSim` to `start-windows.ps1` for the simulated market (see [Market-sim](#market-sim)).
 
 | Machine | Runs | Port |
 |---|---|---|
@@ -11,7 +11,10 @@ It runs the **main (default) profile only**: trades-generator and market-sim are
 | **Windows** (native) | trade-api | 8080 |
 | **Windows** (native) | trade-executor | 8082 |
 | **Windows** (native) | auth-service | 3000 |
+| **Windows** (native) | trades-generator | 8083 |
+| **Windows** (native) | pricing-generator | 8084 |
 | **Windows** (native) | trading-ui (Angular, `ng serve`) | 4200 |
+| **Windows** (native) | admin console (Angular, `ng serve admin`) | 4300 |
 
 ```
 Windows                                           Linux (Docker)
@@ -133,7 +136,7 @@ POSTGRES_PASSWORD=<your postgres password>
 PSQL_BIN_DIR=C:\Program Files\PostgreSQL\18\bin
 ```
 - `POSTGRES_DB=tradedb` can stay as it is. The start script creates that database.
-- `FAUXNANCE_API_URL` and `FAUXNANCE_API_KEY` are optional. Left blank, every order still goes through Kafka but ends as `REJECTED / PRICE_UNAVAILABLE`. Fill them in to get real fills.
+- `FAUXNANCE_API_URL` and `FAUXNANCE_API_KEY` are optional. Left blank, every order still goes through Kafka but ends as `REJECTED / PRICE_UNAVAILABLE`. Fill them in to get real fills, and real prices on the portfolio page.
 
 **B5. Start all the services.** From the repo folder in PowerShell:
 ```powershell
@@ -143,14 +146,21 @@ The first run takes a few minutes because it builds everything. You should see:
 ```
 == Preflight ==              tools found, Kafka reachable, Postgres login OK
 == Database (tradedb) ==     database created + base schema applied (first run only)
-== Build ==                  trade-api + trade-executor jars + auth-service
+== Build ==                  trade-api, trade-executor, pricing-generator, trades-generator jars + auth-service
 == Start (SPRING_PROFILES_ACTIVE=windows) ==
-PASS: trade-api is up / trade-executor is up / auth-service is up
+PASS: trade-api / pricing-generator / trade-executor / auth-service / trades-generator are up
+PASS: trading-ui is up / admin-ui is up
 == Kafka connectivity (trade-executor consumer group) ==
 PASS: trade-executor joined its consumer group on the Linux broker
 == ALL SERVICES RUNNING ==
 ```
 If Windows Firewall asks whether to allow Java or Node, click **Allow**. The services run hidden in the background, and their logs are in `windows\.run\logs\`.
+
+Then open:
+- **Trading UI:** http://localhost:4200, signed in as `john.carter@example.com` / `seed-password-change-me`
+- **Admin console:** http://localhost:4300, signed in as `michael.brown@example.com` / `seed-password-change-me`
+
+`-SkipUi` starts neither UI.
 
 **B6. Test the whole flow.** Right-click inside the repo folder, choose **Open Git Bash here**, and run:
 ```bash
@@ -192,11 +202,22 @@ bash windows/kafka-linux.sh down                                         # Linux
 
 Drop `-SkipBuild` after a `git pull` so the new code is built.
 
+## Market-sim
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -MarketSim
+```
+This sets `SPRING_PROFILES_ACTIVE=windows,market-sim` for every Spring service, the same switch Docker uses. Only settlement changes:
+- **trade-executor** takes its prices from pricing-generator instead of one Fauxnance quote per order, matches orders on a resting order book with partial fills, and expires stale resting orders.
+- **trades-generator** places synthetic counter-orders for the market-maker account, so customer orders have something to match against. It does nothing without `-MarketSim`.
+
+pricing-generator behaves the same either way. trade-executor's own market-data poller stays in the code but is off (`EXECUTOR_MARKET_DATA_POLLER_ENABLED=false`), so only one process publishes prices.
+
 ---
 
 ## What the pieces are
 
-- **`application-windows.yml`**: the Spring profile in `trade_api` and `trade_executor`. `trades_generator` has one too, but this setup doesn't start it.
+- **`application-windows.yml`**: the Spring profile in `trade_api` and `trade_executor`. The two generators need no profile of their own: they read the same environment variables.
   - Requires `KAFKA_BOOTSTRAP_SERVERS`, with no localhost fallback.
   - Sets the native ports.
   - Shortens the producer timeout to 10s for cross-machine sends.
@@ -207,7 +228,7 @@ Drop `-SkipBuild` after a `git pull` so the new code is built.
   - Checks the tools, Kafka reachability and the PostgreSQL login.
   - Creates the database. On an empty database it applies only `001_initial_schema.sql` and `001_seed_data.sql`, the same two files Docker's postgres applies.
   - Builds everything.
-  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then trade-executor and auth-service.
+  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then pricing-generator, trade-executor and auth-service, then trades-generator (it reads prices from pricing-generator), then both UIs.
   - Waits for each health check, and for trade-executor to be assigned partitions of `orders`.
 - **`kafka-linux.sh`** plus **`docker-compose.kafka.yml`**: Kafka and Kafka UI only. The broker advertises the Linux IP on 9092 so Windows clients can reconnect to it.
 
@@ -224,3 +245,4 @@ Drop `-SkipBuild` after a `git pull` so the new code is built.
 | Stage 3: `no token for john.carter@example.com` | The database was seeded before the seed users had a real password. Run `UPDATE users SET password_hash = '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2' WHERE email LIKE '%@example.com';` in psql (password `seed-password-change-me`), or drop `tradedb` and run B5 again. |
 | `Port 8080 is already in use` | A previous run is still up. Run `stop-windows.ps1`. |
 | A service `exited during startup` | The script prints its log. Full logs are in `windows\.run\logs\<service>.log` and `.err.log`. |
+| `still waiting for trading-ui` until it fails, but http://localhost:4200 opens | Old copy of the script: the check asked the dev server for JSON, which it answers with 404. `git pull`. |

@@ -28,12 +28,14 @@ below is a decision the team has taken and will defend at review.
 | B12 | Container count | Top-level README | Five containers: Postgres, Kafka, Trade REST API, Trade Executor, auth service | Also `kafka-ui`, `pricing-generator` and `trades-generator` |
 | B13 | Order status | `contracts/trade-api.yaml` OrderStatus | `NEW, FILLED, REJECTED, CANCELLED`; "There is no partial-fill state" | Adds `PARTIALLY_FILLED`, plus `Orders.source` and `Orders.filled_quantity` (LEAP-003) |
 | B14 | Fill quantity | `contracts/kafka-topics.md` ORDER_FILLED | `quantity` equals the ordered quantity, "since partial fills are out of scope" | Under `market-sim`, a fill can carry less than the ordered quantity (LEAP-003) |
-| B15 | Fauxnance key holder | Architecture HLD | The Trade Executor is the "only holder of FAUXNANCE_API_KEY" | Under `market-sim`, `pricing_generator` holds it and the executor does not (LEAP-002) |
+| B15 | Fauxnance key holder | Architecture HLD | The Trade Executor is the "only holder of FAUXNANCE_API_KEY" | `pricing_generator` holds it under every profile as the platform's one live price feed (`market-data` ticks, chart history). The executor also holds it under the default profile, to price each fill; its market-data poller is off. Under `market-sim` the executor has no key (LEAP-002, LEAP-016) |
 | B16 | Order-flow scope | `trade-api.yaml` / Sprint 7 README | One order, one quote: fill-or-reject | Under `market-sim`, orders match against a resting book, rest if unmatched, and expire by TTL (LEAP-003/004) |
 | B17 | Where the claims live | Sprint 4 README | `claims.md` in the analytics folder | `design/analytics-claims.md`; `analytics_etl/README.md` points to it |
 | B18 | Admin tokens | `auth-api.yaml` JWT claims contract | Every token carries an integer `accountId`; `roles` is `CUSTOMER` or `ADMIN` | `POST /auth/admin/login` issues an admin console token: `roles: [ADMIN]`, `aud: admin-console`, no `accountId`, no refresh token. Customer `/auth/login` refuses admin users; trade_api accepts each kind only on its own routes |
 | B19 | Admin routes and error codes | `trade-api.yaml`, `auth-api.yaml` | No admin routes; catalogues as listed | `/api/v1/admin/**` in trade_api and `/admin/**` in the auth service (`design/admin-trade-api.yaml`, `design/admin-auth-api.yaml`), adding `AUTH-403`, `ADM-404` and `ADM-409` |
-| B20 | Portfolio pricing and FX | `contracts/portfolio-api.yaml` | Last prices from Fauxnance `GET /quotes`, batched; totals converted with live `FX:` rates | Last prices from the `market-data` topic (mid of bid and ask), falling back to the newest stored `Market_Data` row; totals converted at the executor's fixed 90 INR = 1 USD until LEAP-006 |
+| B20 | Portfolio pricing and FX | `contracts/portfolio-api.yaml` | Last prices from Fauxnance `GET /quotes`, batched; totals converted with live `FX:` rates | Last prices from the `market-data` topic (mid of bid and ask), falling back to the newest stored minute bar or daily candle (`Market_Data` was replaced by `market_candles` and `market_bars`, B21); totals converted at the executor's fixed 90 INR = 1 USD until LEAP-006 |
+| B21 | Market data routes and tables | `contracts/trade-api.yaml`; LEAP-016 story | No instrument routes; chart history "from `Market_Data`" | `GET /api/v1/instruments`, `/instruments/{symbol}`, `/{symbol}/quote` and `/{symbol}/history` added to `design/trade-api.yaml`. `Market_Data` is dropped (Liquibase 010) for `market_candles` (Fauxnance daily candles) and `market_bars` (1-minute bars from `pricing_generator`'s ticks, Liquibase 011); no news panel |
+| B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
 
 ## Why
 
@@ -146,8 +148,8 @@ not allow the action. Both services write their decisions to the one
 
 **B20 (portfolio pricing).** trade_api holds no Fauxnance key (B15), and a
 second key holder would split the 2000-a-day quota. Every quote the platform
-fetches is already published on `market-data`, by the executor's poller or by
-`pricing_generator` under `market-sim`, so the portfolio module reads that
+fetches is already published on `market-data` by `pricing_generator`, under
+every profile, so the portfolio module reads that
 topic into memory and spends no quota at all. The staleness rules are kept as
 written: a quote older than `PORTFOLIO_STALE_AFTER_SECONDS` (default 300) is
 flagged `stale`, a holding with no quote has null price fields and marks the
@@ -155,3 +157,19 @@ summary `partial`, and `MKT-503` is returned only when nothing can be priced.
 Totals use the same fixed USD/INR rate the executor settles at, so a holding
 is valued at the rate it was charged at; any other currency pair is left out
 of the totals and marks the summary partial.
+
+**B21 (market data).** The instrument page needs a price, statistics and a
+chart without the browser ever calling Fauxnance, so trade_api serves them from
+what the platform already holds. Fauxnance candles are end-of-day only, so the
+1D chart comes from `pricing_generator`'s own ticks, folded into one-minute
+bars and kept for 26 hours; the longer ranges come from the daily candles it
+stores once a day. A statistic the stored history cannot back (no candle before
+today, no bars yet) is null, never invented. Fauxnance has no news endpoint, so
+the page ships without a news panel.
+
+**B22 (profile).** The contract's `GET /auth/me` returns the token's identity
+only. The profile page (LEAP-020) needs the name, phone, role, account and
+joining date, and lets the user change the name and phone, so the auth
+service, which owns `Users`, serves `/profile`. There is no user id in either
+route: both read the user from the verified token, so nobody can read or change
+another user's profile. The email is the username and stays read-only.
