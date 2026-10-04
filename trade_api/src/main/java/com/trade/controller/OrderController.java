@@ -1,5 +1,6 @@
 package com.trade.controller;
 
+import com.trade.dto.OrderHistoryEntryDto;
 import com.trade.dto.OrderResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.event.OrderPlacedPayload;
@@ -12,14 +13,17 @@ import com.trade.service.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 //business decision + write is delegated to logic and service
@@ -66,6 +70,17 @@ public class OrderController {
                                          @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
         return orderService.cancelOrder(parseOrderId(id), principal.accountId());
+    }
+
+    @GetMapping
+    public ResponseEntity<List<OrderHistoryEntryDto>> getRecentOrders(
+            @RequestParam long accountId,
+            @RequestParam(defaultValue = "5") int limit,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws DomainException {
+        orderService.validateAccountAccess(accountId, principal.accountId());
+        List<OrderHistoryEntryDto> orders = orderService.getRecentOrders(accountId, limit);
+        return ResponseEntity.ok(orders);
     }
 
     private UUID parseOrderId(String id) throws InvalidOrderException {

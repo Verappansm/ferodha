@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './components/login/login.component';
 import { RegistrationComponent } from './components/registration/registration.component';
-import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { PortfolioComponent } from './components/portfolio/portfolio.component';
 import { InstrumentsComponent } from './components/instruments/instruments.component';
 import { InstrumentDetailsComponent } from './components/instrument-details/instrument-details.component';

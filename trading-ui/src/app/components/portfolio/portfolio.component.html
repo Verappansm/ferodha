@@ -1,1 +1,227 @@
-<div class="portfolio-container"></div>
+﻿<div class="portfolio-container" *ngIf="accountId() as acctId">
+  <div class="portfolio-header">
+    <h1>Portfolio</h1>
+    <div class="header-actions">
+      <button class="btn btn-refresh" (click)="loadAll()">🔄 Refresh</button>
+    </div>
+  </div>
+
+  <!-- Quick Summary Cards -->
+  <div class="summary-cards" *ngIf="!summaryLoading() && summary() as s">
+    <div class="card">
+      <div class="card-label">Total Value</div>
+      <div class="card-value">{{ s.totalValue | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cash Balance</div>
+      <div class="card-value">{{ s.cashBalance | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Market Value</div>
+      <div class="card-value">{{ s.marketValue | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label" [class]="getPnlClass((s.realisedPnl || 0) + (s.unrealisedPnl || 0))">
+        Total P&L
+      </div>
+      <div class="card-value" [class]="getPnlClass((s.realisedPnl || 0) + (s.unrealisedPnl || 0))">
+        {{ (s.realisedPnl || 0) + (s.unrealisedPnl || 0) | number: "1.2-2" }} {{ s.baseCurrency }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button [class.active]="selectedTab() === 'holdings'" (click)="setTab('holdings')" class="tab">
+      Holdings ({{ holdings().length }})
+    </button>
+    <button [class.active]="selectedTab() === 'pnl'" (click)="setTab('pnl')" class="tab">
+      P&L
+    </button>
+    <button [class.active]="selectedTab() === 'summary'" (click)="setTab('summary')" class="tab">
+      Summary
+    </button>
+  </div>
+
+  <!-- Holdings Tab -->
+  <div class="tab-content" *ngIf="selectedTab() === 'holdings'">
+    <div class="holdings-header">
+      <h2>Your Holdings</h2>
+      <div class="view-options">
+        <span class="record-count">{{ holdings().length }} positions</span>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="holdingsLoading()" class="loading">
+      <div class="spinner"></div>
+      <p>Loading holdings...</p>
+    </div>
+
+    <!-- Error State -->
+    <div *ngIf="holdingsError() && !holdingsLoading()" class="error">
+      <p>{{ holdingsError() }}</p>
+      <button class="btn btn-secondary" (click)="loadHoldings()">Try Again</button>
+    </div>
+
+    <!-- Holdings Table -->
+    <div *ngIf="!holdingsLoading() && !holdingsError() && sortedHoldings().length > 0" class="holdings-table">
+      <div class="table-header">
+        <div class="col-symbol" (click)="setSortBy('symbol')">
+          Symbol {{ getSortIcon("symbol") }}
+        </div>
+        <div class="col-quantity">Qty</div>
+        <div class="col-price">Avg Cost</div>
+        <div class="col-current">Current Price</div>
+        <div class="col-market" (click)="setSortBy('value')">
+          Market Value {{ getSortIcon("value") }}
+        </div>
+        <div class="col-pnl" (click)="setSortBy('pnl')">
+          Unrealised P&L {{ getSortIcon("pnl") }}
+        </div>
+        <div class="col-return">Return %</div>
+      </div>
+
+      <div class="table-body">
+        <div *ngFor="let pos of sortedHoldings()" class="table-row">
+          <div class="col-symbol">{{ pos.symbol }}</div>
+          <div class="col-quantity">{{ pos.quantity | number: "1.0-0" }}</div>
+          <div class="col-price">{{ pos.averageCost | number: "1.2-2" }}</div>
+          <div class="col-current" [class.stale]="pos.stale">
+            {{ pos.lastPrice | number: "1.2-2" }}
+            <span *ngIf="pos.stale" class="stale-badge">stale</span>
+          </div>
+          <div class="col-market">{{ pos.marketValue | number: "1.2-2" }}</div>
+          <div class="col-pnl" [class]="getPnlClass(pos.unrealisedPnl)">
+            {{ pos.unrealisedPnl | number: "1.2-2" }}
+          </div>
+          <div class="col-return" [class]="getPnlClass(pos.unrealisedPnl)">
+            {{ (pos.unrealisedPnl / pos.costBasis * 100) | number: "1.2-2" }}%
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!holdingsLoading() && !holdingsError() && sortedHoldings().length === 0" class="empty-state">
+      <p>No holdings</p>
+    </div>
+  </div>
+
+  <!-- P&L Tab -->
+  <div class="tab-content" *ngIf="selectedTab() === 'pnl'">
+    <div class="pnl-section">
+      <h2>Profit & Loss</h2>
+
+      <!-- Loading State -->
+      <div *ngIf="pnlLoading()" class="loading">
+        <div class="spinner"></div>
+        <p>Loading P&L...</p>
+      </div>
+
+      <!-- Error State -->
+      <div *ngIf="pnlError() && !pnlLoading()" class="error">
+        <p>{{ pnlError() }}</p>
+        <button class="btn btn-secondary" (click)="loadPnl()">Try Again</button>
+      </div>
+
+      <!-- P&L Data -->
+      <div *ngIf="!pnlLoading() && !pnlError() && pnl() as pnlData" class="pnl-cards">
+        <div class="pnl-card">
+          <div class="pnl-label">Realised P&L</div>
+          <div class="pnl-value" [class]="getPnlClass(pnlData.realisedPnl)">
+            {{ pnlData.realisedPnl | number: "1.2-2" }} {{ pnlData.baseCurrency }}
+          </div>
+          <div class="pnl-detail">Locked-in gains/losses</div>
+        </div>
+
+        <div class="pnl-card">
+          <div class="pnl-label">Unrealised P&L</div>
+          <div class="pnl-value" [class]="getPnlClass(pnlData.unrealisedPnl)">
+            {{ pnlData.unrealisedPnl | number: "1.2-2" }} {{ pnlData.baseCurrency }}
+          </div>
+          <div class="pnl-detail">Current mark-to-market</div>
+        </div>
+
+        <div class="pnl-card total">
+          <div class="pnl-label">Total P&L</div>
+          <div class="pnl-value" [class]="getPnlClass(pnlData.totalPnl)">
+            {{ pnlData.totalPnl | number: "1.2-2" }} {{ pnlData.baseCurrency }}
+          </div>
+          <div class="pnl-detail">All gains/losses combined</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Tab -->
+  <div class="tab-content" *ngIf="selectedTab() === 'summary'">
+    <div class="summary-section">
+      <h2>Account Summary</h2>
+
+      <!-- Loading State -->
+      <div *ngIf="summaryLoading()" class="loading">
+        <div class="spinner"></div>
+        <p>Loading summary...</p>
+      </div>
+
+      <!-- Error State -->
+      <div *ngIf="summaryError() && !summaryLoading()" class="error">
+        <p>{{ summaryError() }}</p>
+        <button class="btn btn-secondary" (click)="loadSummary()">Try Again</button>
+      </div>
+
+      <!-- Summary Data -->
+      <div *ngIf="!summaryLoading() && !summaryError() && summary() as s" class="summary-details">
+        <div class="summary-row">
+          <div class="label">Account ID</div>
+          <div class="value">{{ s.accountId }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Base Currency</div>
+          <div class="value">{{ s.baseCurrency }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Total Portfolio Value</div>
+          <div class="value">{{ s.totalValue | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Cash Balance</div>
+          <div class="value">{{ s.cashBalance | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Market Value (Holdings)</div>
+          <div class="value">{{ s.marketValue | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Cost Basis</div>
+          <div class="value">{{ s.costBasis | number: "1.2-2" }} {{ s.baseCurrency }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Realised P&L</div>
+          <div class="value" [class]="getPnlClass(s.realisedPnl)">
+            {{ s.realisedPnl | number: "1.2-2" }} {{ s.baseCurrency }}
+          </div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Unrealised P&L</div>
+          <div class="value" [class]="getPnlClass(s.unrealisedPnl)">
+            {{ s.unrealisedPnl | number: "1.2-2" }} {{ s.baseCurrency }}
+          </div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Number of Positions</div>
+          <div class="value">{{ s.positionCount }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Last Updated</div>
+          <div class="value">{{ s.asOf | date: "short" }}</div>
+        </div>
+        <div class="summary-row">
+          <div class="label">Price As Of</div>
+          <div class="value">{{ s.priceAsOf | date: "short" }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

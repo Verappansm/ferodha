@@ -1,0 +1,30 @@
+﻿<div class="panel pnl-panel">
+  <div class="panel-header">
+    <h2>Profit & Loss</h2>
+  </div>
+  <div class="panel-content" *ngIf="!loading; else loadingState">
+    <div *ngIf="!error; else errorState">
+      <div *ngIf="pnlData">
+        <div class="pnl-item">
+          <span class="label">Realized P&L</span>
+          <span class="value">{{ pnlData.realisedPnl | number: '1.2-2' }}</span>
+        </div>
+        <div class="pnl-item">
+          <span class="label">Unrealized P&L</span>
+          <span class="value">{{ pnlData.unrealisedPnl | number: '1.2-2' }}</span>
+        </div>
+      </div>
+    </div>
+    <ng-template #errorState>
+      <div class="panel-error">
+        <p class="error-message">{{ error }}</p>
+        <button class="btn btn-outline" (click)="retryClick()">Try Again</button>
+      </div>
+    </ng-template>
+  </div>
+  <ng-template #loadingState>
+    <div class="skeleton-loader">
+      <div class="skeleton-bar"></div>
+    </div>
+  </ng-template>
+</div>

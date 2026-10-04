@@ -1,0 +1,45 @@
+<div class="panel cash-panel">
+  <div class="panel-header">
+    <h2>Available Cash</h2>
+    <button class="btn-link" (click)="navigateToBank()" title="View full bank account">
+      <svg viewBox="0 0 24 24" width="20" height="20">
+        <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Loading State -->
+  <div class="panel-content" *ngIf="loading; else loadedState">
+    <div class="skeleton-loader">
+      <div class="skeleton-bar" style="width: 40%; height: 32px;"></div>
+      <div class="skeleton-bar" style="width: 60%; height: 16px; margin-top: 8px;"></div>
+    </div>
+  </div>
+
+  <!-- Loaded State -->
+  <ng-template #loadedState>
+    <div class="panel-content" *ngIf="!error; else errorState">
+      <div class="cash-amount">
+        <span class="currency">$</span>
+        <span class="amount">{{ cashBalance | number: '1.2-2' }}</span>
+      </div>
+      <p class="cash-label">USD</p>
+      <button class="btn btn-secondary" (click)="navigateToBank()">
+        Deposit
+      </button>
+    </div>
+
+    <!-- Error State -->
+    <ng-template #errorState>
+      <div class="panel-error">
+        <svg class="error-icon" viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+        <p class="error-message">{{ error }}</p>
+        <button class="btn btn-outline" (click)="retryClick()">
+          Try Again
+        </button>
+      </div>
+    </ng-template>
+  </ng-template>
+</div>

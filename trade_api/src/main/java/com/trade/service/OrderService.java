@@ -2,6 +2,7 @@ package com.trade.service;
 
 import com.trade.domain.Order;
 import com.trade.domain.OrderLogic;
+import com.trade.dto.OrderHistoryEntryDto;
 import com.trade.dto.OrderResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.enums.OrderSide;
@@ -15,6 +16,7 @@ import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
 import com.trade.mapper.InstrumentMapper;
 import com.trade.mapper.InstrumentRow;
+import com.trade.mapper.OrderHistoryRow;
 import com.trade.mapper.OrderMapper;
 import com.trade.mapper.OrderRow;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
@@ -111,5 +115,27 @@ public class OrderService {
                 OrderSide.valueOf(order.side()),
                 order.quantity(),
                 order.price());
+    }
+
+    public void validateAccountAccess(long accountId, Long callerAccountId) throws DomainException {
+        accessGuard.requireTokenMatches(accountId, callerAccountId);
+    }
+
+    public List<OrderHistoryEntryDto> getRecentOrders(long accountId, int limit) {
+        List<OrderHistoryRow> history = orderMapper.findHistory(accountId, null, null, null);
+        return history.stream()
+                .limit(limit)
+                .map(row -> new OrderHistoryEntryDto(
+                        "ORD-" + row.orderId(),
+                        row.accountId(),
+                        row.symbol(),
+                        OrderSide.valueOf(row.side()),
+                        row.quantity(),
+                        row.price(),
+                        row.executedPrice(),
+                        OrderStatus.valueOf(row.status()),
+                        row.idempotencyKey(),
+                        row.createdOn()))
+                .collect(Collectors.toList());
     }
 }
