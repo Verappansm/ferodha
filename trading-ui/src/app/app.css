@@ -79,6 +79,38 @@ nav {
   align-items: center;
 }
 
+.profile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: var(--nav-text);
+  background: transparent;
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.profile-icon:hover {
+  color: var(--ink-900);
+  background: var(--ink-100);
+  border-color: var(--ink-400);
+}
+
+.profile-icon:active {
+  background: var(--ink-200);
+}
+
+.profile-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+}
+
 .main-content {
   flex: 1;
 }

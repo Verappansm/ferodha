@@ -15,11 +15,30 @@ export interface UserResponse {
      * The value carried in the `sub` claim.
      */
     id: string;
-    username: string;
+    /**
+     * User's full name
+     */
+    name?: string;
+    /**
+     * User's email address
+     */
+    email: string;
+    /**
+     * User's phone number
+     */
+    phone?: string;
+    /**
+     * User's role
+     */
+    role?: string;
     /**
      * The numeric trading account key, `ACCOUNTS.id`.
      */
     accountId: number;
+    /**
+     * User's joining date
+     */
+    joiningDate?: string;
     roles: Array<Role>;
     createdOn?: string;
 }

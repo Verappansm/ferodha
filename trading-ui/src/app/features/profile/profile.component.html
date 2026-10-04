@@ -1,0 +1,125 @@
+<div class="profile-container">
+  <div class="profile-card">
+    <!-- Header -->
+    <div class="profile-header">
+      <h1 class="profile-title">User Profile</h1>
+      <p class="profile-subtitle">View and manage your account details</p>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="loading()" class="loading-spinner">
+      <div class="spinner"></div>
+      <p>Loading your profile...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="error()" class="error-banner">
+      <strong>Error:</strong> {{ error() }}
+    </div>
+
+    <!-- Success Message -->
+    <div *ngIf="success()" class="success-banner">
+      <strong>Success!</strong> Your profile has been updated successfully.
+    </div>
+
+    <!-- Profile Form -->
+    <div *ngIf="userProfile() && form" class="profile-form-wrapper">
+      <form [formGroup]="form" (ngSubmit)="submit()">
+        <!-- Name Field -->
+        <div class="form-group">
+          <label for="name" class="form-label">Name</label>
+          <input
+            id="name"
+            type="text"
+            class="form-input"
+            formControlName="name"
+            (blur)="form.get('name')?.markAsTouched()"
+            [class.input-error]="showError('name')"
+          />
+          <span *ngIf="showError('name')" class="error-text">
+            {{ getErrorMessage('name') }}
+          </span>
+        </div>
+
+        <!-- Email Field (Read-only) -->
+        <div class="form-group">
+          <label for="email" class="form-label">Email</label>
+          <input
+            id="email"
+            type="email"
+            class="form-input form-input-disabled"
+            formControlName="email"
+            [disabled]="true"
+          />
+          <span class="help-text">Email cannot be changed</span>
+        </div>
+
+        <!-- Phone Field -->
+        <div class="form-group">
+          <label for="phone" class="form-label">Phone</label>
+          <input
+            id="phone"
+            type="tel"
+            class="form-input"
+            formControlName="phone"
+            placeholder="e.g., +1-555-1234"
+            (blur)="form.get('phone')?.markAsTouched()"
+            [class.input-error]="showError('phone')"
+          />
+          <span *ngIf="showError('phone')" class="error-text">
+            {{ getErrorMessage('phone') }}
+          </span>
+        </div>
+
+        <!-- Role Field (Read-only) -->
+        <div class="form-group">
+          <label for="role" class="form-label">Role</label>
+          <input
+            id="role"
+            type="text"
+            class="form-input form-input-disabled"
+            formControlName="role"
+            [disabled]="true"
+          />
+        </div>
+
+        <!-- Trading Account Field (Read-only) -->
+        <div class="form-group">
+          <label for="accountId" class="form-label">Trading Account</label>
+          <input
+            id="accountId"
+            type="text"
+            class="form-input form-input-disabled"
+            formControlName="accountId"
+            [value]="userProfile()?.accountId || 'No account yet'"
+            [disabled]="true"
+          />
+        </div>
+
+        <!-- Joining Date Field (Read-only) -->
+        <div class="form-group">
+          <label for="joiningDate" class="form-label">Joining Date</label>
+          <input
+            id="joiningDate"
+            type="text"
+            class="form-input form-input-disabled"
+            formControlName="joiningDate"
+            [disabled]="true"
+          />
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="form.invalid || loading()"
+          >
+            <span *ngIf="!loading()">Save Changes</span>
+            <span *ngIf="loading()">Saving...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
