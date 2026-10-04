@@ -14,6 +14,9 @@ import { PositionResponse } from './generated/trade/model/position-response';
 import { InstrumentResponse } from './generated/trade/model/instrument-response';
 import { InstrumentType } from './generated/trade/model/instrument-type';
 import { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-instruments-response';
+import { InstrumentQuote } from './generated/trade/model/instrument-quote';
+import { PriceHistory } from './generated/trade/model/price-history';
+import { PricePoint } from './generated/trade/model/price-point';
 
 export type {
   AccountResponse,
@@ -24,8 +27,13 @@ export type {
   PositionResponse,
   InstrumentResponse,
   PaginatedInstrumentsResponse,
+  InstrumentQuote,
+  PricePoint,
 };
-export { OrderSide, OrderStatus, InstrumentType };
+export { OrderSide, OrderStatus, InstrumentType, PriceHistory };
+
+/** The chart ranges the Trade REST API serves: minute bars for 1D, daily candles otherwise. */
+export type ChartRange = PriceHistory.RangeEnum;
 
 /**
  * The Trade REST API as the rest of the application uses it, over the client
@@ -63,5 +71,17 @@ export class TradeApi {
 
   getInstruments(pageSize?: number, offset?: number): Observable<PaginatedInstrumentsResponse> {
     return this.instruments.getInstruments(pageSize, offset);
+  }
+
+  instrument(symbol: string): Observable<InstrumentResponse> {
+    return this.instruments.getInstrument(symbol);
+  }
+
+  quote(symbol: string): Observable<InstrumentQuote> {
+    return this.instruments.getInstrumentQuote(symbol);
+  }
+
+  history(symbol: string, range: ChartRange): Observable<PriceHistory> {
+    return this.instruments.getInstrumentHistory(symbol, range);
   }
 }

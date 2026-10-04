@@ -1,9 +1,8 @@
 export * from './account-response';
 export * from './account-status';
 export * from './balance-response';
-export * from './candle';
-export * from './candles-response-dto';
 export * from './error-response';
+export * from './instrument-quote';
 export * from './instrument-response';
 export * from './instrument-type';
 export * from './order-history-entry';
@@ -13,3 +12,5 @@ export * from './order-status';
 export * from './paginated-instruments-response';
 export * from './place-order-request';
 export * from './position-response';
+export * from './price-history';
+export * from './price-point';

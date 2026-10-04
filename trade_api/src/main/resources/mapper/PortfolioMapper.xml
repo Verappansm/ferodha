@@ -42,18 +42,30 @@
         ORDER BY t.executed_at, o.placed_at, t.trade_id
     </select>
 
+    <!--
+        The newest stored price per symbol: the close of its latest minute bar
+        (pricing_generator's ticks) or, failing that, of its latest daily
+        candle, observed at the start of that bar or day (UTC).
+    -->
     <select id="findLatestStoredPrices" resultMap="storedPriceRow">
-        SELECT DISTINCT ON (i.ticker)
-               i.ticker      AS symbol,
-               md.close_price AS price,
-               md.timestamp  AS as_of
-        FROM Market_Data md
-                 JOIN Instruments i ON i.instrument_id = md.instrument_id
-        WHERE i.ticker IN
-        <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
-            #{symbol}
-        </foreach>
-        ORDER BY i.ticker, md.timestamp DESC
+        SELECT DISTINCT ON (symbol) symbol, price, as_of
+        FROM (
+            SELECT symbol, close AS price, bar_start AS as_of
+            FROM market_bars
+            WHERE symbol IN
+            <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
+                #{symbol}
+            </foreach>
+            UNION ALL
+            SELECT symbol, close AS price, candle_time::timestamp AT TIME ZONE 'UTC' AS as_of
+            FROM market_candles
+            WHERE interval = '1d'
+              AND symbol IN
+            <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
+                #{symbol}
+            </foreach>
+        ) prices
+        ORDER BY symbol, as_of DESC
     </select>
 
 </mapper>

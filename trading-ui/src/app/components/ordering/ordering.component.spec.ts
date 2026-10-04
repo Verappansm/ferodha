@@ -22,9 +22,9 @@ describe('OrderingComponent', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            queryParams: of({})
-          }
-        }
+            queryParams: of({}),
+          },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(OrderingComponent);

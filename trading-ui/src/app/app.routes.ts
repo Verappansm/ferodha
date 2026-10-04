@@ -5,7 +5,6 @@ import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { ProfileComponent } from './features/profile/profile.component';
 import { PortfolioComponent } from './components/portfolio/portfolio.component';
 import { InstrumentsComponent } from './components/instruments/instruments.component';
-import { InstrumentDetailsComponent } from './components/instrument-details/instrument-details.component';
 import { OrderingComponent } from './components/ordering/ordering.component';
 import { OrdersComponent } from './components/orders/orders.component';
 import { WatchlistComponent } from './components/watchlist/watchlist.component';
@@ -21,8 +20,16 @@ export const routes: Routes = [
   { path: 'profile', component: ProfileComponent, canActivate: [authGuard] },
   { path: 'portfolio', component: PortfolioComponent, canActivate: [authGuard] },
   { path: 'instruments', component: InstrumentsComponent, canActivate: [authGuard] },
-  { path: 'instruments/:symbol', component: InstrumentDetailsComponent, canActivate: [authGuard] },
-  { path: 'trading', component: OrderingComponent, canActivate: [authGuard] },
+  // Lazy, so chart.js only downloads when an instrument page is opened.
+  {
+    path: 'instruments/:symbol',
+    loadComponent: () =>
+      import('./components/instrument-details/instrument-details.component').then(
+        (m) => m.InstrumentDetailsComponent,
+      ),
+    canActivate: [authGuard],
+  },
+  { path: 'order', component: OrderingComponent, canActivate: [authGuard] },
   { path: 'orders', component: OrdersComponent, canActivate: [authGuard] },
   { path: 'watchlist', component: WatchlistComponent, canActivate: [authGuard] },
   { path: 'bank', component: BankComponent, canActivate: [authGuard] },

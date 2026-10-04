@@ -1,264 +1,175 @@
-import { Component, OnInit, signal, computed, inject, effect, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router } from '@angular/router';
-import { InstrumentsService } from '../../api/generated/trade/api/instruments.service';
-import { CandlesService } from '../../api/generated/trade/api/candles.service';
-import { InstrumentResponse } from '../../api/generated/trade/model/instrument-response';
-import Chart from 'chart.js/auto';
+import {
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import {
+  ChartRange,
+  InstrumentQuote,
+  InstrumentResponse,
+  PricePoint,
+  TradeApi,
+} from '../../api/trade-api';
+import { errorMessage } from '../../core/errors/error-message';
+import { pnlDirection, pnlSign, pnlWord } from '../../core/format/pnl';
+import { CHART_FACTORY, DrawnChart } from './price-chart';
+
+export const RANGES: { value: ChartRange; label: string }[] = [
+  { value: '1D', label: '1 day' },
+  { value: '1W', label: '1 week' },
+  { value: '1M', label: '1 month' },
+  { value: '6M', label: '6 months' },
+  { value: '1Y', label: '1 year' },
+];
+
+/** How often the quote is re-read while the page is open. */
+export const QUOTE_REFRESH_MS = 15_000;
 
 /**
- * LEAP-016: Instrument Detail Page
- * Displays:
- * - Instrument name, symbol, exchange
- * - Latest quote (bid, ask, last)
- * - OHLC chart with daily candles (1-year history)
- * - Key statistics
- * - Buy/Sell buttons to place orders
+ * The instrument page (LEAP-016): the latest quote with its time and
+ * staleness, key statistics, a price chart over a chosen range with a text
+ * summary and a data table beside it, and Buy and Sell into the order ticket.
+ * Every figure comes from the Trade REST API; the browser never calls
+ * Fauxnance. Fauxnance has no news feed, so there is no news panel.
  */
 @Component({
   selector: 'app-instrument-details',
-  standalone: true,
-  imports: [CommonModule],
+  imports: [DatePipe, DecimalPipe, RouterLink],
   templateUrl: './instrument-details.component.html',
-  styleUrls: ['./instrument-details.component.css'],
+  styleUrl: './instrument-details.component.css',
 })
-export class InstrumentDetailsComponent implements OnInit, AfterViewInit {
-  private readonly instrumentsService = inject(InstrumentsService);
-  private readonly candlesService = inject(CandlesService);
+export class InstrumentDetailsComponent implements OnInit {
+  private readonly tradeApi = inject(TradeApi);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly drawChart = inject(CHART_FACTORY);
+  private readonly destroyRef = inject(DestroyRef);
 
-  @ViewChild('chartCanvas') chartCanvas!: ElementRef<HTMLCanvasElement>;
-  private chart: Chart | null = null;
+  protected readonly ranges = RANGES;
+  protected readonly direction = pnlDirection;
+  protected readonly sign = pnlSign;
+  protected readonly word = pnlWord;
+  protected readonly abs = Math.abs;
 
-  // UI State
-  readonly isLoading = signal(false);
-  readonly errorMessage = signal('');
-  readonly chartLoaded = signal(false);
-
-  // Instrument data
-  readonly symbol = signal<string>('');
+  readonly symbol = signal('');
   readonly instrument = signal<InstrumentResponse | null>(null);
+  readonly instrumentError = signal<string | null>(null);
+  readonly quote = signal<InstrumentQuote | null>(null);
+  readonly quoteError = signal<string | null>(null);
+  readonly range = signal<ChartRange>('1M');
+  readonly points = signal<PricePoint[] | null>(null);
+  readonly historyError = signal<string | null>(null);
+  readonly showTable = signal(false);
 
-  // Candle data
-  readonly candles = signal<any[]>([]);
-  readonly candleInterval = signal<string>('1d');
+  readonly rangeLabel = computed(() => RANGES.find((r) => r.value === this.range())?.label ?? '');
 
-  ngOnInit() {
-    // Get symbol from route parameter
-    this.route.paramMap.subscribe(params => {
-      const sym = params.get('symbol');
-      if (sym) {
-        this.symbol.set(sym);
-        this.loadInstrumentAndCandles(sym);
-      }
-    });
-  }
+  private readonly canvas = viewChild<ElementRef<HTMLCanvasElement>>('chartCanvas');
+  private chart: DrawnChart | null = null;
 
-  ngAfterViewInit() {
-    // Chart will be rendered after candles are loaded
-    if (this.candles().length > 0 && this.chartCanvas) {
-      this.initChart();
-    }
-  }
-
-  private loadInstrumentAndCandles(sym: string) {
-    this.isLoading.set(true);
-    this.errorMessage.set('');
-
-    // Fetch instrument details
-    this.instrumentsService.getInstruments(20, 0).subscribe({
-      next: (response: any) => {
-        const instr = response.instruments?.find((i: any) => i.symbol === sym);
-        if (instr) {
-          this.instrument.set(instr);
-          // Fetch candles after instrument is loaded
-          this.loadCandles(sym);
-        } else {
-          this.errorMessage.set(`Instrument ${sym} not found`);
-          this.isLoading.set(false);
-        }
-      },
-      error: (err) => {
-        this.errorMessage.set('Failed to load instrument data');
-        this.isLoading.set(false);
-      }
-    });
-  }
-
-  private loadCandles(sym: string) {
-    this.candlesService.getCandles(sym, '1d').subscribe({
-      next: (response: any) => {
-        if (response && response.candles) {
-          this.candles.set(response.candles);
-          this.chartLoaded.set(true);
-          // Render chart after data is loaded
-          setTimeout(() => this.initChart(), 100);
-        }
-        this.isLoading.set(false);
-      },
-      error: (err) => {
-        console.error('Failed to load candles', err);
-        this.errorMessage.set('Failed to load chart data');
-        this.isLoading.set(false);
-      }
-    });
-  }
-
-  private initChart() {
-    if (!this.chartCanvas || this.candles().length === 0) {
-      return;
-    }
-
-    // Destroy existing chart if any
-    if (this.chart) {
-      this.chart.destroy();
-    }
-
-    this.createCandlestickChart();
-  }
-
-  private getColorVariable(varName: string): string {
-    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-  }
-
-  private getGridColor(): string {
-    // In light mode, use --ink-200 with higher opacity for visibility
-    // In dark mode, use --ink-500 (darker) with lower opacity for subtlety
-    const isDarkMode = document.documentElement.getAttribute('data-theme') === 'dark';
-    const gridBase = isDarkMode ? this.getColorVariable('--ink-500') : this.getColorVariable('--ink-200');
-    const opacity = isDarkMode ? '33' : 'CC'; // CC in hex ≈ 0.8 opacity for light mode
-    return gridBase + opacity;
-  }
-
-  private createCandlestickChart() {
-    const dates = this.candles().map((c: any) => c.date?.toString() || '');
-    const highs = this.candles().map((c: any) => parseFloat(c.high?.toString() || '0'));
-    const lows = this.candles().map((c: any) => parseFloat(c.low?.toString() || '0'));
-    const closes = this.candles().map((c: any) => parseFloat(c.close?.toString() || '0'));
-
-    // Read CSS variables for dark mode support
-    const blueColor = this.getColorVariable('--info');
-    const redColor = this.getColorVariable('--negative');
-    const greenColor = this.getColorVariable('--positive');
-    const gridColor = this.getGridColor(); // Responsive grid color for light/dark mode
-    const textColor = this.getColorVariable('--ink-500'); // Lighter for better readability in dark mode
-
-    this.chart = new Chart(this.chartCanvas!.nativeElement, {
-      type: 'line',
-      data: {
-        labels: dates,
-        datasets: [
-          {
-            label: 'High',
-            data: highs,
-            borderColor: greenColor,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
-          },
-          {
-            label: 'Close',
-            data: closes,
-            borderColor: blueColor,
-            backgroundColor: blueColor + '20',
-            borderWidth: 3,
-            pointRadius: 0,
-            fill: true,
-            tension: 0.3,
-          },
-          {
-            label: 'Low',
-            data: lows,
-            borderColor: redColor,
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: false,
-            tension: 0.3,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        interaction: {
-          intersect: false,
-          mode: 'index',
-        },
-        plugins: {
-          legend: {
-            position: 'top',
-            labels: {
-              font: { size: 12 },
-              padding: 15,
-              color: this.getColorVariable('--ink-900'),
-            },
-          },
-          title: {
-            display: false,
-          },
-        },
-        scales: {
-          x: {
-            display: true,
-            ticks: {
-              maxTicksLimit: 20,
-              font: { size: 10 },
-              color: textColor,
-            },
-            grid: {
-              color: gridColor,
-            },
-          },
-          y: {
-            display: true,
-            position: 'left',
-            ticks: {
-              font: { size: 10 },
-              color: textColor,
-            },
-            grid: {
-              color: gridColor,
-            },
-          },
-        },
-      },
-    } as any);
-  }
-
-  // Computed stats from candles
-  readonly dayRange = computed(() => {
-    const candles = this.candles();
-    if (candles.length === 0) return { low: 0, high: 0 };
-    const low = Math.min(...candles.map((c: any) => Number(c.low)));
-    const high = Math.max(...candles.map((c: any) => Number(c.high)));
-    return { low, high };
+  /** Lowest low, highest high and the change from first to last close. */
+  readonly summary = computed(() => {
+    const points = this.points();
+    if (!points || points.length === 0) return null;
+    const first = points[0].close;
+    const last = points[points.length - 1].close;
+    return {
+      low: Math.min(...points.map((p) => p.low)),
+      high: Math.max(...points.map((p) => p.high)),
+      first,
+      last,
+      change: last - first,
+      changePercent: first === 0 ? null : ((last - first) / first) * 100,
+    };
   });
 
-  readonly currentPrice = computed(() => {
-    const candles = this.candles();
-    if (candles.length === 0) return 0;
-    return Number(candles[candles.length - 1]?.close) || 0;
-  });
+  constructor() {
+    // Redraw whenever the points change and the canvas is on the page.
+    effect(() => {
+      const points = this.points();
+      const canvas = this.canvas()?.nativeElement;
+      this.chart?.destroy();
+      this.chart = null;
+      if (!canvas || !points || points.length === 0) return;
+      this.chart = this.drawChart(canvas, {
+        labels: points.map((p) => this.label(p.time)),
+        closes: points.map((p) => p.close),
+        colours: {
+          line: cssVar('--brand-600'),
+          fill: cssVar('--brand-100'),
+          grid: cssVar('--ink-200'),
+          text: cssVar('--ink-500'),
+        },
+      });
+    });
+    this.destroyRef.onDestroy(() => this.chart?.destroy());
+  }
 
-  readonly previousClose = computed(() => {
-    const candles = this.candles();
-    if (candles.length < 2) return 0;
-    return Number(candles[candles.length - 2]?.close) || 0;
-  });
+  ngOnInit(): void {
+    this.route.paramMap.subscribe((params) => {
+      const symbol = params.get('symbol') ?? '';
+      this.symbol.set(symbol);
+      this.loadInstrument();
+      this.loadQuote();
+      this.loadHistory();
+    });
+    const timer = setInterval(() => this.loadQuote(), QUOTE_REFRESH_MS);
+    this.destroyRef.onDestroy(() => clearInterval(timer));
+  }
 
-  // Navigate to order ticket with symbol pre-filled
-  navigateToOrder(side: 'BUY' | 'SELL') {
-    this.router.navigate(['/trading'], {
-      queryParams: { symbol: this.symbol(), side }
+  /** A new range reloads the chart only, never the quote. */
+  selectRange(range: ChartRange): void {
+    if (range === this.range()) return;
+    this.range.set(range);
+    this.loadHistory();
+  }
+
+  trade(side: 'BUY' | 'SELL'): void {
+    this.router.navigate(['/order'], { queryParams: { symbol: this.symbol(), side } });
+  }
+
+  label(time: string): string {
+    const date = new Date(time);
+    return this.range() === '1D'
+      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : date.toLocaleDateString([], { day: 'numeric', month: 'short', year: '2-digit' });
+  }
+
+  loadQuote(): void {
+    this.tradeApi.quote(this.symbol()).subscribe({
+      next: (quote) => {
+        this.quote.set(quote);
+        this.quoteError.set(null);
+      },
+      error: (error: unknown) => this.quoteError.set(errorMessage(error)),
     });
   }
 
-  // Format price for display
-  formatPrice(price: number): string {
-    return price.toFixed(2);
+  loadHistory(): void {
+    this.points.set(null);
+    this.historyError.set(null);
+    this.tradeApi.history(this.symbol(), this.range()).subscribe({
+      next: (history) => this.points.set(history.points),
+      error: (error: unknown) => this.historyError.set(errorMessage(error)),
+    });
   }
+
+  private loadInstrument(): void {
+    this.instrumentError.set(null);
+    this.tradeApi.instrument(this.symbol()).subscribe({
+      next: (instrument) => this.instrument.set(instrument),
+      error: (error: unknown) => this.instrumentError.set(errorMessage(error)),
+    });
+  }
+}
+
+function cssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#4f46e5';
 }

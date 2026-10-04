@@ -385,6 +385,7 @@ paths:
             format: int32
             default: 20
             minimum: 1
+            maximum: 1000
         - name: offset
           in: query
           required: false
@@ -403,6 +404,82 @@ paths:
                 $ref: '#/components/schemas/PaginatedInstrumentsResponse'
         '401':
           $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/instruments/{symbol}:
+    get:
+      tags: [Instruments]
+      operationId: getInstrument
+      summary: Get one tradable instrument
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+      responses:
+        '200':
+          description: The instrument.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+
+  /api/v1/instruments/{symbol}/quote:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentQuote
+      summary: Get the latest quote and key statistics
+      description: |
+        The latest quote the platform holds for the instrument (from the `market-data` topic, else
+        the close of its latest minute bar), with when it was observed and whether that is past the
+        freshness window. Key statistics come from stored history; any figure the history cannot
+        back is null. The browser never calls Fauxnance.
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+      responses:
+        '200':
+          description: Quote and statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentQuote'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+
+  /api/v1/instruments/{symbol}/history:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentHistory
+      summary: Get price history for the chart
+      description: |
+        Open, high, low and close per bar, oldest first. `1D` returns one-minute bars recorded from
+        the live price feed; the longer ranges return daily candles.
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['1D', '1W', '1M', '6M', '1Y']
+            default: '1M'
+      responses:
+        '200':
+          description: Price history; empty when none is stored yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
 
 components:
 
@@ -415,6 +492,16 @@ components:
         A JWT issued by the auth service. The claims contract is defined in `auth-api.yaml`.
 
   parameters:
+    SymbolPath:
+      name: symbol
+      in: path
+      required: true
+      description: Instrument ticker symbol.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 20
+      example: AAPL
     AccountIdPath:
       name: id
       in: path
@@ -427,6 +514,17 @@ components:
       example: 1
 
   responses:
+    InstrumentNotFound:
+      description: No tradable instrument has that symbol (unknown or delisted).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: INS-404
+                message: Instrument not found
     Unauthorised:
       description: Missing, malformed, expired or wrongly signed token.
       content:
@@ -803,3 +901,81 @@ components:
           format: int64
           description: Zero-based offset of this page.
           example: 0
+
+    InstrumentQuote:
+      type: object
+      additionalProperties: false
+      required: [symbol, currency, stale]
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        bid:
+          type: [number, 'null']
+          description: Null when the price came from a stored bar rather than a live quote.
+        ask:
+          type: [number, 'null']
+        mid:
+          type: [number, 'null']
+          description: Midpoint of bid and ask, or the stored close. Null when no price exists yet.
+        asOf:
+          type: [string, 'null']
+          format: date-time
+          description: When the price was observed.
+        stale:
+          type: boolean
+          description: True when there is no price or it is older than the freshness window.
+        dayLow:
+          type: [number, 'null']
+        dayHigh:
+          type: [number, 'null']
+        previousClose:
+          type: [number, 'null']
+          description: Close of the latest daily candle before today (UTC).
+        week52Low:
+          type: [number, 'null']
+        week52High:
+          type: [number, 'null']
+
+    PricePoint:
+      type: object
+      additionalProperties: false
+      required: [time, open, high, low, close]
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: Start of the minute, or of the trading day (UTC).
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: [integer, 'null']
+          format: int64
+
+    PriceHistory:
+      type: object
+      additionalProperties: false
+      required: [symbol, range, interval, points]
+      properties:
+        symbol:
+          type: string
+        range:
+          type: string
+          enum: ['1D', '1W', '1M', '6M', '1Y']
+        interval:
+          type: string
+          enum: ['1m', '1d']
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricePoint'

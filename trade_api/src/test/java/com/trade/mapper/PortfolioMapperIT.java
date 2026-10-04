@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -53,17 +54,22 @@ class PortfolioMapperIT extends MapperIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("the newest stored price per symbol is returned")
+    @DisplayName("the newest stored price wins, whether a minute bar or a daily candle")
     void latestStoredPricePerSymbol() {
-        UUID instrumentId = insertTradableInstrument("PF3");
-        insertMarketData(instrumentId, "2026-10-01T10:00:00Z", "10.00");
-        insertMarketData(instrumentId, "2026-10-02T10:00:00Z", "12.50");
+        insertDailyCandle("PF3", "2026-10-01", "10.00");
+        insertDailyCandle("PF3", "2026-10-02", "11.00");
+        insertMinuteBar("PF3", "2026-10-02T14:31:00Z", "12.50");
+        insertDailyCandle("PF4", "2026-10-02", "20.00");
 
-        List<StoredPriceRow> prices = portfolioMapper.findLatestStoredPrices(List.of("PF3", "NOPRICE"));
+        List<StoredPriceRow> prices = portfolioMapper.findLatestStoredPrices(List.of("PF3", "PF4", "NOPRICE"));
 
-        assertEquals(1, prices.size());
-        assertEquals("PF3", prices.getFirst().symbol());
-        assertEquals(0, new BigDecimal("12.50").compareTo(prices.getFirst().price()));
+        assertEquals(2, prices.size());
+        assertEquals("PF3", prices.get(0).symbol());
+        assertEquals(0, new BigDecimal("12.50").compareTo(prices.get(0).price()));
+        assertEquals(OffsetDateTime.parse("2026-10-02T14:31:00Z").toInstant(), prices.get(0).asOf().toInstant());
+        assertEquals("PF4", prices.get(1).symbol());
+        assertEquals(0, new BigDecimal("20.00").compareTo(prices.get(1).price()));
+        assertEquals(OffsetDateTime.parse("2026-10-02T00:00:00Z").toInstant(), prices.get(1).asOf().toInstant());
     }
 
     private AccountRow givenAccount(String email, String bankAccountNumber) {
@@ -79,11 +85,19 @@ class PortfolioMapperIT extends MapperIntegrationTestSupport {
         orderMapper.insertTrade(orderId, price, quantity);
     }
 
-    private void insertMarketData(UUID instrumentId, String timestamp, String close) {
+    private void insertDailyCandle(String symbol, String day, String close) {
+        BigDecimal price = new BigDecimal(close);
         jdbcTemplate.update("""
-                INSERT INTO Market_Data (instrument_id, timestamp, open_price, close_price, high_price, low_price)
-                VALUES (?::uuid, ?::timestamptz, ?, ?, ?, ?)
-                """, instrumentId.toString(), timestamp, new BigDecimal(close), new BigDecimal(close),
-                new BigDecimal(close), new BigDecimal(close));
+                INSERT INTO market_candles (symbol, interval, open, high, low, close, candle_time)
+                VALUES (?, '1d', ?, ?, ?, ?, ?::date)
+                """, symbol, price, price, price, price, day);
+    }
+
+    private void insertMinuteBar(String symbol, String barStart, String close) {
+        BigDecimal price = new BigDecimal(close);
+        jdbcTemplate.update("""
+                INSERT INTO market_bars (symbol, bar_start, open, high, low, close)
+                VALUES (?, ?::timestamptz, ?, ?, ?, ?)
+                """, symbol, barStart, price, price, price, price);
     }
 }

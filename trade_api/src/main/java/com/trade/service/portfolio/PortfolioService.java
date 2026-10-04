@@ -43,7 +43,7 @@ import java.util.TreeMap;
 // depends only on fill prices, never on today's price.
 //
 // Last prices come from LatestQuotes (the market-data topic), falling back
-// to the newest stored Market_Data row. A price older than the freshness
+// to the newest stored minute bar or daily candle. A price older than the freshness
 // window is still shown, flagged stale; a holding with no price at all has
 // null price fields and marks the summary partial. Only when no holding can
 // be priced does a route answer MKT-503.

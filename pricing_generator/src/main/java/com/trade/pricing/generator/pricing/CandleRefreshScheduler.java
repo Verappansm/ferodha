@@ -5,7 +5,6 @@ import com.trade.pricing.generator.fauxnance.dto.FauxnanceCandle;
 import com.trade.pricing.generator.mapper.PollableSymbolMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +16,6 @@ import java.util.List;
 // /quotes does. Negligible against the daily quota either way: even 25
 // watched symbols is 25 requests/day for this call alone.
 @Component
-@Profile("market-sim")
 public class CandleRefreshScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(CandleRefreshScheduler.class);

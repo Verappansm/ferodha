@@ -59,13 +59,15 @@ public class FauxnanceCandleClient {
      * Used by CandlePersistenceScheduler to populate market_candles table.
      * Returns all candles returned by endpoint, or empty list if fetch fails.
      *
-     * Endpoint: GET /candles/{symbol}
+     * Endpoint: GET /candles/{symbol}?from=&to=&interval=1d (the last 366 days)
      * Header: X-Api-Key (configured globally in FauxnanceClientConfig)
      */
     public List<FauxnanceCandle> fetchCandlesByRange(String symbol) {
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(366);
         try {
             FauxnanceCandlesEnvelope envelope = restClient.get()
-                    .uri("/candles/{symbol}", symbol)
+                    .uri("/candles/{symbol}?from={from}&to={to}&interval=1d", symbol, from, to)
                     .retrieve()
                     .body(FauxnanceCandlesEnvelope.class);
 

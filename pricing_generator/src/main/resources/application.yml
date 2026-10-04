@@ -2,8 +2,6 @@ server:
   port: ${SERVER_PORT:8084}
 
 spring:
-  profiles:
-    active: market-sim
   application:
     name: pricing-generator
 
@@ -43,6 +41,11 @@ fauxnance:
 generator:
   candle:
     refresh-interval-seconds: ${GENERATOR_CANDLE_REFRESH_SECONDS:86400}
+    persistence-interval-seconds: ${GENERATOR_CANDLE_PERSISTENCE_SECONDS:86400}
+  bars:
+    # 1-minute bars behind the instrument page's 1D chart, which reads the
+    # last 24 hours; older ones are deleted every hour.
+    retention-hours: ${GENERATOR_BAR_RETENTION_HOURS:26}
   quote:
     refresh-interval-seconds: ${GENERATOR_QUOTE_REFRESH_SECONDS:300}
   tick:

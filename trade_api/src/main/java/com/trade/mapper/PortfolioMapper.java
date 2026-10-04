@@ -15,7 +15,8 @@ public interface PortfolioMapper {
     // average cost and the realised P&L have to be replayed in.
     List<FillRow> findFills(@Param("accountId") long accountId);
 
-    // The newest stored Market_Data row per symbol. Only a fallback for a
-    // symbol the market-data topic has not quoted since this process started.
+    // The newest stored price per symbol (latest minute bar, else latest
+    // daily candle). Only a fallback for a symbol the market-data topic has
+    // not quoted since this process started.
     List<StoredPriceRow> findLatestStoredPrices(@Param("symbols") Collection<String> symbols);
 }

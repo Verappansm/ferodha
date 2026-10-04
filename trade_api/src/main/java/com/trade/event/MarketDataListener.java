@@ -14,9 +14,9 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
-// Feeds LatestQuotes from market-data. Both producers (trade-executor's
-// poller, and pricing_generator under market-sim) send the same envelope
-// with a {symbol, bid, ask, currency, asOf} payload.
+// Feeds LatestQuotes from market-data: pricing_generator's ticks (or, if
+// ever re-enabled, trade-executor's poller - the same envelope) with a
+// {symbol, bid, ask, currency, asOf} payload.
 //
 // The group id is unique per process start and the offset reset is
 // earliest, so every start re-reads the topic's retained quotes and the
@@ -43,13 +43,15 @@ public class MarketDataListener {
         try {
             JsonNode payload = objectMapper.readTree(message).path("payload");
             String symbol = payload.path("symbol").asText(null);
-            BigDecimal price = midPrice(payload.path("bid"), payload.path("ask"));
+            BigDecimal bid = decimal(payload.path("bid"));
+            BigDecimal ask = decimal(payload.path("ask"));
+            BigDecimal price = midPrice(bid, ask);
             OffsetDateTime asOf = observedAt(payload.path("asOf"));
             if (symbol == null || price == null) {
                 log.debug("Skipping market-data message without a symbol or a price");
                 return;
             }
-            latestQuotes.record(symbol, price, asOf);
+            latestQuotes.record(symbol, new LatestQuotes.Quote(price, bid, ask, asOf));
         } catch (Exception e) {
             log.debug("Skipping unreadable market-data message: {}", e.getMessage());
         }
@@ -69,12 +71,14 @@ public class MarketDataListener {
 
     // Values a holding at the mid of the quote; one missing side falls back
     // to the other.
-    private static BigDecimal midPrice(JsonNode bid, JsonNode ask) {
-        BigDecimal b = bid.isNumber() ? bid.decimalValue() : null;
-        BigDecimal a = ask.isNumber() ? ask.decimalValue() : null;
-        if (b != null && a != null) {
-            return b.add(a).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+    private static BigDecimal midPrice(BigDecimal bid, BigDecimal ask) {
+        if (bid != null && ask != null) {
+            return bid.add(ask).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
         }
-        return b != null ? b : a;
+        return bid != null ? bid : ask;
+    }
+
+    private static BigDecimal decimal(JsonNode node) {
+        return node.isNumber() ? node.decimalValue() : null;
     }
 }

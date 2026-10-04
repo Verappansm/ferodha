@@ -11,6 +11,7 @@ import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
 import com.trade.exception.InvalidDateRangeException;
 import com.trade.exception.InvalidOrderException;
+import com.trade.exception.InvalidParameterException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
 import com.trade.exception.PricingUnavailableException;
@@ -51,6 +52,7 @@ public class GlobalExceptionHandler {
             Map.entry(DuplicateOrderException.class, HttpStatus.CONFLICT),
             Map.entry(InvalidOrderException.class, HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry(InvalidDateRangeException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(InvalidParameterException.class, HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
             Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
@@ -109,6 +111,7 @@ public class GlobalExceptionHandler {
             case DuplicateOrderException e -> "idempotencyKey=" + e.getIdempotencyKey();
             case InvalidOrderException e -> "field=" + e.getField();
             case InvalidDateRangeException e -> "from=" + e.getFrom() + " to=" + e.getTo();
+            case InvalidParameterException e -> "parameter=" + e.getParameter();
             case OrderNotFoundException e -> "orderId=" + e.getOrderId();
             case OrderNotCancellableException e -> "orderId=" + e.getOrderId() + " status=" + e.getCurrentStatus();
             case ConcurrentUpdateException e -> "accountId=" + e.getAccountId();

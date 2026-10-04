@@ -33,17 +33,21 @@ export class InstrumentsComponent {
 
   // Available filter options
   readonly exchanges = computed(() => {
-    const exch = new Set(this.allInstruments().map(i => i.exchange));
+    const exch = new Set(this.allInstruments().map((i) => i.exchange));
     return Array.from(exch).sort();
   });
 
   readonly sectors = computed(() => {
-    const sec = new Set(this.allInstruments().filter(i => i.sector).map(i => i.sector!));
+    const sec = new Set(
+      this.allInstruments()
+        .filter((i) => i.sector)
+        .map((i) => i.sector!),
+    );
     return Array.from(sec).sort();
   });
 
   readonly types = computed(() => {
-    const t = new Set(this.allInstruments().map(i => i.type));
+    const t = new Set(this.allInstruments().map((i) => i.type));
     return Array.from(t).sort();
   });
 
@@ -54,10 +58,13 @@ export class InstrumentsComponent {
     const sector = this.selectedSector();
     const type = this.selectedType();
 
-    return this.allInstruments().filter(instrument => {
+    return this.allInstruments().filter((instrument) => {
       // Search by symbol or name
-      if (query && !instrument.symbol.toLowerCase().includes(query) &&
-          !instrument.name.toLowerCase().includes(query)) {
+      if (
+        query &&
+        !instrument.symbol.toLowerCase().includes(query) &&
+        !instrument.name.toLowerCase().includes(query)
+      ) {
         return false;
       }
 
@@ -153,26 +160,26 @@ export class InstrumentsComponent {
 
   nextPage(): void {
     if (this.hasNextPage()) {
-      this.currentOffset.update(offset => offset + this.pageSize);
+      this.currentOffset.update((offset) => offset + this.pageSize);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
   prevPage(): void {
     if (this.hasPrevPage()) {
-      this.currentOffset.update(offset => offset - this.pageSize);
+      this.currentOffset.update((offset) => offset - this.pageSize);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
   buyInstrument(symbol: string): void {
-    // Navigate to trading page with symbol and side pre-filled
-    this.router.navigate(['/trading'], { queryParams: { symbol, side: 'BUY' } });
+    // Navigate to the order ticket with symbol and side pre-filled
+    this.router.navigate(['/order'], { queryParams: { symbol, side: 'BUY' } });
   }
 
   sellInstrument(symbol: string): void {
-    // Navigate to trading page with symbol and side pre-filled
-    this.router.navigate(['/trading'], { queryParams: { symbol, side: 'SELL' } });
+    // Navigate to the order ticket with symbol and side pre-filled
+    this.router.navigate(['/order'], { queryParams: { symbol, side: 'SELL' } });
   }
 
   viewDetails(symbol: string): void {

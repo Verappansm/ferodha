@@ -9,6 +9,7 @@ model/account-response.ts
 model/account-status.ts
 model/balance-response.ts
 model/error-response.ts
+model/instrument-quote.ts
 model/instrument-response.ts
 model/instrument-type.ts
 model/models.ts
@@ -19,6 +20,8 @@ model/order-status.ts
 model/paginated-instruments-response.ts
 model/place-order-request.ts
 model/position-response.ts
+model/price-history.ts
+model/price-point.ts
 param.ts
 provide-api.ts
 query.params.ts

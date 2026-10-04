@@ -89,7 +89,7 @@
             selectedExchange.set('');
             selectedSector.set('');
             selectedType.set('');
-            onSearchChange();
+            onSearchChange()
           "
         >
           Clear All Filters
@@ -177,23 +177,13 @@
   @if (totalPages() > 1) {
     <div class="pagination-section">
       <div class="pagination-info">
-        <p>
-          Page {{ currentPageNum() }} of {{ totalPages() }}
-        </p>
+        <p>Page {{ currentPageNum() }} of {{ totalPages() }}</p>
       </div>
       <div class="pagination-controls">
-        <button
-          class="btn btn-outline-primary"
-          [disabled]="!hasPrevPage()"
-          (click)="prevPage()"
-        >
+        <button class="btn btn-outline-primary" [disabled]="!hasPrevPage()" (click)="prevPage()">
           ← Previous
         </button>
-        <button
-          class="btn btn-outline-primary"
-          [disabled]="!hasNextPage()"
-          (click)="nextPage()"
-        >
+        <button class="btn btn-outline-primary" [disabled]="!hasNextPage()" (click)="nextPage()">
           Next →
         </button>
       </div>
