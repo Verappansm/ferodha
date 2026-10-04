@@ -36,7 +36,11 @@ import java.util.UUID;
 // during context startup, on top of the base schema applied below.
 @Testcontainers
 @SpringBootTest
-@TestPropertySource(properties = "app.jwt.secret=mapper-integration-test-signing-secret")
+@TestPropertySource(properties = {
+        "app.jwt.secret=mapper-integration-test-signing-secret",
+        // no broker in this test: keep the market-data listener from polling for one
+        "portfolio.quotes.listen=false"
+})
 @Tag("integration")
 abstract class MapperIntegrationTestSupport {
 

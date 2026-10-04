@@ -30,6 +30,19 @@
           "enumPropertyNaming": "original"
         }
       },
+      "portfolio-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/portfolio-api.yaml",
+        "output": "src/app/api/generated/portfolio",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
       "admin-trade-api": {
         "generatorName": "typescript-angular",
         "inputSpec": "../design/admin-trade-api.yaml",
