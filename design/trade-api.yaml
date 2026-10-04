@@ -73,6 +73,8 @@ tags:
     description: Placing and cancelling orders.
   - name: Accounts
     description: Account details, cash balance, holdings and order history.
+  - name: Instruments
+    description: Market instruments and tradable symbols.
 
 security:
   - bearerAuth: []
@@ -364,6 +366,43 @@ paths:
           $ref: '#/components/responses/AccountNotActive'
         '404':
           $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/instruments:
+    get:
+      tags: [Instruments]
+      operationId: getInstruments
+      summary: Get tradable instruments
+      description: |
+        Returns a paginated list of all tradable instruments. Filtering by exchange, sector, and
+        type is performed on the client side.
+      parameters:
+        - name: pageSize
+          in: query
+          required: false
+          description: Number of instruments per page (default 20).
+          schema:
+            type: integer
+            format: int32
+            default: 20
+            minimum: 1
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based offset for pagination (default 0).
+          schema:
+            type: integer
+            format: int64
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: Paginated list of tradable instruments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstrumentsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
 
 components:
 
@@ -697,3 +736,70 @@ components:
             Short description for a human. Never include a stack trace, a SQL fragment, a class
             name or an internal identifier. Leaking those is OWASP A05.
           example: Insufficient holdings
+
+    InstrumentType:
+      type: string
+      enum: [EQUITY, BOND, ETF, FOREX, CRYPTO]
+      description: Instrument asset class.
+
+    InstrumentResponse:
+      type: object
+      additionalProperties: false
+      required: [symbol, name, type, exchange, currency, sector]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Instrument ticker symbol.
+          example: AAPL
+        name:
+          type: string
+          maxLength: 150
+          description: Display name of the instrument.
+          example: Apple Inc.
+        type:
+          $ref: '#/components/schemas/InstrumentType'
+        exchange:
+          type: string
+          maxLength: 50
+          description: Exchange where the instrument is traded.
+          example: NASDAQ
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 currency code for instrument pricing.
+          example: USD
+        sector:
+          type: string
+          nullable: true
+          maxLength: 50
+          description: Business sector classification.
+          example: Technology
+
+    PaginatedInstrumentsResponse:
+      type: object
+      additionalProperties: false
+      required: [instruments, total, pageSize, offset]
+      properties:
+        instruments:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstrumentResponse'
+          description: List of instruments on this page.
+        total:
+          type: integer
+          format: int64
+          description: Total number of tradable instruments.
+          example: 42
+        pageSize:
+          type: integer
+          format: int32
+          description: Number of instruments returned on this page.
+          example: 20
+        offset:
+          type: integer
+          format: int64
+          description: Zero-based offset of this page.
+          example: 0
