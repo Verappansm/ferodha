@@ -33,6 +33,7 @@ below is a decision the team has taken and will defend at review.
 | B17 | Where the claims live | Sprint 4 README | `claims.md` in the analytics folder | `design/analytics-claims.md`; `analytics_etl/README.md` points to it |
 | B18 | Admin tokens | `auth-api.yaml` JWT claims contract | Every token carries an integer `accountId`; `roles` is `CUSTOMER` or `ADMIN` | `POST /auth/admin/login` issues an admin console token: `roles: [ADMIN]`, `aud: admin-console`, no `accountId`, no refresh token. Customer `/auth/login` refuses admin users; trade_api accepts each kind only on its own routes |
 | B19 | Admin routes and error codes | `trade-api.yaml`, `auth-api.yaml` | No admin routes; catalogues as listed | `/api/v1/admin/**` in trade_api and `/admin/**` in the auth service (`design/admin-trade-api.yaml`, `design/admin-auth-api.yaml`), adding `AUTH-403`, `ADM-404` and `ADM-409` |
+| B20 | Portfolio pricing and FX | `contracts/portfolio-api.yaml` | Last prices from Fauxnance `GET /quotes`, batched; totals converted with live `FX:` rates | Last prices from the `market-data` topic (mid of bid and ask), falling back to the newest stored `Market_Data` row; totals converted at the executor's fixed 90 INR = 1 USD until LEAP-006 |
 
 ## Why
 
@@ -142,3 +143,15 @@ lives in the service that owns the data it changes (`Accounts`, `Orders` and
 `ADM-404` and `ADM-409` cover a missing target and a target whose state does
 not allow the action. Both services write their decisions to the one
 `admin_audit` table (trade_api Liquibase `009`).
+
+**B20 (portfolio pricing).** trade_api holds no Fauxnance key (B15), and a
+second key holder would split the 2000-a-day quota. Every quote the platform
+fetches is already published on `market-data`, by the executor's poller or by
+`pricing_generator` under `market-sim`, so the portfolio module reads that
+topic into memory and spends no quota at all. The staleness rules are kept as
+written: a quote older than `PORTFOLIO_STALE_AFTER_SECONDS` (default 300) is
+flagged `stale`, a holding with no quote has null price fields and marks the
+summary `partial`, and `MKT-503` is returned only when nothing can be priced.
+Totals use the same fixed USD/INR rate the executor settles at, so a holding
+is valued at the rate it was charged at; any other currency pair is left out
+of the totals and marks the summary partial.

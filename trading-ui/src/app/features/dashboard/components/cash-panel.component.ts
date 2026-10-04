@@ -1,31 +1,17 @@
-﻿import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Component, input, output } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { BalanceResponse } from '../../../api/trade-api';
+import { PanelState } from '../panel-state';
 
+/** Available cash, from the balance route; links to the bank page. */
 @Component({
   selector: 'app-cash-panel',
-  standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [DecimalPipe, RouterLink],
   templateUrl: './cash-panel.component.html',
-  styleUrls: ['./cash-panel.component.css'],
+  styleUrl: './panel.css',
 })
-export class CashPanelComponent implements OnInit {
-  @Input() accountId: number | null = null;
-  @Input() loading: boolean = false;
-  @Input() error: string | null = null;
-  @Input() cashBalance: number = 0;
-  @Output() retry = new EventEmitter<void>();
-
-  ngOnInit() {
-    // Component initialization
-  }
-
-  navigateToBank() {
-    // Navigate to bank/deposit view
-    console.log('Navigate to bank');
-  }
-
-  retryClick() {
-    this.retry.emit();
-  }
+export class CashPanelComponent {
+  readonly state = input.required<PanelState<BalanceResponse>>();
+  readonly retry = output<void>();
 }

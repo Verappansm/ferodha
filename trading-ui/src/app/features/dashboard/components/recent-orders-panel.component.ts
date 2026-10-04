@@ -1,26 +1,18 @@
-﻿import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Component, input, output } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { OrderHistoryEntry } from '../../../api/trade-api';
+import { OrderStatusBadgeComponent } from '../../../components/order-status-badge/order-status-badge.component';
+import { PanelState } from '../panel-state';
 
+/** The latest orders, with the blotter's own status badge; links to the orders page. */
 @Component({
   selector: 'app-recent-orders-panel',
-  standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [DatePipe, RouterLink, OrderStatusBadgeComponent],
   templateUrl: './recent-orders-panel.component.html',
-  styleUrls: ['./recent-orders-panel.component.css'],
+  styleUrl: './panel.css',
 })
 export class RecentOrdersPanelComponent {
-  @Input() accountId: number | null = null;
-  @Input() loading: boolean = false;
-  @Input() error: string | null = null;
-  @Input() orders: any[] = [];
-  @Output() retry = new EventEmitter<void>();
-
-  navigateToOrders() {
-    console.log('Navigate to orders');
-  }
-
-  retryClick() {
-    this.retry.emit();
-  }
+  readonly state = input.required<PanelState<OrderHistoryEntry[]>>();
+  readonly retry = output<void>();
 }

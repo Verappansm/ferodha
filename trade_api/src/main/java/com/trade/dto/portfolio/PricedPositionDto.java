@@ -1,23 +1,23 @@
 package com.trade.dto.portfolio;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
-/**
- * Priced position: quantity, average cost, market value, unrealised P&L, staleness.
- * Contract: portfolio-api.yaml /portfolio/{accountId}/positions
- */
+// contracts/portfolio-api.yaml PricedPosition. Amounts are in the
+// instrument's own currency. lastPrice, marketValue, the unrealised figures
+// and priceAsOf are null when the instrument could not be priced.
 public record PricedPositionDto(
         Long accountId,
         String symbol,
-        BigDecimal quantity,
+        Integer quantity,
         BigDecimal averageCost,
         BigDecimal costBasis,
-        String currency,
         BigDecimal lastPrice,
         BigDecimal marketValue,
         BigDecimal unrealisedPnl,
-        Boolean stale,
-        Instant priceAsOf
+        BigDecimal unrealisedPnlPercent,
+        String currency,
+        OffsetDateTime priceAsOf,
+        Boolean stale
 ) {
 }

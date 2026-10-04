@@ -1,32 +1,57 @@
-﻿<div class="panel top-positions-panel">
-  <div class="panel-header">
-    <h2>Top Positions</h2>
-  </div>
-  <div class="panel-content" *ngIf="!loading; else loadingState">
-    <div *ngIf="!error; else errorState">
-      <div *ngIf="positions && positions.length > 0" class="positions-list">
-        <div *ngFor="let pos of positions" class="position-item">
-          <div class="position-symbol">{{ pos.symbol }}</div>
-          <div class="position-qty">{{ pos.quantity }} @ {{ pos.lastPrice | number: "1.2-2" }}</div>
-          <div class="position-value" [class.positive]="pos.unrealisedPnl > 0" [class.negative]="pos.unrealisedPnl < 0">
-            {{ pos.marketValue | number: "1.2-2" }}
-          </div>
-        </div>
-      </div>
-      <div *ngIf="!positions || positions.length === 0" class="empty-message">
-        No positions
-      </div>
+<section class="panel" data-testid="positions-panel" aria-labelledby="positions-title">
+  <header class="panel-header">
+    <h3 id="positions-title">Top positions</h3>
+    <a class="panel-link" routerLink="/portfolio">Portfolio</a>
+  </header>
+
+  @if (state().loading) {
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <span class="visually-hidden">Loading positions</span>
+  } @else if (state().error) {
+    <div class="panel-error" role="alert">
+      <p data-testid="positions-panel-error">{{ state().error }}</p>
+      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
     </div>
-    <ng-template #errorState>
-      <div class="panel-error">
-        <p class="error-message">{{ error }}</p>
-        <button class="btn btn-outline" (click)="retryClick()">Try Again</button>
-      </div>
-    </ng-template>
-  </div>
-  <ng-template #loadingState>
-    <div class="skeleton-loader">
-      <div class="skeleton-bar"></div>
-    </div>
-  </ng-template>
-</div>
+  } @else if (state().data; as positions) {
+    @if (positions.length === 0) {
+      <p class="muted" data-testid="positions-panel-empty">
+        You do not hold anything yet. Filled buy orders appear here.
+      </p>
+    } @else {
+      <ul class="rows">
+        @for (position of positions; track position.symbol) {
+          <li data-testid="positions-panel-row">
+            <span>
+              <span class="symbol">{{ position.symbol }}</span>
+              {{ position.quantity }}
+              @if (position.stale) {
+                <span class="stale" data-testid="positions-panel-stale">
+                  @if (position.priceAsOf) {
+                    Stale, priced {{ position.priceAsOf | date: 'short' }}
+                  } @else {
+                    No price
+                  }
+                </span>
+              }
+            </span>
+            @if (position.marketValue != null) {
+              <span class="num">
+                {{ position.marketValue | number: '1.2-2' }} {{ position.currency }}
+                <br />
+                <span [class]="direction(position.unrealisedPnl)">
+                  {{ sign(position.unrealisedPnl)
+                  }}{{ abs(position.unrealisedPnl ?? 0) | number: '1.2-2' }}
+                  {{ word(position.unrealisedPnl) }}
+                </span>
+              </span>
+            } @else {
+              <span class="num muted">Not priced</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

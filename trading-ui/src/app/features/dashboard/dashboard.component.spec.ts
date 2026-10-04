@@ -1,362 +1,231 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { DashboardComponent } from './dashboard.component';
-import { PortfolioService } from '../../services/portfolio.service';
-import { OrderService } from '../../services/order.service';
-import { AuthService } from '../../services/auth.service';
+import { HttpErrorResponse } from '@angular/common/http';
+import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
+import { DashboardComponent } from './dashboard.component';
+import { Session } from '../../core/session/session';
+import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
+import { PortfolioApi, PricedPosition } from '../../api/portfolio-api';
+import { ERROR_MESSAGES } from '../../core/errors/error-message';
+
+function order(
+  orderId: string,
+  createdOn: string,
+  status: OrderStatus = OrderStatus.FILLED,
+): OrderHistoryEntry {
+  return {
+    orderId,
+    accountId: 3,
+    symbol: 'AAPL',
+    side: OrderSide.BUY,
+    quantity: 10,
+    price: 150,
+    executedPrice: 149.5,
+    status,
+    createdOn,
+  };
+}
+
+function position(
+  symbol: string,
+  marketValue: number | null,
+  extra: Partial<PricedPosition> = {},
+): PricedPosition {
+  return {
+    accountId: 3,
+    symbol,
+    quantity: 10,
+    averageCost: 100,
+    costBasis: 1000,
+    lastPrice: marketValue === null ? null : marketValue / 10,
+    marketValue,
+    unrealisedPnl: marketValue === null ? null : marketValue - 1000,
+    unrealisedPnlPercent: null,
+    currency: 'USD',
+    priceAsOf: marketValue === null ? null : '2026-10-04T12:00:00Z',
+    stale: marketValue === null,
+    ...extra,
+  };
+}
+
+const PNL = {
+  accountId: 3,
+  baseCurrency: 'USD',
+  from: '2026-10-04',
+  to: '2026-10-04',
+  realisedPnl: 40,
+  unrealisedPnl: -15.5,
+  totalPnl: 24.5,
+  asOf: '2026-10-04T12:00:00Z',
+};
 
 describe('DashboardComponent', () => {
-  let component: DashboardComponent;
   let fixture: ComponentFixture<DashboardComponent>;
-  let portfolioService: jasmine.SpyObj<PortfolioService>;
-  let orderService: jasmine.SpyObj<OrderService>;
-  let authService: jasmine.SpyObj<AuthService>;
-
-  const mockUser = { id: '123', accountId: 456, username: 'testuser' };
-  const mockPortfolioSummary = {
-    accountId: 456,
-    baseCurrency: 'USD',
-    cashBalance: 50000,
-    marketValue: 145000,
-    costBasis: 140000,
-    unrealisedPnl: 5000,
-    realisedPnl: 2500,
-    totalValue: 195000,
-    positionCount: 5,
-    partial: false,
-    priceAsOf: '2026-10-04T11:35:35+05:30',
-    asOf: '2026-10-04T11:35:35+05:30',
-  };
-
-  const mockPnl = {
-    accountId: 456,
-    baseCurrency: 'USD',
-    realisedPnl: 2500,
-    unrealisedPnl: 5000,
-    totalPnl: 7500,
-    asOf: '2026-10-04T11:35:35+05:30',
-  };
-
-  const mockOrders = [
-    {
-      orderId: '1',
-      symbol: 'AAPL',
-      side: 'BUY',
-      quantity: 100,
-      status: 'FILLED',
-      filledQuantity: 100,
-      createdAt: new Date(),
-    },
-    {
-      orderId: '2',
-      symbol: 'MSFT',
-      side: 'BUY',
-      quantity: 50,
-      status: 'PENDING',
-      filledQuantity: 0,
-      createdAt: new Date(),
-    },
-  ];
-
-  const mockPositions = [
-    {
-      symbol: 'AAPL',
-      quantity: 100,
-      marketValue: 15550,
-      unrealisedPnl: 550,
-      stale: false,
-    },
-    {
-      symbol: 'MSFT',
-      quantity: 50,
-      marketValue: 15000,
-      unrealisedPnl: 1000,
-      stale: false,
-    },
-  ];
+  let balance: ReturnType<typeof vi.fn>;
+  let orderHistory: ReturnType<typeof vi.fn>;
+  let pnl: ReturnType<typeof vi.fn>;
+  let positions: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    const portfolioServiceSpy = jasmine.createSpyObj('PortfolioService', [
-      'getPortfolioSummary',
-      'getPnl',
-      'getTopPositions',
-    ]);
-    const orderServiceSpy = jasmine.createSpyObj('OrderService', ['getRecentOrders']);
-    const authServiceSpy = jasmine.createSpyObj('AuthService', ['getCurrentUser']);
-
-    portfolioServiceSpy.getPortfolioSummary.and.returnValue(of(mockPortfolioSummary));
-    portfolioServiceSpy.getPnl.and.returnValue(of(mockPnl));
-    portfolioServiceSpy.getTopPositions.and.returnValue(of(mockPositions));
-    orderServiceSpy.getRecentOrders.and.returnValue(of(mockOrders));
-    authServiceSpy.getCurrentUser.and.returnValue(of(mockUser));
-
+    balance = vi
+      .fn()
+      .mockReturnValue(of({ accountId: 3, cashBalance: 2500.5, currency: 'USD', asOf: '' }));
+    orderHistory = vi.fn().mockReturnValue(of([]));
+    pnl = vi.fn().mockReturnValue(of(PNL));
+    positions = vi.fn().mockReturnValue(of([]));
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
       providers: [
-        { provide: PortfolioService, useValue: portfolioServiceSpy },
-        { provide: OrderService, useValue: orderServiceSpy },
-        { provide: AuthService, useValue: authServiceSpy },
+        provideRouter([]),
+        { provide: Session, useValue: { accountId: signal<number | null>(3) } },
+        { provide: TradeApi, useValue: { balance, orderHistory } },
+        { provide: PortfolioApi, useValue: { pnl, positions } },
       ],
     }).compileComponents();
+  });
 
-    portfolioService = TestBed.inject(PortfolioService) as jasmine.SpyObj<PortfolioService>;
-    orderService = TestBed.inject(OrderService) as jasmine.SpyObj<OrderService>;
-    authService = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
-
+  function open(): void {
     fixture = TestBed.createComponent(DashboardComponent);
-    component = fixture.componentInstance;
-  });
+    fixture.detectChanges();
+  }
 
-  describe('initialization', () => {
-    it('should create the dashboard component', () => {
-      expect(component).toBeTruthy();
+  function text(testId: string): string {
+    const element: HTMLElement | null = fixture.nativeElement.querySelector(
+      `[data-testid="${testId}"]`,
+    );
+    return element?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  }
+
+  function all(testId: string): HTMLElement[] {
+    return Array.from(fixture.nativeElement.querySelectorAll(`[data-testid="${testId}"]`));
+  }
+
+  describe('each panel renders its figures from the API response', () => {
+    it('shows the cash balance in its currency', () => {
+      open();
+      expect(text('cash-amount')).toBe('2,500.50USD');
     });
 
-    it('should load all data on init', () => {
-      fixture.detectChanges();
-
-      expect(authService.getCurrentUser).toHaveBeenCalled();
-      // Wait for async operations
-      fixture.whenStable().then(() => {
-        expect(portfolioService.getPortfolioSummary).toHaveBeenCalledWith(mockUser.accountId);
-        expect(portfolioService.getPnl).toHaveBeenCalledWith(mockUser.accountId);
-        expect(orderService.getRecentOrders).toHaveBeenCalledWith(mockUser.accountId, 5);
-        expect(portfolioService.getTopPositions).toHaveBeenCalledWith(mockUser.accountId, 5);
-      });
+    it("asks for today's P&L and shows it with a sign and a word, not colour alone", () => {
+      open();
+      const today = new Date().toISOString().slice(0, 10);
+      expect(pnl).toHaveBeenCalledWith(3, { from: today, to: today });
+      expect(text('pnl-total')).toBe('+24.50USD');
+      expect(text('pnl-word')).toBe('Gain');
+      expect(text('pnl-realised')).toBe('+40.00 Gain');
+      expect(text('pnl-unrealised')).toBe('−15.50 Loss');
     });
 
-    it('should set accountId from authenticated user', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.accountId()).toBe(mockUser.accountId);
-        done();
-      }, 100);
-    });
-  });
-
-  describe('cash panel', () => {
-    it('should display cash balance after loading', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.cashBalance()).toBe(mockPortfolioSummary.cashBalance);
-        expect(component.cashLoading()).toBe(false);
-        expect(component.cashError()).toBeNull();
-        done();
-      }, 100);
-    });
-
-    it('should handle cash loading error', (done) => {
-      portfolioService.getPortfolioSummary.and.returnValue(
-        throwError(() => new Error('Network error'))
+    it('shows the five newest orders, newest first, with the blotter status badge', () => {
+      orderHistory.mockReturnValue(
+        of([
+          order('ORD-1', '2026-10-01T09:00:00Z'),
+          order('ORD-2', '2026-10-04T09:00:00Z', OrderStatus.NEW),
+          order('ORD-3', '2026-10-02T09:00:00Z'),
+          order('ORD-4', '2026-10-03T09:00:00Z'),
+          order('ORD-5', '2026-09-30T09:00:00Z'),
+          order('ORD-6', '2026-09-29T09:00:00Z'),
+        ]),
       );
-
-      component.reloadCash();
-
-      setTimeout(() => {
-        expect(component.cashLoading()).toBe(false);
-        expect(component.cashError()).toBeTruthy();
-        done();
-      }, 100);
+      open();
+      const rows = all('orders-panel-row');
+      expect(rows.length).toBe(5);
+      expect(rows[0].querySelector('[data-testid="order-status-badge"]')?.textContent).toContain(
+        'NEW (IN PROCESS)',
+      );
+      expect(fixture.componentInstance.orders().data?.map((o) => o.orderId)).toEqual([
+        'ORD-2',
+        'ORD-4',
+        'ORD-3',
+        'ORD-1',
+        'ORD-5',
+      ]);
     });
 
-    it('should retry cash loading on manual retry', (done) => {
-      portfolioService.getPortfolioSummary.and.returnValue(
-        throwError(() => new Error('First attempt failed'))
+    it('shows the largest positions first, with an unpriced one last and marked', () => {
+      positions.mockReturnValue(
+        of([position('MSFT', 900), position('TSLA', null), position('AAPL', 1500)]),
       );
+      open();
+      const rows = all('positions-panel-row');
+      expect(rows.map((row) => row.querySelector('.symbol')?.textContent)).toEqual([
+        'AAPL',
+        'MSFT',
+        'TSLA',
+      ]);
+      expect(rows[0].textContent).toContain('+500.00 Gain');
+      expect(rows[1].textContent).toContain('−100.00 Loss');
+      expect(rows[2].textContent).toContain('Not priced');
+      expect(text('positions-panel-stale')).toBe('No price');
+    });
 
-      component.reloadCash();
-
-      setTimeout(() => {
-        expect(component.cashError()).toBeTruthy();
-
-        // Change mock to succeed
-        portfolioService.getPortfolioSummary.and.returnValue(of(mockPortfolioSummary));
-        component.reloadCash();
-
-        setTimeout(() => {
-          expect(component.cashError()).toBeNull();
-          expect(component.cashBalance()).toBe(mockPortfolioSummary.cashBalance);
-          done();
-        }, 50);
-      }, 50);
+    it('marks a stale price with the time it was last priced', () => {
+      positions.mockReturnValue(of([position('AAPL', 1500, { stale: true })]));
+      open();
+      expect(text('positions-panel-stale')).toMatch(/^Stale, priced /);
     });
   });
 
-  describe('P&L panel', () => {
-    it('should display P&L data after loading', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.pnlData()).toEqual(mockPnl);
-        expect(component.pnlLoading()).toBe(false);
-        expect(component.pnlError()).toBeNull();
-        done();
-      }, 100);
+  describe('a failed panel shows a readable message while the others still render', () => {
+    it('keeps cash, orders and positions when the P&L request fails', () => {
+      pnl.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 503,
+              error: { errorCode: 'MKT-503', message: 'Pricing unavailable' },
+            }),
+        ),
+      );
+      open();
+      expect(text('pnl-error')).toBe(ERROR_MESSAGES['MKT-503']);
+      expect(text('cash-amount')).toBe('2,500.50USD');
+      expect(text('orders-panel-empty')).not.toBe('');
+      expect(text('positions-panel-empty')).not.toBe('');
     });
 
-    it('should handle P&L loading error', (done) => {
-      portfolioService.getPnl.and.returnValue(throwError(() => new Error('Network error')));
+    it('says when the service could not be reached, and retries only that panel', () => {
+      balance.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
+      open();
+      expect(text('cash-error')).toContain('could not be reached');
+      expect(text('pnl-total')).toBe('+24.50USD');
 
-      component.reloadPnl();
-
-      setTimeout(() => {
-        expect(component.pnlLoading()).toBe(false);
-        expect(component.pnlError()).toBeTruthy();
-        done();
-      }, 100);
+      const retry: HTMLButtonElement = fixture.nativeElement.querySelector(
+        '[data-testid="cash-panel"] .retry',
+      );
+      retry.click();
+      fixture.detectChanges();
+      expect(text('cash-amount')).toBe('2,500.50USD');
+      expect(balance).toHaveBeenCalledTimes(2);
+      expect(pnl).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('orders panel', () => {
-    it('should display recent orders after loading', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.recentOrders().length).toBe(mockOrders.length);
-        expect(component.ordersLoading()).toBe(false);
-        expect(component.ordersError()).toBeNull();
-        done();
-      }, 100);
-    });
-
-    it('should show empty state when no orders', (done) => {
-      orderService.getRecentOrders.and.returnValue(of([]));
-
-      component.reloadOrders();
-
-      setTimeout(() => {
-        expect(component.recentOrders().length).toBe(0);
-        expect(component.isEmptyState()).toBe(true);
-        done();
-      }, 100);
-    });
-
-    it('should handle orders loading error gracefully', (done) => {
-      orderService.getRecentOrders.and.returnValue(
-        throwError(() => new Error('Network error'))
-      );
-
-      component.reloadOrders();
-
-      setTimeout(() => {
-        expect(component.ordersLoading()).toBe(false);
-        expect(component.ordersError()).toBeTruthy();
-        // Other panels should still render (not affected by order error)
-        expect(component.cashBalance()).toBe(mockPortfolioSummary.cashBalance);
-        done();
-      }, 100);
+  describe('a new customer with no orders or positions sees helpful empty states', () => {
+    it('points to the bank, the market list and explains where holdings appear', () => {
+      balance.mockReturnValue(of({ accountId: 3, cashBalance: 0, currency: 'USD', asOf: '' }));
+      pnl.mockReturnValue(of({ ...PNL, realisedPnl: 0, unrealisedPnl: 0, totalPnl: 0 }));
+      open();
+      expect(text('cash-empty')).toContain('Deposit from your bank');
+      expect(text('orders-panel-empty')).toContain('Find an instrument');
+      expect(text('positions-panel-empty')).toContain('You do not hold anything yet');
+      expect(text('pnl-word')).toBe('No change');
     });
   });
 
-  describe('positions panel', () => {
-    it('should display top positions after loading', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.topPositions().length).toBeGreaterThan(0);
-        expect(component.positionsLoading()).toBe(false);
-        expect(component.positionsError()).toBeNull();
-        done();
-      }, 100);
-    });
-
-    it('should sort positions by market value', (done) => {
-      const unsortedPositions = [
-        { ...mockPositions[1], marketValue: 5000 },
-        { ...mockPositions[0], marketValue: 15000 },
-      ];
-      portfolioService.getTopPositions.and.returnValue(of(unsortedPositions));
-
-      component.reloadPositions();
-
-      setTimeout(() => {
-        const positions = component.topPositions();
-        expect(positions[0].marketValue).toBeGreaterThanOrEqual(positions[1].marketValue);
-        done();
-      }, 100);
-    });
-
-    it('should handle empty positions gracefully', (done) => {
-      portfolioService.getTopPositions.and.returnValue(of([]));
-
-      component.reloadPositions();
-
-      setTimeout(() => {
-        expect(component.topPositions().length).toBe(0);
-        done();
-      }, 100);
-    });
+  it('links each panel to its full page', () => {
+    open();
+    const links = Array.from(fixture.nativeElement.querySelectorAll('.panel-header a')).map((a) =>
+      (a as HTMLAnchorElement).getAttribute('href'),
+    );
+    expect(links).toEqual(['/bank', '/portfolio', '/orders', '/portfolio']);
   });
 
-  describe('error handling', () => {
-    it('should show independent error messages for each panel', (done) => {
-      // Make portfolio and orders fail, but P&L succeed
-      portfolioService.getPortfolioSummary.and.returnValue(
-        throwError(() => new Error('Portfolio error'))
-      );
-      orderService.getRecentOrders.and.returnValue(
-        throwError(() => new Error('Orders error'))
-      );
-      // P&L should still succeed
-
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        // Cash panel should show error
-        expect(component.cashError()).toBeTruthy();
-        // Orders panel should show error
-        expect(component.ordersError()).toBeTruthy();
-        // But P&L should load successfully
-        expect(component.pnlError()).toBeNull();
-        expect(component.pnlData()).toEqual(mockPnl);
-        done();
-      }, 100);
-    });
-
-    it('should not blank entire page if one panel fails', (done) => {
-      orderService.getRecentOrders.and.returnValue(
-        throwError(() => new Error('Orders API down'))
-      );
-
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        // Cash panel should still render
-        expect(component.cashLoading()).toBe(false);
-        expect(component.cashBalance()).toBeGreaterThan(0);
-
-        // P&L panel should still render
-        expect(component.pnlLoading()).toBe(false);
-        expect(component.pnlData()).toBeTruthy();
-
-        done();
-      }, 100);
-    });
-  });
-
-  describe('empty state', () => {
-    it('should show empty state when user has no orders or positions', (done) => {
-      orderService.getRecentOrders.and.returnValue(of([]));
-      portfolioService.getTopPositions.and.returnValue(of([]));
-
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.isEmptyState()).toBe(true);
-        done();
-      }, 100);
-    });
-
-    it('should not show empty state when user has orders or positions', (done) => {
-      fixture.detectChanges();
-
-      setTimeout(() => {
-        expect(component.isEmptyState()).toBe(false);
-        done();
-      }, 100);
-    });
+  it('loads nothing without a signed-in account', () => {
+    TestBed.overrideProvider(Session, { useValue: { accountId: signal<number | null>(null) } });
+    open();
+    expect(balance).not.toHaveBeenCalled();
+    expect(pnl).not.toHaveBeenCalled();
   });
 });

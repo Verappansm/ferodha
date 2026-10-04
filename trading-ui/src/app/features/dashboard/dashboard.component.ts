@@ -1,139 +1,113 @@
-﻿import { Component, OnInit, signal, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { PortfolioService } from '../../services/portfolio.service';
-import { OrderService } from '../../services/order.service';
+import { Component, inject, OnInit, signal, WritableSignal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { BalanceResponse, OrderHistoryEntry, TradeApi } from '../../api/trade-api';
+import { PnlResponse, PortfolioApi, PricedPosition } from '../../api/portfolio-api';
+import { errorMessage } from '../../core/errors/error-message';
 import { Session } from '../../core/session/session';
+import { LOADING, PanelState } from './panel-state';
 import { CashPanelComponent } from './components/cash-panel.component';
 import { PnlPanelComponent } from './components/pnl-panel.component';
 import { RecentOrdersPanelComponent } from './components/recent-orders-panel.component';
 import { TopPositionsPanelComponent } from './components/top-positions-panel.component';
 
+/** How many orders and positions the dashboard shows. */
+export const PANEL_ROWS = 5;
+
+/**
+ * The client dashboard (LEAP-014): cash from the balance route, today's P&L
+ * and the largest positions from the portfolio routes (LEAP-009, so the two
+ * screens never disagree), and the latest orders from order history. Each
+ * panel loads on its own, so one failing request never blanks the others.
+ */
 @Component({
   selector: 'app-dashboard',
-  standalone: true,
   imports: [
-    CommonModule,
-    RouterModule,
+    DatePipe,
     CashPanelComponent,
     PnlPanelComponent,
     RecentOrdersPanelComponent,
     TopPositionsPanelComponent,
   ],
   templateUrl: './dashboard.component.html',
-  styleUrls: ['./dashboard.component.css'],
+  styleUrl: './dashboard.component.css',
 })
 export class DashboardComponent implements OnInit {
-  private session = inject(Session);
-  private portfolioService = inject(PortfolioService);
-  private orderService = inject(OrderService);
+  private readonly session = inject(Session);
+  private readonly tradeApi = inject(TradeApi);
+  private readonly portfolioApi = inject(PortfolioApi);
 
-  accountId = computed(() => this.session.accountId());
-  cashLoading = signal(false);
-  cashError = signal<string | null>(null);
-  cashBalance = signal(0);
+  readonly cash = signal<PanelState<BalanceResponse>>(LOADING);
+  readonly pnl = signal<PanelState<PnlResponse>>(LOADING);
+  readonly orders = signal<PanelState<OrderHistoryEntry[]>>(LOADING);
+  readonly positions = signal<PanelState<PricedPosition[]>>(LOADING);
+  readonly lastUpdated = signal<Date | null>(null);
 
-  pnlLoading = signal(false);
-  pnlError = signal<string | null>(null);
-  pnlData = signal<any>(null);
-
-  ordersLoading = signal(false);
-  ordersError = signal<string | null>(null);
-  orders = signal<any[]>([]);
-
-  positionsLoading = signal(false);
-  positionsError = signal<string | null>(null);
-  positions = signal<any[]>([]);
-
-  lastUpdate = computed(() => new Date());
-
-  ngOnInit() {
-    this.initializeDashboard();
+  ngOnInit(): void {
+    this.refresh();
   }
 
-  private initializeDashboard() {
-    const acctId = this.accountId();
-    if (acctId) {
-      this.loadAllData();
-    }
+  refresh(): void {
+    this.loadCash();
+    this.loadPnl();
+    this.loadOrders();
+    this.loadPositions();
+    this.lastUpdated.set(new Date());
   }
 
-  private loadAllData() {
-    this.reloadCash();
-    this.reloadPnl();
-    this.reloadOrders();
-    this.reloadPositions();
+  loadCash(): void {
+    this.load(this.cash, (accountId) => this.tradeApi.balance(accountId));
   }
 
-  reloadCash() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.cashLoading.set(true);
-    this.cashError.set(null);
-    this.portfolioService.getPortfolioSummary(acctId).subscribe({
-      next: (summary: any) => {
-        this.cashBalance.set(summary.cashBalance);
-        this.cashLoading.set(false);
-      },
-      error: (err: any) => {
-        this.cashError.set('Failed to load cash balance');
-        this.cashLoading.set(false);
-      },
+  /** Realised P&L booked today (UTC, as the server books it) plus unrealised as at now. */
+  loadPnl(): void {
+    const today = new Date().toISOString().slice(0, 10);
+    this.load(this.pnl, (accountId) =>
+      this.portfolioApi.pnl(accountId, { from: today, to: today }),
+    );
+  }
+
+  loadOrders(): void {
+    this.load(this.orders, (accountId) =>
+      this.tradeApi
+        .orderHistory(accountId)
+        .pipe(
+          map((orders) =>
+            [...orders]
+              .sort((a, b) => Date.parse(b.createdOn) - Date.parse(a.createdOn))
+              .slice(0, PANEL_ROWS),
+          ),
+        ),
+    );
+  }
+
+  /** Largest first by market value; a holding without a price sorts last. */
+  loadPositions(): void {
+    this.load(this.positions, (accountId) =>
+      this.portfolioApi
+        .positions(accountId)
+        .pipe(
+          map((positions) =>
+            [...positions]
+              .sort((a, b) => (b.marketValue ?? -Infinity) - (a.marketValue ?? -Infinity))
+              .slice(0, PANEL_ROWS),
+          ),
+        ),
+    );
+  }
+
+  private load<T>(
+    state: WritableSignal<PanelState<T>>,
+    request: (accountId: number) => Observable<T>,
+  ): void {
+    const accountId = this.session.accountId();
+    if (accountId === null) return;
+    state.set(LOADING);
+    request(accountId).subscribe({
+      next: (data) => state.set({ loading: false, error: null, data }),
+      error: (error: unknown) =>
+        state.set({ loading: false, error: errorMessage(error), data: null }),
     });
-  }
-
-  reloadPnl() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.pnlLoading.set(true);
-    this.pnlError.set(null);
-    this.portfolioService.getPnl(acctId).subscribe({
-      next: (pnl: any) => {
-        this.pnlData.set(pnl);
-        this.pnlLoading.set(false);
-      },
-      error: (err: any) => {
-        this.pnlError.set('Failed to load P&L');
-        this.pnlLoading.set(false);
-      },
-    });
-  }
-
-  reloadOrders() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.ordersLoading.set(true);
-    this.ordersError.set(null);
-    this.orderService.getRecentOrders(acctId, 5).subscribe({
-      next: (orders: any) => {
-        this.orders.set(orders);
-        this.ordersLoading.set(false);
-      },
-      error: (err: any) => {
-        this.ordersError.set('Failed to load orders');
-        this.ordersLoading.set(false);
-      },
-    });
-  }
-
-  reloadPositions() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.positionsLoading.set(true);
-    this.positionsError.set(null);
-    this.portfolioService.getTopPositions(acctId, 5).subscribe({
-      next: (positions: any) => {
-        this.positions.set(positions);
-        this.positionsLoading.set(false);
-      },
-      error: (err: any) => {
-        this.positionsError.set('Failed to load positions');
-        this.positionsLoading.set(false);
-      },
-    });
-  }
-
-  isEmptyState(): boolean {
-    return !this.cashBalance() && !this.pnlData() && this.orders().length === 0;
   }
 }

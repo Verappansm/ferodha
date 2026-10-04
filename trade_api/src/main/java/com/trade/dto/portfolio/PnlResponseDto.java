@@ -1,18 +1,23 @@
 package com.trade.dto.portfolio;
 
-import java.math.BigDecimal;
-import java.time.Instant;
+import com.fasterxml.jackson.annotation.JsonInclude;
 
-/**
- * Profit and loss summary: realised and unrealised totals.
- * Contract: portfolio-api.yaml /portfolio/{accountId}/pnl
- */
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.List;
+
+// contracts/portfolio-api.yaml PnlResponse. from and to are always present
+// (null when unbounded); bySymbol only when the caller asked for it.
 public record PnlResponseDto(
         Long accountId,
         String baseCurrency,
+        LocalDate from,
+        LocalDate to,
         BigDecimal realisedPnl,
         BigDecimal unrealisedPnl,
         BigDecimal totalPnl,
-        Instant asOf
+        @JsonInclude(JsonInclude.Include.NON_NULL) List<SymbolPnlDto> bySymbol,
+        OffsetDateTime asOf
 ) {
 }

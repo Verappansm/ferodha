@@ -9,7 +9,7 @@ import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
-import com.trade.exception.InvalidAccountAccessException;
+import com.trade.exception.InvalidDateRangeException;
 import com.trade.exception.InvalidOrderException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
@@ -45,12 +45,12 @@ public class GlobalExceptionHandler {
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_TYPE = Map.ofEntries(
             Map.entry(AccountNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(AccountNotActiveException.class, HttpStatus.FORBIDDEN),
-            Map.entry(InvalidAccountAccessException.class, HttpStatus.FORBIDDEN),
             Map.entry(InstrumentNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(InsufficientFundsException.class, HttpStatus.BAD_REQUEST),
             Map.entry(InsufficientHoldingsException.class, HttpStatus.CONFLICT),
             Map.entry(DuplicateOrderException.class, HttpStatus.CONFLICT),
             Map.entry(InvalidOrderException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(InvalidDateRangeException.class, HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
             Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
@@ -103,16 +103,16 @@ public class GlobalExceptionHandler {
         return switch (exception) {
             case AccountNotFoundException e -> "accountId=" + e.getAccountId();
             case AccountNotActiveException e -> "accountId=" + e.getAccountId() + " status=" + e.getStatus();
-            case InvalidAccountAccessException e -> "requested=" + e.getRequestedAccountId() + " token=" + e.getTokenAccountId();
             case InstrumentNotFoundException e -> "symbol=" + e.getSymbol();
             case InsufficientFundsException e -> "required=" + e.getRequired() + " available=" + e.getAvailable();
             case InsufficientHoldingsException e -> "requested=" + e.getRequested() + " held=" + e.getHeld();
             case DuplicateOrderException e -> "idempotencyKey=" + e.getIdempotencyKey();
             case InvalidOrderException e -> "field=" + e.getField();
+            case InvalidDateRangeException e -> "from=" + e.getFrom() + " to=" + e.getTo();
             case OrderNotFoundException e -> "orderId=" + e.getOrderId();
             case OrderNotCancellableException e -> "orderId=" + e.getOrderId() + " status=" + e.getCurrentStatus();
             case ConcurrentUpdateException e -> "accountId=" + e.getAccountId();
-            case PricingUnavailableException e -> "no quotes available from Fauxnance";
+            case PricingUnavailableException e -> "accountId=" + e.getAccountId() + " unpriced=" + e.getUnpricedSymbols();
             default -> "";
         };
     }

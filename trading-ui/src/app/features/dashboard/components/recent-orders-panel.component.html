@@ -1,33 +1,38 @@
-﻿<div class="panel recent-orders-panel">
-  <div class="panel-header">
-    <h2>Recent Orders</h2>
-  </div>
-  <div class="panel-content" *ngIf="!loading; else loadingState">
-    <div *ngIf="!error; else errorState">
-      <div *ngIf="orders && orders.length > 0" class="orders-list">
-        <div *ngFor="let order of orders" class="order-item">
-          <div class="order-symbol">{{ order.symbol }}</div>
-          <div class="order-side" [class.buy]="order.side === 'BUY'" [class.sell]="order.side === 'SELL'">
-            {{ order.side }}
-          </div>
-          <div class="order-quantity">{{ order.quantity }}</div>
-          <div class="order-status">{{ order.status }}</div>
-        </div>
-      </div>
-      <div *ngIf="!orders || orders.length === 0" class="empty-message">
-        No recent orders
-      </div>
+<section class="panel" data-testid="orders-panel" aria-labelledby="orders-title">
+  <header class="panel-header">
+    <h3 id="orders-title">Recent orders</h3>
+    <a class="panel-link" routerLink="/orders">All orders</a>
+  </header>
+
+  @if (state().loading) {
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <span class="visually-hidden">Loading orders</span>
+  } @else if (state().error) {
+    <div class="panel-error" role="alert">
+      <p data-testid="orders-panel-error">{{ state().error }}</p>
+      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
     </div>
-    <ng-template #errorState>
-      <div class="panel-error">
-        <p class="error-message">{{ error }}</p>
-        <button class="btn btn-outline" (click)="retryClick()">Try Again</button>
-      </div>
-    </ng-template>
-  </div>
-  <ng-template #loadingState>
-    <div class="skeleton-loader">
-      <div class="skeleton-bar"></div>
-    </div>
-  </ng-template>
-</div>
+  } @else if (state().data; as orders) {
+    @if (orders.length === 0) {
+      <p class="muted" data-testid="orders-panel-empty">
+        No orders yet. <a class="panel-link" routerLink="/instruments">Find an instrument</a> to
+        place your first order.
+      </p>
+    } @else {
+      <ul class="rows">
+        @for (order of orders; track order.orderId) {
+          <li data-testid="orders-panel-row">
+            <span>
+              <span class="symbol">{{ order.symbol }}</span>
+              {{ order.side }} {{ order.quantity }}
+              <span class="muted">{{ order.createdOn | date: 'short' }}</span>
+            </span>
+            <app-order-status-badge [status]="order.status" />
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

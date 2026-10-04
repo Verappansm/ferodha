@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.PortfolioMapper">
+
+    <resultMap id="fillRow" type="com.trade.mapper.FillRow">
+        <constructor>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="java.math.BigDecimal"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="executed_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="storedPriceRow" type="com.trade.mapper.StoredPriceRow">
+        <constructor>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="as_of" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+        Addressed by Accounts.id, the numeric key in the API path; Orders and
+        Trades only carry the UUID Accounts.account_id. The placed_at and
+        trade_id tie-breaks keep the replay order stable when two fills share
+        a timestamp.
+    -->
+    <select id="findFills" resultMap="fillRow">
+        SELECT i.ticker             AS symbol,
+               i.currency           AS currency,
+               o.side               AS side,
+               t.execution_quantity AS quantity,
+               t.execution_price    AS price,
+               t.executed_at        AS executed_at
+        FROM Trades t
+                 JOIN Orders o ON o.order_id = t.order_id
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE a.id = #{accountId}
+        ORDER BY t.executed_at, o.placed_at, t.trade_id
+    </select>
+
+    <select id="findLatestStoredPrices" resultMap="storedPriceRow">
+        SELECT DISTINCT ON (i.ticker)
+               i.ticker      AS symbol,
+               md.close_price AS price,
+               md.timestamp  AS as_of
+        FROM Market_Data md
+                 JOIN Instruments i ON i.instrument_id = md.instrument_id
+        WHERE i.ticker IN
+        <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
+            #{symbol}
+        </foreach>
+        ORDER BY i.ticker, md.timestamp DESC
+    </select>
+
+</mapper>

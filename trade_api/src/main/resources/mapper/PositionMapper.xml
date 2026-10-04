@@ -51,27 +51,4 @@
         ORDER BY i.ticker
     </select>
 
-    <!-- Get total unrealised P&L from Positions_View for an account -->
-    <select id="getTotalUnrealisedPnL" resultType="java.math.BigDecimal">
-        SELECT COALESCE(SUM(unrealized_pnl_value), 0)
-        FROM Positions_View
-        WHERE account_id = #{accountId}
-    </select>
-
-    <!-- Get all priced positions from Positions_View -->
-    <select id="findPricedPositionsFromView" resultType="com.trade.mapper.PositionMapper$PricedPositionRow">
-        SELECT quantity, average_price, market_value, unrealized_pnl_value
-        FROM Positions_View
-        WHERE account_id = #{accountId}
-        ORDER BY quantity DESC
-    </select>
-
-    <!-- Get priced position for a specific symbol from Positions_View -->
-    <select id="findPricedPositionBySymbolFromView" resultType="com.trade.mapper.PositionMapper$PricedPositionWithSymbolRow">
-        SELECT i.ticker AS symbol, pv.quantity, pv.average_price, pv.market_value, pv.unrealized_pnl_value
-        FROM Positions_View pv
-        JOIN Instruments i ON i.ticker = pv.symbol
-        WHERE pv.account_id = #{accountId} AND pv.symbol = #{symbol}
-    </select>
-
 </mapper>

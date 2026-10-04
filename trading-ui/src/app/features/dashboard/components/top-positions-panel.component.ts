@@ -1,26 +1,23 @@
-﻿import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
+import { Component, input, output } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { PricedPosition } from '../../../api/portfolio-api';
+import { pnlDirection, pnlSign, pnlWord } from '../../../core/format/pnl';
+import { PanelState } from '../panel-state';
 
+/** The largest holdings by market value, priced; links to the portfolio page. */
 @Component({
   selector: 'app-top-positions-panel',
-  standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [DatePipe, DecimalPipe, RouterLink],
   templateUrl: './top-positions-panel.component.html',
-  styleUrls: ['./top-positions-panel.component.css'],
+  styleUrl: './panel.css',
 })
 export class TopPositionsPanelComponent {
-  @Input() accountId: number | null = null;
-  @Input() loading: boolean = false;
-  @Input() error: string | null = null;
-  @Input() positions: any[] = [];
-  @Output() retry = new EventEmitter<void>();
+  readonly state = input.required<PanelState<PricedPosition[]>>();
+  readonly retry = output<void>();
 
-  navigateToPositions() {
-    console.log('Navigate to positions');
-  }
-
-  retryClick() {
-    this.retry.emit();
-  }
+  protected readonly direction = pnlDirection;
+  protected readonly sign = pnlSign;
+  protected readonly word = pnlWord;
+  protected readonly abs = Math.abs;
 }

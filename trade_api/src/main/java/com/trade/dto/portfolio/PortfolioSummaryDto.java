@@ -1,12 +1,10 @@
 package com.trade.dto.portfolio;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.OffsetDateTime;
 
-/**
- * Portfolio summary: cash balance, total market value, cost basis, and P&L totals.
- * Contract: portfolio-api.yaml /portfolio/{accountId}
- */
+// contracts/portfolio-api.yaml PortfolioSummary. Every amount is in
+// baseCurrency, the account's own currency.
 public record PortfolioSummaryDto(
         Long accountId,
         String baseCurrency,
@@ -14,11 +12,11 @@ public record PortfolioSummaryDto(
         BigDecimal marketValue,
         BigDecimal costBasis,
         BigDecimal unrealisedPnl,
+        BigDecimal unrealisedPnlPercent,
         BigDecimal realisedPnl,
         BigDecimal totalValue,
         Integer positionCount,
-        Boolean partial,      // true if some symbols have no quote
-        Instant priceAsOf,
-        Instant asOf
+        Boolean partial,
+        OffsetDateTime asOf
 ) {
 }

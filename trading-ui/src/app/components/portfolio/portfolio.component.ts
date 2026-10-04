@@ -1,183 +1,97 @@
-﻿import { Component, OnInit, signal, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { PortfolioService } from '../../services/portfolio.service';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import {
+  PnlResponse,
+  PortfolioApi,
+  PortfolioSummary,
+  PricedPosition,
+} from '../../api/portfolio-api';
+import { errorMessage } from '../../core/errors/error-message';
+import { pnlDirection, pnlSign, pnlWord } from '../../core/format/pnl';
 import { Session } from '../../core/session/session';
 
-interface PortfolioSummary {
-  accountId: number;
-  baseCurrency: string;
-  cashBalance: number;
-  marketValue: number;
-  costBasis: number;
-  unrealisedPnl: number;
-  realisedPnl: number;
-  totalValue: number;
-  positionCount: number;
-  partial: boolean;
-  priceAsOf: string;
-  asOf: string;
-}
+export type SortKey = 'symbol' | 'value' | 'pnl';
 
-interface Position {
-  symbol: string;
-  quantity: number;
-  averageCost: number;
-  costBasis: number;
-  currency: string;
-  lastPrice: number;
-  marketValue: number;
-  unrealisedPnl: number;
-  stale: boolean;
-  priceAsOf: string;
-}
-
-interface PnlData {
-  accountId: number;
-  baseCurrency: string;
-  realisedPnl: number;
-  unrealisedPnl: number;
-  totalPnl: number;
-  asOf: string;
-}
-
+/**
+ * The portfolio screen (LEAP-009): totals including cash, every holding
+ * priced, and realised and unrealised P&L, from design/portfolio-api.yaml.
+ * Summary, holdings and P&L load separately, so one failure leaves the
+ * others on screen.
+ */
 @Component({
   selector: 'app-portfolio',
-  standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [DatePipe, DecimalPipe, RouterLink],
   templateUrl: './portfolio.component.html',
-  styleUrls: ['./portfolio.component.css'],
+  styleUrl: './portfolio.component.css',
 })
 export class PortfolioComponent implements OnInit {
-  private session = inject(Session);
-  private portfolioService = inject(PortfolioService);
+  private readonly session = inject(Session);
+  private readonly portfolioApi = inject(PortfolioApi);
 
-  accountId = computed(() => this.session.accountId());
+  readonly summary = signal<PortfolioSummary | null>(null);
+  readonly summaryError = signal<string | null>(null);
+  readonly holdings = signal<PricedPosition[] | null>(null);
+  readonly holdingsError = signal<string | null>(null);
+  readonly pnl = signal<PnlResponse | null>(null);
+  readonly pnlError = signal<string | null>(null);
 
-  // Summary
-  summary = signal<PortfolioSummary | null>(null);
-  summaryLoading = signal(false);
-  summaryError = signal<string | null>(null);
+  readonly sortBy = signal<SortKey>('value');
+  readonly descending = signal(true);
 
-  // Holdings
-  holdings = signal<Position[]>([]);
-  holdingsLoading = signal(false);
-  holdingsError = signal<string | null>(null);
-
-  // P&L
-  pnl = signal<PnlData | null>(null);
-  pnlLoading = signal(false);
-  pnlError = signal<string | null>(null);
-
-  // UI
-  selectedTab = signal<'summary' | 'holdings' | 'pnl'>('holdings');
-  sortBy = signal<'symbol' | 'value' | 'pnl'>('value');
-  sortDirection = signal<'asc' | 'desc'>('desc');
-
-  sortedHoldings = computed(() => {
-    const holdings = this.holdings();
-    const sort = this.sortBy();
-    const dir = this.sortDirection();
-
-    const sorted = [...holdings].sort((a, b) => {
-      let aVal: number, bVal: number;
-      if (sort === 'symbol') {
-        return dir === 'asc' ? a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
-      } else if (sort === 'value') {
-        aVal = a.marketValue;
-        bVal = b.marketValue;
-      } else {
-        aVal = a.unrealisedPnl;
-        bVal = b.unrealisedPnl;
-      }
-      return dir === 'asc' ? aVal - bVal : bVal - aVal;
+  /** Unpriced holdings always sort last, whichever way the column runs. */
+  readonly sortedHoldings = computed(() => {
+    const key = this.sortBy();
+    const direction = this.descending() ? -1 : 1;
+    return [...(this.holdings() ?? [])].sort((a, b) => {
+      if (key === 'symbol') return direction * a.symbol.localeCompare(b.symbol);
+      const left = key === 'value' ? a.marketValue : a.unrealisedPnl;
+      const right = key === 'value' ? b.marketValue : b.unrealisedPnl;
+      if (left == null || right == null) return (left == null ? 1 : 0) - (right == null ? 1 : 0);
+      return direction * (left - right);
     });
-    return sorted;
   });
 
-  ngOnInit() {
-    const acctId = this.accountId();
-    if (acctId) {
-      this.loadAll();
-    }
+  protected readonly direction = pnlDirection;
+  protected readonly sign = pnlSign;
+  protected readonly word = pnlWord;
+  protected readonly abs = (value: number | null | undefined) => Math.abs(value ?? 0);
+
+  ngOnInit(): void {
+    this.refresh();
   }
 
-  loadAll() {
-    this.loadSummary();
-    this.loadHoldings();
-    this.loadPnl();
-  }
-
-  loadSummary() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.summaryLoading.set(true);
+  refresh(): void {
+    const accountId = this.session.accountId();
+    if (accountId === null) return;
     this.summaryError.set(null);
-    this.portfolioService.getPortfolioSummary(acctId).subscribe({
-      next: (data) => {
-        this.summary.set(data);
-        this.summaryLoading.set(false);
-      },
-      error: (err: any) => {
-        this.summaryError.set('Failed to load portfolio summary');
-        this.summaryLoading.set(false);
-      },
-    });
-  }
-
-  loadHoldings() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.holdingsLoading.set(true);
     this.holdingsError.set(null);
-    this.portfolioService.getPricedPositions(acctId).subscribe({
-      next: (data) => {
-        this.holdings.set(data);
-        this.holdingsLoading.set(false);
-      },
-      error: (err: any) => {
-        this.holdingsError.set('Failed to load holdings');
-        this.holdingsLoading.set(false);
-      },
-    });
-  }
-
-  loadPnl() {
-    const acctId = this.accountId();
-    if (!acctId) return;
-    this.pnlLoading.set(true);
     this.pnlError.set(null);
-    this.portfolioService.getPnl(acctId).subscribe({
-      next: (data) => {
-        this.pnl.set(data);
-        this.pnlLoading.set(false);
-      },
-      error: (err: any) => {
-        this.pnlError.set('Failed to load P&L');
-        this.pnlLoading.set(false);
-      },
+    this.portfolioApi.summary(accountId).subscribe({
+      next: (summary) => this.summary.set(summary),
+      error: (error: unknown) => this.summaryError.set(errorMessage(error)),
+    });
+    this.portfolioApi.positions(accountId).subscribe({
+      next: (holdings) => this.holdings.set(holdings),
+      error: (error: unknown) => this.holdingsError.set(errorMessage(error)),
+    });
+    this.portfolioApi.pnl(accountId).subscribe({
+      next: (pnl) => this.pnl.set(pnl),
+      error: (error: unknown) => this.pnlError.set(errorMessage(error)),
     });
   }
 
-  setTab(tab: 'summary' | 'holdings' | 'pnl') {
-    this.selectedTab.set(tab);
-  }
-
-  setSortBy(sort: 'symbol' | 'value' | 'pnl') {
-    if (this.sortBy() === sort) {
-      this.sortDirection.set(this.sortDirection() === 'asc' ? 'desc' : 'asc');
+  sort(key: SortKey): void {
+    if (this.sortBy() === key) {
+      this.descending.update((value) => !value);
     } else {
-      this.sortBy.set(sort);
-      this.sortDirection.set('desc');
+      this.sortBy.set(key);
+      this.descending.set(key !== 'symbol');
     }
   }
 
-  getPnlClass(pnl: number): string {
-    return pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
-  }
-
-  getSortIcon(by: string): string {
-    if (this.sortBy() !== by) return '⇅';
-    return this.sortDirection() === 'asc' ? '↑' : '↓';
+  ariaSort(key: SortKey): 'ascending' | 'descending' | 'none' {
+    if (this.sortBy() !== key) return 'none';
+    return this.descending() ? 'descending' : 'ascending';
   }
 }

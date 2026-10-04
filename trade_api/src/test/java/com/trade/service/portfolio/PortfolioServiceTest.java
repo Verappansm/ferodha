@@ -1,233 +1,278 @@
 package com.trade.service.portfolio;
 
-import com.trade.client.portfolio.Quote;
-import com.trade.client.portfolio.QuoteServiceClient;
 import com.trade.dto.portfolio.PnlResponseDto;
 import com.trade.dto.portfolio.PortfolioSummaryDto;
 import com.trade.dto.portfolio.PricedPositionDto;
+import com.trade.exception.AccountNotActiveException;
 import com.trade.exception.AccountNotFoundException;
-import com.trade.exception.InvalidAccountAccessException;
+import com.trade.exception.InvalidDateRangeException;
+import com.trade.exception.PricingUnavailableException;
 import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
-import com.trade.mapper.PositionMapper;
-import com.trade.mapper.PositionRow;
+import com.trade.mapper.FillRow;
+import com.trade.mapper.PortfolioMapper;
+import com.trade.mapper.StoredPriceRow;
+import com.trade.service.AccountAccessGuard;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.*;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class PortfolioServiceTest {
 
-    @Mock
+    private static final long ACCOUNT_ID = 1L;
+    private static final OffsetDateTime NOW = OffsetDateTime.parse("2026-10-04T12:00:00Z");
+
     private AccountMapper accountMapper;
-
-    @Mock
-    private PositionMapper positionMapper;
-
-    @Mock
-    private QuoteServiceClient quoteServiceClient;
-
-    @InjectMocks
-    private PortfolioService portfolioService;
-
-    private AccountRow mockAccount;
-    private PositionRow mockPosition;
-    private Quote mockQuote;
+    private PortfolioMapper portfolioMapper;
+    private LatestQuotes latestQuotes;
+    private PortfolioService service;
+    private final List<FillRow> fills = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
-        mockAccount = new AccountRow(
-                1L,
-                UUID.randomUUID(),
-                "ACC-123",
-                UUID.randomUUID(),
-                "John Doe",
-                new BigDecimal("10000.00"),
-                "ACTIVE",
-                1,
-                OffsetDateTime.now(),
-                "USD"
-        );
-
-        mockPosition = new PositionRow(
-                1L,
-                "AAPL",
-                10L,
-                new BigDecimal("150.00")
-        );
-
-        mockQuote = new Quote(
-                "AAPL",
-                new BigDecimal("160.00"),
-                new BigDecimal("159.50"),
-                new BigDecimal("160.50"),
-                "USD",
-                Instant.now(),
-                false
-        );
+        accountMapper = mock(AccountMapper.class);
+        portfolioMapper = mock(PortfolioMapper.class);
+        latestQuotes = new LatestQuotes();
+        service = new PortfolioService(accountMapper, portfolioMapper, new AccountAccessGuard(), latestQuotes,
+                Duration.ofMinutes(5), Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));
+        when(portfolioMapper.findFills(anyLong())).thenReturn(fills);
+        when(portfolioMapper.findLatestStoredPrices(anyCollection())).thenReturn(List.of());
+        givenAccount("USD", "1000.00");
     }
 
     @Test
-    void testGetPortfolioSummary_EmptyPortfolio() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(Collections.emptyList());
+    @DisplayName("unrealised P&L is (price - average cost) x quantity")
+    void unrealisedPnlIsPriceMinusAverageCostTimesQuantity() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(2));
+        quote("AAPL", "120.00", NOW.minusSeconds(30));
 
-        PortfolioSummaryDto summary = portfolioService.getPortfolioSummary(1L, 1L);
+        PricedPositionDto position = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).getFirst();
 
-        assertNotNull(summary);
-        assertEquals(1L, summary.accountId());
-        assertEquals(new BigDecimal("10000.00"), summary.cashBalance());
-        assertEquals(BigDecimal.ZERO, summary.marketValue());
+        assertEquals(10, position.quantity());
+        assertAmount("100.00", position.averageCost());
+        assertAmount("1000.00", position.costBasis());
+        assertAmount("1200.00", position.marketValue());
+        assertAmount("200.00", position.unrealisedPnl());
+        assertAmount("20.00", position.unrealisedPnlPercent());
+        assertFalse(position.stale());
+    }
+
+    @Test
+    @DisplayName("a buy re-weights the average cost and a sell leaves it unchanged")
+    void averageCostIsTheRunningWeightedAverage() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(3));
+        fill("AAPL", "SELL", 5, "130.00", NOW.minusDays(2));
+        fill("AAPL", "BUY", 5, "200.00", NOW.minusDays(1));
+        quote("AAPL", "150.00", NOW);
+
+        PricedPositionDto position = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).getFirst();
+
+        // (5 * 100 + 5 * 200) / 10 - not the average of every buy, (10 * 100 + 5 * 200) / 15
+        assertEquals(10, position.quantity());
+        assertAmount("150.00", position.averageCost());
+    }
+
+    @Test
+    @DisplayName("realised P&L is booked once per sale at the average cost of the time, never from today's price")
+    void realisedPnlIsBookedOncePerSale() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(3));
+        fill("AAPL", "SELL", 4, "110.00", NOW.minusDays(2));
+        fill("AAPL", "SELL", 6, "90.00", NOW.minusDays(1));
+        quote("AAPL", "500.00", NOW);
+
+        PnlResponseDto pnl = service.getPnl(ACCOUNT_ID, ACCOUNT_ID, null, null, false);
+
+        // 4 * (110 - 100) + 6 * (90 - 100)
+        assertAmount("-20.00", pnl.realisedPnl());
+        assertAmount("0.00", pnl.unrealisedPnl());
+        assertTrue(service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).isEmpty());
+    }
+
+    @Test
+    @DisplayName("a stale quote is flagged stale, and the totals still return")
+    void staleQuoteIsFlaggedAndTotalsStillReturn() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(1));
+        quote("AAPL", "110.00", NOW.minusHours(1));
+
+        PricedPositionDto position = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).getFirst();
+        PortfolioSummaryDto summary = service.getPortfolioSummary(ACCOUNT_ID, ACCOUNT_ID);
+
+        assertTrue(position.stale());
+        assertEquals(NOW.minusHours(1), position.priceAsOf());
+        assertAmount("1100.00", summary.marketValue());
+        assertAmount("2100.00", summary.totalValue());
+        assertFalse(summary.partial());
+    }
+
+    @Test
+    @DisplayName("a symbol with no quote falls back to the newest stored price")
+    void fallsBackToTheStoredPrice() throws Exception {
+        fill("MSFT", "BUY", 2, "300.00", NOW.minusDays(1));
+        when(portfolioMapper.findLatestStoredPrices(List.of("MSFT"))).thenReturn(List.of(
+                new StoredPriceRow("MSFT", new BigDecimal("310.00"), NOW.minusDays(1))));
+
+        PricedPositionDto position = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).getFirst();
+
+        assertAmount("310.00", position.lastPrice());
+        assertTrue(position.stale());
+    }
+
+    @Test
+    @DisplayName("a holding that cannot be priced has null price fields and marks the summary partial")
+    void unpricedHoldingMarksTheSummaryPartial() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(1));
+        fill("TSLA", "BUY", 1, "250.00", NOW.minusDays(1));
+        quote("AAPL", "110.00", NOW);
+
+        List<PricedPositionDto> positions = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null);
+        PortfolioSummaryDto summary = service.getPortfolioSummary(ACCOUNT_ID, ACCOUNT_ID);
+
+        PricedPositionDto tesla = positions.get(1);
+        assertEquals("TSLA", tesla.symbol());
+        assertNull(tesla.lastPrice());
+        assertNull(tesla.marketValue());
+        assertNull(tesla.unrealisedPnl());
+        assertTrue(tesla.stale());
+        assertTrue(summary.partial());
+        assertEquals(2, summary.positionCount());
+        assertAmount("1250.00", summary.costBasis());
+        assertAmount("100.00", summary.unrealisedPnl());
+        assertAmount("10.00", summary.unrealisedPnlPercent());
+    }
+
+    @Test
+    @DisplayName("when no holding can be priced the route answers MKT-503")
+    void noPriceAtAllIsPricingUnavailable() {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(1));
+
+        PricingUnavailableException thrown = assertThrows(PricingUnavailableException.class,
+                () -> service.getPortfolioSummary(ACCOUNT_ID, ACCOUNT_ID));
+        assertEquals("MKT-503", thrown.getCode());
+    }
+
+    @Test
+    @DisplayName("an empty portfolio is cash only, not an outage")
+    void emptyPortfolioIsCashOnly() throws Exception {
+        PortfolioSummaryDto summary = service.getPortfolioSummary(ACCOUNT_ID, ACCOUNT_ID);
+
         assertEquals(0, summary.positionCount());
+        assertAmount("1000.00", summary.totalValue());
+        assertNull(summary.unrealisedPnlPercent());
         assertFalse(summary.partial());
     }
 
     @Test
-    void testGetPortfolioSummary_WithPositions() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(mockPosition));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Map.of("AAPL", mockQuote));
-
-        PortfolioSummaryDto summary = portfolioService.getPortfolioSummary(1L, 1L);
-
-        assertNotNull(summary);
-        assertEquals(1L, summary.accountId());
-        assertEquals(new BigDecimal("10000.00"), summary.cashBalance());
-        // 10 * 160 = 1600
-        assertEquals(new BigDecimal("1600.00"), summary.marketValue());
-        // 10 * 150 = 1500
-        assertEquals(new BigDecimal("1500.00"), summary.costBasis());
-        // 1600 - 1500 = 100
-        assertEquals(new BigDecimal("100.00"), summary.unrealisedPnl());
-        assertEquals(1, summary.positionCount());
-        assertFalse(summary.partial());
+    @DisplayName("another customer's account is ACC-403 before anything is read")
+    void tokenMismatchIsRefusedBeforeAnyRead() {
+        assertThrows(AccountNotActiveException.class, () -> service.getPortfolioSummary(ACCOUNT_ID, 2L));
+        verifyNoInteractions(accountMapper, portfolioMapper);
     }
 
     @Test
-    void testGetPortfolioSummary_UnrealisedPnLNegative() throws Exception {
-        PositionRow position = new PositionRow(1L, "AAPL", 10L, new BigDecimal("170.00"));
-        Quote quote = new Quote("AAPL", new BigDecimal("160.00"), new BigDecimal("159.50"), new BigDecimal("160.50"), "USD", Instant.now(), false);
+    @DisplayName("an account that does not exist is ACC-404")
+    void unknownAccountIsNotFound() {
+        when(accountMapper.findById(9L)).thenReturn(Optional.empty());
 
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(position));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Map.of("AAPL", quote));
-
-        PortfolioSummaryDto summary = portfolioService.getPortfolioSummary(1L, 1L);
-
-        // 10 * 160 = 1600, 10 * 170 = 1700, PnL = 1600 - 1700 = -100
-        assertEquals(new BigDecimal("-100.00"), summary.unrealisedPnl());
+        assertThrows(AccountNotFoundException.class, () -> service.getPnl(9L, 9L, null, null, false));
+        verify(portfolioMapper, never()).findFills(anyLong());
     }
 
     @Test
-    void testGetPortfolioSummary_StaleQuote() throws Exception {
-        Quote staleQuote = new Quote("AAPL", new BigDecimal("160.00"), new BigDecimal("159.50"), new BigDecimal("160.50"), "USD", Instant.now(), true);
-
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(mockPosition));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Map.of("AAPL", staleQuote));
-
-        PortfolioSummaryDto summary = portfolioService.getPortfolioSummary(1L, 1L);
-
-        assertTrue(summary.partial());
+    @DisplayName("from later than to is VAL-422")
+    void fromAfterToIsInvalid() {
+        assertThrows(InvalidDateRangeException.class, () -> service.getPnl(ACCOUNT_ID, ACCOUNT_ID,
+                LocalDate.parse("2026-10-04"), LocalDate.parse("2026-10-01"), false));
     }
 
     @Test
-    void testGetPortfolioSummary_MissingQuote() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(mockPosition));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Collections.emptyMap());
+    @DisplayName("from and to bound the realised figure only")
+    void dateRangeBoundsRealisedPnl() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", OffsetDateTime.parse("2026-10-01T10:00:00Z"));
+        fill("AAPL", "SELL", 2, "110.00", OffsetDateTime.parse("2026-10-02T10:00:00Z"));
+        fill("AAPL", "SELL", 3, "120.00", OffsetDateTime.parse("2026-10-03T10:00:00Z"));
+        quote("AAPL", "130.00", NOW);
 
-        PortfolioSummaryDto summary = portfolioService.getPortfolioSummary(1L, 1L);
+        PnlResponseDto pnl = service.getPnl(ACCOUNT_ID, ACCOUNT_ID,
+                LocalDate.parse("2026-10-03"), LocalDate.parse("2026-10-03"), false);
 
-        assertTrue(summary.partial());
+        assertAmount("60.00", pnl.realisedPnl());   // only the 3 @ 120 sale
+        assertAmount("150.00", pnl.unrealisedPnl()); // 5 * (130 - 100), whatever the range
+        assertAmount("210.00", pnl.totalPnl());
+        assertNull(pnl.bySymbol());
     }
 
     @Test
-    void testGetPortfolioSummary_AccountNotFound() {
-        when(accountMapper.findById(1L)).thenReturn(Optional.empty());
+    @DisplayName("bySymbol adds the per-instrument breakdown")
+    void bySymbolBreakdown() throws Exception {
+        fill("AAPL", "BUY", 10, "100.00", NOW.minusDays(2));
+        fill("AAPL", "SELL", 5, "120.00", NOW.minusDays(1));
+        quote("AAPL", "110.00", NOW);
 
-        assertThrows(AccountNotFoundException.class, () ->
-                portfolioService.getPortfolioSummary(1L, 1L));
+        PnlResponseDto pnl = service.getPnl(ACCOUNT_ID, ACCOUNT_ID, null, null, true);
+
+        assertEquals(1, pnl.bySymbol().size());
+        assertEquals("AAPL", pnl.bySymbol().getFirst().symbol());
+        assertAmount("100.00", pnl.bySymbol().getFirst().realisedPnl());
+        assertAmount("50.00", pnl.bySymbol().getFirst().unrealisedPnl());
+        assertAmount("150.00", pnl.bySymbol().getFirst().totalPnl());
     }
 
     @Test
-    void testGetPortfolioSummary_AccessDenied() {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
+    @DisplayName("an INR account's USD holding is totalled at the executor's fixed rate")
+    void totalsAreInTheAccountCurrency() throws Exception {
+        givenAccount("INR", "9000.00");
+        fill("AAPL", "BUY", 1, "100.00", NOW.minusDays(1));
+        quote("AAPL", "110.00", NOW);
 
-        assertThrows(InvalidAccountAccessException.class, () ->
-                portfolioService.getPortfolioSummary(1L, 999L)); // Different account ID
+        PortfolioSummaryDto summary = service.getPortfolioSummary(ACCOUNT_ID, ACCOUNT_ID);
+        PricedPositionDto position = service.getPricedPositions(ACCOUNT_ID, ACCOUNT_ID, null).getFirst();
+
+        assertEquals("INR", summary.baseCurrency());
+        assertAmount("9900.00", summary.marketValue());
+        assertAmount("18900.00", summary.totalValue());
+        assertEquals("USD", position.currency());
+        assertAmount("110.00", position.marketValue());
     }
 
-    @Test
-    void testGetPricedPositions_SinglePosition() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(mockPosition));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Map.of("AAPL", mockQuote));
-
-        List<PricedPositionDto> positions = portfolioService.getPricedPositions(1L, 1L, null);
-
-        assertNotNull(positions);
-        assertEquals(1, positions.size());
-        PricedPositionDto pos = positions.get(0);
-        assertEquals("AAPL", pos.symbol());
-        assertEquals(new BigDecimal("10"), pos.quantity());
-        assertEquals(new BigDecimal("150.00"), pos.averageCost());
-        assertEquals(new BigDecimal("1600.00"), pos.marketValue());
-        assertEquals(new BigDecimal("100.00"), pos.unrealisedPnl());
-        assertFalse(pos.stale());
+    private void givenAccount(String currency, String cash) {
+        when(accountMapper.findById(ACCOUNT_ID)).thenReturn(Optional.of(new AccountRow(
+                ACCOUNT_ID, UUID.randomUUID(), "ACC-000001", UUID.randomUUID(), "Priya Menon",
+                new BigDecimal(cash), "ACTIVE", 1, NOW, currency)));
     }
 
-    @Test
-    void testGetPricedPositions_FilterBySymbol() throws Exception {
-        PositionRow pos1 = new PositionRow(1L, "AAPL", 10L, new BigDecimal("150.00"));
-        PositionRow pos2 = new PositionRow(1L, "GOOGL", 5L, new BigDecimal("2800.00"));
-
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(pos1, pos2));
-        when(quoteServiceClient.fetchQuotes(argThat(list -> list.contains("AAPL")))).thenReturn(Map.of("AAPL", mockQuote));
-
-        List<PricedPositionDto> positions = portfolioService.getPricedPositions(1L, 1L, "AAPL");
-
-        assertEquals(1, positions.size());
-        assertEquals("AAPL", positions.get(0).symbol());
+    private void fill(String symbol, String side, int quantity, String price, OffsetDateTime at) {
+        fills.add(new FillRow(symbol, "USD", side, BigDecimal.valueOf(quantity), new BigDecimal(price), at));
     }
 
-    @Test
-    void testGetPnL() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(List.of(mockPosition));
-        when(quoteServiceClient.fetchQuotes(List.of("AAPL"))).thenReturn(Map.of("AAPL", mockQuote));
-
-        PnlResponseDto pnl = portfolioService.getPnL(1L, 1L);
-
-        assertNotNull(pnl);
-        assertEquals(1L, pnl.accountId());
-        assertEquals(new BigDecimal("100.00"), pnl.unrealisedPnl());
-        assertEquals(BigDecimal.ZERO, pnl.realisedPnl());
+    private void quote(String symbol, String price, OffsetDateTime asOf) {
+        latestQuotes.record(symbol, new BigDecimal(price), asOf);
     }
 
-    @Test
-    void testGetPnL_EmptyPortfolio() throws Exception {
-        when(accountMapper.findById(1L)).thenReturn(Optional.of(mockAccount));
-        when(positionMapper.findAllForAccount(1L)).thenReturn(Collections.emptyList());
-
-        PnlResponseDto pnl = portfolioService.getPnL(1L, 1L);
-
-        assertNotNull(pnl);
-        assertEquals(BigDecimal.ZERO, pnl.unrealisedPnl());
-        assertEquals(BigDecimal.ZERO, pnl.realisedPnl());
-        assertEquals(BigDecimal.ZERO, pnl.totalPnl());
+    private static void assertAmount(String expected, BigDecimal actual) {
+        assertEquals(0, new BigDecimal(expected).compareTo(actual), () -> "expected " + expected + " but was " + actual);
     }
 }
