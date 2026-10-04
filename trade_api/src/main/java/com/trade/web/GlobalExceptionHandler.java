@@ -9,9 +9,11 @@ import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
+import com.trade.exception.InvalidAccountAccessException;
 import com.trade.exception.InvalidOrderException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
+import com.trade.exception.PricingUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -43,6 +45,7 @@ public class GlobalExceptionHandler {
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_TYPE = Map.ofEntries(
             Map.entry(AccountNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(AccountNotActiveException.class, HttpStatus.FORBIDDEN),
+            Map.entry(InvalidAccountAccessException.class, HttpStatus.FORBIDDEN),
             Map.entry(InstrumentNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(InsufficientFundsException.class, HttpStatus.BAD_REQUEST),
             Map.entry(InsufficientHoldingsException.class, HttpStatus.CONFLICT),
@@ -50,7 +53,8 @@ public class GlobalExceptionHandler {
             Map.entry(InvalidOrderException.class, HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
-            Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT)
+            Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
+            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE)
     );
 
     @ExceptionHandler(DomainException.class)
@@ -99,6 +103,7 @@ public class GlobalExceptionHandler {
         return switch (exception) {
             case AccountNotFoundException e -> "accountId=" + e.getAccountId();
             case AccountNotActiveException e -> "accountId=" + e.getAccountId() + " status=" + e.getStatus();
+            case InvalidAccountAccessException e -> "requested=" + e.getRequestedAccountId() + " token=" + e.getTokenAccountId();
             case InstrumentNotFoundException e -> "symbol=" + e.getSymbol();
             case InsufficientFundsException e -> "required=" + e.getRequired() + " available=" + e.getAvailable();
             case InsufficientHoldingsException e -> "requested=" + e.getRequested() + " held=" + e.getHeld();
@@ -107,6 +112,7 @@ public class GlobalExceptionHandler {
             case OrderNotFoundException e -> "orderId=" + e.getOrderId();
             case OrderNotCancellableException e -> "orderId=" + e.getOrderId() + " status=" + e.getCurrentStatus();
             case ConcurrentUpdateException e -> "accountId=" + e.getAccountId();
+            case PricingUnavailableException e -> "no quotes available from Fauxnance";
             default -> "";
         };
     }
