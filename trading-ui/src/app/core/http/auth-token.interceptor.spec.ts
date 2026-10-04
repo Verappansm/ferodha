@@ -60,8 +60,9 @@ describe('authTokenInterceptor', () => {
     expect(authorizationSentTo(`${AUTH}/auth/refresh`, 'POST')).toBeNull();
   });
 
-  it('the protected auth route carries the bearer token', () => {
+  it('the protected auth routes carry the bearer token', () => {
     expect(authorizationSentTo(`${AUTH}/auth/me`)).toBe(`Bearer ${TOKEN}`);
+    expect(authorizationSentTo(`${AUTH}/profile`)).toBe(`Bearer ${TOKEN}`);
   });
 
   it('a look-alike of a platform origin does not carry the bearer token', () => {
@@ -76,6 +77,7 @@ describe('authTokenInterceptor', () => {
   it('a platform origin outside the protected paths does not carry the bearer token', () => {
     expect(authorizationSentTo(`${TRADE}/actuator/health`)).toBeNull();
     expect(authorizationSentTo(`${AUTH}/docs`)).toBeNull();
+    expect(authorizationSentTo(`${AUTH}/profile-photos`)).toBeNull();
   });
 
   it('a signed-out session sends no header anywhere', () => {

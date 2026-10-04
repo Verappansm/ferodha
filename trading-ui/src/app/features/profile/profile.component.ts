@@ -1,132 +1,90 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import {
-  FormBuilder,
-  FormGroup,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
-import { ProfileApiService } from '../../services/profile-api.service';
-import { UserResponse } from '../../api/auth-api';
+import { Component, inject, OnInit, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ProfileApi, ProfileResponse } from '../../api/profile-api';
+import { errorMessage } from '../../core/errors/error-message';
 
+/**
+ * The auth service's phone rule (design/profile-api.yaml): digits with
+ * optional spaces, dashes and brackets and an optional leading +, at most 20
+ * characters. Checked here so an invalid number is never sent.
+ */
+export const PHONE_PATTERN = /^\+?\(?[0-9][0-9 ()-]{5,18}[0-9]$/;
+
+/**
+ * The profile page (LEAP-020): the signed-in user's own details from the
+ * auth service, read from their token. The name and phone can be changed;
+ * the email, role, account and joining date are shown read-only.
+ */
 @Component({
   selector: 'app-profile',
-  standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [DatePipe, ReactiveFormsModule],
   templateUrl: './profile.component.html',
-  styleUrls: ['./profile.component.css'],
+  styleUrl: './profile.component.css',
 })
 export class ProfileComponent implements OnInit {
-  private readonly profileApi = inject(ProfileApiService);
-  private readonly fb = inject(FormBuilder);
+  private readonly profileApi = inject(ProfileApi);
 
-  form!: FormGroup;
-  loading = signal(false);
-  error = signal<string | null>(null);
-  success = signal(false);
-  userProfile = signal<UserResponse | null>(null);
+  readonly profile = signal<ProfileResponse | null>(null);
+  readonly loadError = signal<string | null>(null);
+  readonly saveError = signal<string | null>(null);
+  readonly saving = signal(false);
+  readonly saved = signal(false);
+
+  readonly form = inject(NonNullableFormBuilder).group({
+    name: ['', [Validators.required, Validators.maxLength(100), notBlank]],
+    phone: ['', [Validators.maxLength(20), Validators.pattern(PHONE_PATTERN)]],
+  });
 
   ngOnInit(): void {
-    this.loadProfile();
-  }
-
-  private loadProfile(): void {
-    this.loading.set(true);
-    this.error.set(null);
-    this.profileApi.getProfile().subscribe({
-      next: (profile) => {
-        this.userProfile.set(profile);
-        this.initializeForm(profile);
-        this.loading.set(false);
-      },
-      error: (err) => {
-        this.error.set('Failed to load profile. Please try again.');
-        this.loading.set(false);
-      },
+    this.profileApi.get().subscribe({
+      next: (profile) => this.show(profile),
+      error: (error: unknown) => this.loadError.set(errorMessage(error)),
     });
+    this.form.valueChanges.subscribe(() => this.saved.set(false));
   }
 
-  private initializeForm(profile: UserResponse): void {
-    this.form = this.fb.group({
-      name: [
-        { value: profile.name || '', disabled: false },
-        [Validators.required, Validators.maxLength(100)],
-      ],
-      email: [
-        { value: profile.email || '', disabled: true },
-        Validators.required,
-      ],
-      phone: [
-        { value: profile.phone || '', disabled: false },
-        [Validators.maxLength(20)],
-      ],
-      role: [{ value: profile.role || '', disabled: true }, Validators.required],
-      accountId: [
-        { value: profile.accountId || '', disabled: true },
-        Validators.required,
-      ],
-      joiningDate: [
-        { value: this.formatDate(profile.joiningDate) || '', disabled: true },
-        Validators.required,
-      ],
-    });
-  }
-
-  private formatDate(dateString?: string): string {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return dateString;
-    }
-  }
-
-  submit(): void {
+  save(): void {
+    this.saveError.set(null);
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
-
-    this.loading.set(true);
-    this.error.set(null);
-    this.success.set(false);
-
     const { name, phone } = this.form.getRawValue();
-
-    this.profileApi.updateProfile({ name, phone }).subscribe({
-      next: () => {
-        this.success.set(true);
-        this.loading.set(false);
-        setTimeout(() => this.success.set(false), 3000);
+    this.saving.set(true);
+    this.profileApi.update({ name: name.trim(), phone: phone.trim() }).subscribe({
+      next: (profile) => {
+        this.saving.set(false);
+        this.show(profile);
+        this.saved.set(true);
       },
-      error: (err) => {
-        this.error.set('Failed to update profile. Please try again.');
-        this.loading.set(false);
+      error: (error: unknown) => {
+        this.saving.set(false);
+        this.saveError.set(errorMessage(error));
       },
     });
   }
 
-  showError(field: string): boolean {
-    const control = this.form?.get(field);
-    return control ? control.invalid && control.touched : false;
+  nameError(): string | null {
+    const control = this.form.controls.name;
+    if (!control.touched || control.valid) return null;
+    return control.hasError('maxlength')
+      ? 'Name must be 100 characters or fewer.'
+      : 'Enter your name.';
   }
 
-  getErrorMessage(field: string): string {
-    const control = this.form?.get(field);
-    if (!control?.errors) return '';
-
-    if (control.errors['required']) {
-      return `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
-    }
-    if (control.errors['maxlength']) {
-      const max = control.errors['maxlength'].requiredLength;
-      return `${field.charAt(0).toUpperCase() + field.slice(1)} cannot exceed ${max} characters`;
-    }
-    return 'Invalid input';
+  phoneError(): string | null {
+    const control = this.form.controls.phone;
+    if (!control.touched || control.valid) return null;
+    return 'Enter a phone number using digits, spaces, dashes or brackets, with an optional leading +, up to 20 characters.';
   }
+
+  private show(profile: ProfileResponse): void {
+    this.profile.set(profile);
+    this.form.reset({ name: profile.name, phone: profile.phone ?? '' });
+  }
+}
+
+function notBlank(control: { value: string }): { blank: true } | null {
+  return control.value.trim() === '' ? { blank: true } : null;
 }

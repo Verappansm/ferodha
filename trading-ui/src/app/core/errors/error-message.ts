@@ -1,12 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../api/generated/auth/model/error-response';
 import { ErrorResponse as PortfolioErrorResponse } from '../../api/generated/portfolio/model/error-response';
+import { ErrorResponse as ProfileErrorResponse } from '../../api/generated/profile/model/error-response';
 import { ErrorResponse as TradeErrorResponse } from '../../api/generated/trade/model/error-response';
 
 export type ErrorCode =
   | AuthErrorResponse.ErrorCodeEnum
   | TradeErrorResponse.ErrorCodeEnum
-  | PortfolioErrorResponse.ErrorCodeEnum;
+  | PortfolioErrorResponse.ErrorCodeEnum
+  | ProfileErrorResponse.ErrorCodeEnum;
 
 // One sentence per code. Typed as a full Record over `ErrorCode`, so a code must have a corresponding message.
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {

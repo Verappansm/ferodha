@@ -143,4 +143,27 @@ export class UsersRepository {
     );
     return result.rows[0] ? toAuthUser(result.rows[0]) : null;
   }
+
+  /**
+   * The profile page's edit (LEAP-020): the name and phone only. An
+   * undefined field is left unchanged; a null phone clears it.
+   */
+  async updateProfile(
+    id: string,
+    changes: { name?: string; phone?: string | null },
+  ): Promise<AuthUser | null> {
+    await this.pool.query(
+      `UPDATE Users
+          SET name = COALESCE($2::varchar, name),
+              phone_number = CASE WHEN $3::boolean THEN $4::varchar ELSE phone_number END
+        WHERE user_id = $1`,
+      [
+        id,
+        changes.name ?? null,
+        changes.phone !== undefined,
+        changes.phone ?? null,
+      ],
+    );
+    return this.findById(id);
+  }
 }

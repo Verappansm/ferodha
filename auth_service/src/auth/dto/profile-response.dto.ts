@@ -18,10 +18,13 @@ export class ProfileResponseDto {
   @ApiProperty({ example: 'priya.menon@example.com' })
   email!: string;
 
-  @ApiPropertyOptional({ example: '+1-555-1234', description: 'User phone number' })
+  @ApiPropertyOptional({
+    example: '+91 98765 43210',
+    description: 'Absent when none is held.',
+  })
   phone?: string;
 
-  @ApiProperty({ enum: Role, isArray: true, example: [Role.CUSTOMER] })
+  @ApiProperty({ enum: Role, example: Role.CUSTOMER })
   role!: Role;
 
   @ApiPropertyOptional({

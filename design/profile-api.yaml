@@ -1,0 +1,161 @@
+openapi: 3.1.0
+
+info:
+  title: Customer profile (auth service)
+  version: 1.0.0
+  summary: The signed-in user's own details, and the two they can change.
+  description: |
+    LEAP-020. An extension of `auth-api.yaml`, served by the auth service on 3000 because it owns
+    `Users`. Both routes read the user from the verified access token only: there is no user id in
+    the path, so nobody can read or change anyone else's profile.
+
+    Only the name and the phone number can be changed here. The email address is the username and
+    is not editable; the role and the trading account are not the user's to change.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development.
+
+tags:
+  - name: Profile
+    description: The signed-in user's profile.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /profile:
+    get:
+      tags: [Profile]
+      operationId: getProfile
+      summary: Get the signed-in user's profile
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+    patch:
+      tags: [Profile]
+      operationId: updateProfile
+      summary: Change the signed-in user's name and phone
+      description: |
+        An omitted field is left as it is. An empty `phone` removes the phone number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: The updated profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: The customer access token issued by `POST /auth/login`.
+
+  responses:
+    Unauthorised:
+      description: Missing or invalid token, or the user is no longer active.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    InvalidInput:
+      description: An empty or over-long name, or a phone number that is not one.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+
+  schemas:
+
+    Role:
+      type: string
+      enum: [CUSTOMER, ADMIN]
+
+    ProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [id, name, email, role, joiningDate]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+          example: Priya Menon
+        email:
+          type: string
+          format: email
+          example: priya.menon@example.com
+        phone:
+          type: string
+          maxLength: 20
+          description: Absent when the user has none.
+          example: +91 98765 43210
+        role:
+          $ref: '#/components/schemas/Role'
+        accountId:
+          type: integer
+          format: int64
+          description: The numeric trading account key, `Accounts.id`. Absent until an account is opened.
+          example: 1
+        joiningDate:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Priya Menon
+        phone:
+          type: string
+          maxLength: 20
+          pattern: '^$|^\+?\(?[0-9][0-9 ()-]{5,18}[0-9]$'
+          description: Digits, spaces, dashes and brackets, with an optional leading `+`. Empty removes it.
+          example: +91 98765 43210
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, VAL-422]
+        message:
+          type: string

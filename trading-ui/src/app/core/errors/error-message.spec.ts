@@ -1,6 +1,7 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../api/generated/auth/model/error-response';
 import { ErrorResponse as PortfolioErrorResponse } from '../../api/generated/portfolio/model/error-response';
+import { ErrorResponse as ProfileErrorResponse } from '../../api/generated/profile/model/error-response';
 import { ErrorResponse as TradeErrorResponse } from '../../api/generated/trade/model/error-response';
 import { ERROR_MESSAGES, errorMessage, FALLBACK, UNREACHABLE } from './error-message';
 
@@ -19,6 +20,7 @@ describe('errorMessage', () => {
     ...Object.values(AuthErrorResponse.ErrorCodeEnum),
     ...Object.values(TradeErrorResponse.ErrorCodeEnum),
     ...Object.values(PortfolioErrorResponse.ErrorCodeEnum),
+    ...Object.values(ProfileErrorResponse.ErrorCodeEnum),
   ];
 
   it.each(catalogue)('every code in every catalogue maps to a message: %s', (code) => {
