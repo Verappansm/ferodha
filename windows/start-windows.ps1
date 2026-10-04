@@ -264,7 +264,10 @@ function Get-BootJar([string]$ServiceDir) {
 Write-Stage 'Preflight'
 
 if (Test-Path $PidFile) {
-    $stillRunning = @(Get-Content $PidFile -Raw | ConvertFrom-Json) |
+    # Assigned first: in Windows PowerShell 5.1, @(... | ConvertFrom-Json)
+    # wraps the whole array as one element instead of listing the services.
+    $recorded = Get-Content $PidFile -Raw | ConvertFrom-Json
+    $stillRunning = @($recorded) |
         Where-Object { Get-Process -Id $_.pid -ErrorAction SilentlyContinue }
     if ($stillRunning) { Fail 'Services from a previous run are still running. Run windows\stop-windows.ps1 first.' }
 }
@@ -344,8 +347,10 @@ if ($SkipBuild) {
     foreach ($svc in $SpringServices) {
         Push-Location (Join-Path $RepoDir $svc)
         try {
-            # maven.test.skip: don't even compile the tests - only the jar is needed.
-            & mvn -q -B '-Dmaven.test.skip=true' package
+            # clean: a file deleted from src (a mapper, a class) must not survive in
+            # target/ and be packed into the jar. maven.test.skip: don't even
+            # compile the tests - only the jar is needed.
+            & mvn -q -B '-Dmaven.test.skip=true' clean package
             if ($LASTEXITCODE -ne 0) { Fail "mvn package failed in $svc" }
         } finally { Pop-Location }
         Write-Pass "$svc built"

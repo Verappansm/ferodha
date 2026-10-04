@@ -54,7 +54,10 @@ function Stop-Tree([int]$ProcessId, [string]$Label) {
 # 1. Everything the start script recorded. Only java/node: a PID left over
 #    from an earlier run may since have been reused by an unrelated process.
 if (Test-Path $PidFile) {
-    foreach ($entry in @(Get-Content $PidFile -Raw | ConvertFrom-Json)) {
+    # Assigned first: in Windows PowerShell 5.1, @(... | ConvertFrom-Json)
+    # wraps the whole array as one element instead of listing the services.
+    $recorded = Get-Content $PidFile -Raw | ConvertFrom-Json
+    foreach ($entry in @($recorded)) {
         $proc = Get-Process -Id $entry.pid -ErrorAction SilentlyContinue
         if ($proc -and $proc.ProcessName -in 'java', 'node') {
             Stop-Tree $entry.pid $entry.name

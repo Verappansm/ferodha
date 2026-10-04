@@ -3,6 +3,7 @@ package com.trade.pricing.generator.pricing;
 import com.trade.pricing.generator.mapper.MinuteBarMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,7 @@ public class MinuteBarRecorder {
     private final Duration retention;
     private final Clock clock;
 
+    @Autowired
     public MinuteBarRecorder(MinuteBarMapper barMapper,
                              @Value("${generator.bars.retention-hours:26}") long retentionHours) {
         this(barMapper, Duration.ofHours(retentionHours), Clock.systemUTC());
