@@ -1,6 +1,8 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, inject, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { TradeApi, InstrumentResponse, InstrumentType } from '../../api/trade-api';
 
 @Component({
   selector: 'app-instruments',
@@ -10,7 +12,171 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./instruments.component.css'],
 })
 export class InstrumentsComponent {
-  searchQuery = signal('');
-  instruments = signal<any[]>([]);
-  isLoading = signal(false);
+  private readonly tradeApi = inject(TradeApi);
+  private readonly router = inject(Router);
+
+  // Pagination
+  readonly pageSize = 20;
+  readonly currentOffset = signal(0);
+  readonly totalCount = signal(0);
+
+  // Data
+  readonly allInstruments = signal<InstrumentResponse[]>([]);
+  readonly isLoading = signal(false);
+  readonly errorMessage = signal('');
+
+  // Filters
+  readonly searchQuery = signal('');
+  readonly selectedExchange = signal('');
+  readonly selectedSector = signal('');
+  readonly selectedType = signal('');
+
+  // Available filter options
+  readonly exchanges = computed(() => {
+    const exch = new Set(this.allInstruments().map(i => i.exchange));
+    return Array.from(exch).sort();
+  });
+
+  readonly sectors = computed(() => {
+    const sec = new Set(this.allInstruments().filter(i => i.sector).map(i => i.sector!));
+    return Array.from(sec).sort();
+  });
+
+  readonly types = computed(() => {
+    const t = new Set(this.allInstruments().map(i => i.type));
+    return Array.from(t).sort();
+  });
+
+  // Filtered instruments
+  readonly filteredInstruments = computed(() => {
+    const query = this.searchQuery().toLowerCase();
+    const exchange = this.selectedExchange();
+    const sector = this.selectedSector();
+    const type = this.selectedType();
+
+    return this.allInstruments().filter(instrument => {
+      // Search by symbol or name
+      if (query && !instrument.symbol.toLowerCase().includes(query) &&
+          !instrument.name.toLowerCase().includes(query)) {
+        return false;
+      }
+
+      // Filter by exchange
+      if (exchange && instrument.exchange !== exchange) {
+        return false;
+      }
+
+      // Filter by sector
+      if (sector && instrument.sector !== sector) {
+        return false;
+      }
+
+      // Filter by type
+      if (type && instrument.type !== type) {
+        return false;
+      }
+
+      return true;
+    });
+  });
+
+  // Paginated results from filtered instruments
+  readonly paginatedInstruments = computed(() => {
+    const filtered = this.filteredInstruments();
+    const start = this.currentOffset();
+    const end = start + this.pageSize;
+    return filtered.slice(start, end);
+  });
+
+  readonly totalFilteredCount = computed(() => this.filteredInstruments().length);
+
+  readonly currentPageNum = computed(() => {
+    if (this.totalFilteredCount() === 0) return 1;
+    return Math.floor(this.currentOffset() / this.pageSize) + 1;
+  });
+
+  readonly totalPages = computed(() => {
+    if (this.totalFilteredCount() === 0) return 1;
+    return Math.ceil(this.totalFilteredCount() / this.pageSize);
+  });
+
+  readonly hasNextPage = computed(() => {
+    const nextOffset = this.currentOffset() + this.pageSize;
+    return nextOffset < this.totalFilteredCount();
+  });
+
+  readonly hasPrevPage = computed(() => this.currentOffset() > 0);
+
+  constructor() {
+    // Load all instruments once when component initializes
+    this.loadAllInstruments();
+  }
+
+  private loadAllInstruments(): void {
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+
+    // Load all tradable instruments at once for client-side filtering and pagination
+    this.tradeApi.getInstruments(1000, 0).subscribe({
+      next: (response) => {
+        this.allInstruments.set(response.instruments);
+        this.totalCount.set(response.total);
+        this.isLoading.set(false);
+      },
+      error: (err) => {
+        this.isLoading.set(false);
+        this.errorMessage.set('Failed to load instruments. Please try again.');
+        console.error('Error loading instruments:', err);
+      },
+    });
+  }
+
+  private loadInstruments(): void {
+    // Method kept for compatibility
+  }
+
+  onSearchChange(): void {
+    this.currentOffset.set(0); // Reset to first page
+  }
+
+  onExchangeChange(): void {
+    this.currentOffset.set(0); // Reset to first page
+  }
+
+  onSectorChange(): void {
+    this.currentOffset.set(0); // Reset to first page
+  }
+
+  onTypeChange(): void {
+    this.currentOffset.set(0); // Reset to first page
+  }
+
+  nextPage(): void {
+    if (this.hasNextPage()) {
+      this.currentOffset.update(offset => offset + this.pageSize);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  prevPage(): void {
+    if (this.hasPrevPage()) {
+      this.currentOffset.update(offset => offset - this.pageSize);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  buyInstrument(symbol: string): void {
+    // Navigate to order page with symbol pre-filled
+    this.router.navigate(['/order'], { queryParams: { symbol, side: 'BUY' } });
+  }
+
+  sellInstrument(symbol: string): void {
+    // Navigate to order page with symbol pre-filled
+    this.router.navigate(['/order'], { queryParams: { symbol, side: 'SELL' } });
+  }
+
+  viewDetails(symbol: string): void {
+    // Navigate to instrument details page
+    this.router.navigate(['/instruments', symbol]);
+  }
 }

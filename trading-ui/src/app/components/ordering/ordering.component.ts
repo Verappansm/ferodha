@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import {
   AbstractControl,
   NonNullableFormBuilder,
@@ -74,6 +75,7 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 export class OrderingComponent {
   private readonly session = inject(Session);
   private readonly tradeApi = inject(TradeApi);
+  private readonly route = inject(ActivatedRoute);
 
   readonly form = inject(NonNullableFormBuilder).group({
     symbol: [
@@ -110,6 +112,16 @@ export class OrderingComponent {
   constructor() {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.pendingKey = null;
+    });
+
+    // Pre-populate form from query parameters (used by buy/sell shortcuts)
+    this.route.queryParams.pipe(takeUntilDestroyed()).subscribe((params) => {
+      if (params['symbol']) {
+        this.form.controls.symbol.setValue(params['symbol']);
+      }
+      if (params['side'] && (params['side'] === 'BUY' || params['side'] === 'SELL')) {
+        this.form.controls.side.setValue(params['side']);
+      }
     });
   }
 

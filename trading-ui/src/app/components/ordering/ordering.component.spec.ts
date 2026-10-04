@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
 import { OrderingComponent } from './ordering.component';
 import { Session } from '../../core/session/session';
 import { TradeApi, OrderResponse, OrderStatus, OrderSide } from '../../api/trade-api';
@@ -18,6 +19,12 @@ describe('OrderingComponent', () => {
       providers: [
         { provide: Session, useValue: { accountId } },
         { provide: TradeApi, useValue: { placeOrder } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            queryParams: of({})
+          }
+        }
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(OrderingComponent);

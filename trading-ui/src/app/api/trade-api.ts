@@ -2,6 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { AccountsService } from './generated/trade/api/accounts.service';
 import { OrdersService } from './generated/trade/api/orders.service';
+import { InstrumentsService } from './generated/trade/api/instruments.service';
 import { AccountResponse } from './generated/trade/model/account-response';
 import { BalanceResponse } from './generated/trade/model/balance-response';
 import { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
@@ -10,6 +11,9 @@ import { OrderSide } from './generated/trade/model/order-side';
 import { OrderStatus } from './generated/trade/model/order-status';
 import { PlaceOrderRequest } from './generated/trade/model/place-order-request';
 import { PositionResponse } from './generated/trade/model/position-response';
+import { InstrumentResponse } from './generated/trade/model/instrument-response';
+import { InstrumentType } from './generated/trade/model/instrument-type';
+import { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-instruments-response';
 
 export type {
   AccountResponse,
@@ -18,8 +22,10 @@ export type {
   OrderResponse,
   PlaceOrderRequest,
   PositionResponse,
+  InstrumentResponse,
+  PaginatedInstrumentsResponse,
 };
-export { OrderSide, OrderStatus };
+export { OrderSide, OrderStatus, InstrumentType };
 
 /**
  * The Trade REST API as the rest of the application uses it, over the client
@@ -29,6 +35,7 @@ export { OrderSide, OrderStatus };
 export class TradeApi {
   private readonly accounts = inject(AccountsService);
   private readonly orders = inject(OrdersService);
+  private readonly instruments = inject(InstrumentsService);
 
   account(accountId: number): Observable<AccountResponse> {
     return this.accounts.getAccount(accountId);
@@ -52,5 +59,9 @@ export class TradeApi {
 
   cancelOrder(orderId: string): Observable<OrderResponse> {
     return this.orders.cancelOrder(orderId);
+  }
+
+  getInstruments(pageSize?: number, offset?: number): Observable<PaginatedInstrumentsResponse> {
+    return this.instruments.getInstruments(pageSize, offset);
   }
 }
