@@ -293,6 +293,19 @@ foreach ($entry in $KafkaBootstrap.Split(',')) {
 }
 Write-Pass "Kafka reachable at $KafkaBootstrap"
 
+# stop-windows.ps1 stops the local PostgreSQL service, so start it again.
+if ($PgHost -in 'localhost', '127.0.0.1', '::1') {
+    foreach ($service in @(Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Running' })) {
+        try {
+            Start-Service -Name $service.Name -ErrorAction Stop
+            Write-Pass "started PostgreSQL service $($service.Name)"
+        } catch {
+            Fail "PostgreSQL service $($service.Name) is stopped and could not be started: run this window as Administrator, or start it in services.msc."
+        }
+    }
+    $pgDeadline = (Get-Date).AddSeconds(30)
+    while (-not (Test-Tcp $PgHost ([int]$PgPort) 1000) -and (Get-Date) -lt $pgDeadline) { Start-Sleep -Seconds 1 }
+}
 if (-not (Test-Tcp $PgHost ([int]$PgPort) 3000)) { Fail "Cannot reach Postgres at ${PgHost}:${PgPort}. Is the PostgreSQL service running?" }
 $null = Invoke-Psql 'postgres' @('-c', 'SELECT 1')
 Write-Pass "Postgres reachable at ${PgHost}:${PgPort} as $PgUser"

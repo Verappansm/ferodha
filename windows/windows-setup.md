@@ -187,6 +187,7 @@ It ends with `== ALL STAGES PASSED ==`.
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\stop-windows.ps1       # Windows
 ```
+This stops every service the start script ran (with their child processes), anything java or node still listening on the platform ports (8080, 8082, 8083, 8084, 3000, 4200, 4300) after a run that failed part-way, and the local PostgreSQL service. Add `-KeepPostgres` to leave PostgreSQL running. Stopping and starting the PostgreSQL service needs a window opened as Administrator; `start-windows.ps1` starts the service again if it is stopped.
 ```bash
 bash windows/kafka-linux.sh down                                         # Linux
 ```

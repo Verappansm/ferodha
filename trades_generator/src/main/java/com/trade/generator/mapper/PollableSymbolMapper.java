@@ -7,9 +7,8 @@ import java.util.List;
 @Mapper
 public interface PollableSymbolMapper {
 
-    // Symbols someone holds (a non-zero net position) or is watching -
-    // identical query to trade_executor's own PollableSymbolMapper, copied
-    // rather than shared per this repo's established convention between
-    // independently-deployed services.
+    // Every tradable instrument, plus anything still held or watched after it
+    // was delisted - the same set pricing_generator prices, so every
+    // instrument a customer can trade under market-sim has counter-orders.
     List<String> findPollableSymbols();
 }
