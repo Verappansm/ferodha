@@ -122,7 +122,7 @@
         </thead>
         <tbody>
           @for (instrument of paginatedInstruments(); track instrument.symbol) {
-            <tr>
+            <tr class="instrument-row" (click)="viewDetails(instrument.symbol)">
               <td class="col-symbol">
                 <strong>{{ instrument.symbol }}</strong>
               </td>
@@ -139,14 +139,14 @@
                 <div class="action-buttons">
                   <button
                     class="btn btn-sm btn-success"
-                    (click)="buyInstrument(instrument.symbol)"
+                    (click)="$event.stopPropagation(); buyInstrument(instrument.symbol)"
                     title="Buy {{ instrument.symbol }}"
                   >
                     Buy
                   </button>
                   <button
                     class="btn btn-sm btn-danger"
-                    (click)="sellInstrument(instrument.symbol)"
+                    (click)="$event.stopPropagation(); sellInstrument(instrument.symbol)"
                     title="Sell {{ instrument.symbol }}"
                   >
                     Sell

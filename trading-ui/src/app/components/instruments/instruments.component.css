@@ -149,6 +149,11 @@
   color: var(--ink-900);
 }
 
+.instruments-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
 .instruments-table tbody tr:hover {
   background-color: var(--ink-100);
 }

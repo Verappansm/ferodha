@@ -1,1 +1,97 @@
-<div class="instrument-details-container"></div>
+<div class="instrument-details-container">
+  <!-- Header -->
+  <div class="header">
+    <div class="breadcrumb">
+      <a href="/instruments">Instruments</a> / <span>{{ symbol() }}</span>
+    </div>
+
+    <h1 *ngIf="instrument()" class="title">
+      {{ instrument()?.name }}
+      <span class="symbol">({{ symbol() }})</span>
+    </h1>
+
+    <!-- Error Message -->
+    <div *ngIf="errorMessage()" class="error-alert">
+      {{ errorMessage() }}
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="isLoading()" class="loading">
+      <span>Loading instrument data...</span>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div *ngIf="!isLoading() && instrument()" class="content">
+    <!-- Instrument Info Card -->
+    <div class="info-card">
+      <div class="info-row">
+        <span class="label">Exchange:</span>
+        <span class="value">{{ instrument()?.exchange }}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Type:</span>
+        <span class="value">{{ instrument()?.type }}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">Currency:</span>
+        <span class="value">{{ instrument()?.currency }}</span>
+      </div>
+      <div *ngIf="instrument()?.sector" class="info-row">
+        <span class="label">Sector:</span>
+        <span class="value">{{ instrument()?.sector }}</span>
+      </div>
+    </div>
+
+    <!-- Quote Panel -->
+    <div class="quote-panel">
+      <h2>Latest Quote</h2>
+      <div class="quote-data">
+        <div class="quote-item">
+          <span class="label">Current Price</span>
+          <span class="value price">{{ formatPrice(currentPrice()) }}</span>
+        </div>
+        <div class="quote-item">
+          <span class="label">Day Range</span>
+          <span class="value"
+            >{{ formatPrice(dayRange().low) }} - {{ formatPrice(dayRange().high) }}</span
+          >
+        </div>
+        <div class="quote-item">
+          <span class="label">Previous Close</span>
+          <span class="value">{{ formatPrice(previousClose()) }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chart Section -->
+    <div class="chart-section">
+      <h2>Price History (1 Year - Daily)</h2>
+
+      <!-- Canvas for Chart.js -->
+      <div class="chart-container">
+        <canvas #chartCanvas id="priceChart"></canvas>
+      </div>
+
+      <!-- Text Summary (Accessibility) -->
+      <div class="chart-summary" *ngIf="candles().length > 0">
+        <p>
+          Over the past year, {{ symbol() }} traded between {{ formatPrice(dayRange().low) }}
+          and {{ formatPrice(dayRange().high) }}, with the most recent close at
+          {{ formatPrice(currentPrice()) }}.
+        </p>
+      </div>
+
+      <!-- Chart Note -->
+      <div *ngIf="!chartLoaded()" class="chart-placeholder">
+        <p>Chart data not available</p>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions">
+      <button class="btn-buy" (click)="navigateToOrder('BUY')">Buy {{ symbol() }}</button>
+      <button class="btn-sell" (click)="navigateToOrder('SELL')">Sell {{ symbol() }}</button>
+    </div>
+  </div>
+</div>

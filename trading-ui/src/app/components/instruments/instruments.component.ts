@@ -166,13 +166,13 @@ export class InstrumentsComponent {
   }
 
   buyInstrument(symbol: string): void {
-    // Navigate to order page with symbol pre-filled
-    this.router.navigate(['/order'], { queryParams: { symbol, side: 'BUY' } });
+    // Navigate to trading page with symbol and side pre-filled
+    this.router.navigate(['/trading'], { queryParams: { symbol, side: 'BUY' } });
   }
 
   sellInstrument(symbol: string): void {
-    // Navigate to order page with symbol pre-filled
-    this.router.navigate(['/order'], { queryParams: { symbol, side: 'SELL' } });
+    // Navigate to trading page with symbol and side pre-filled
+    this.router.navigate(['/trading'], { queryParams: { symbol, side: 'SELL' } });
   }
 
   viewDetails(symbol: string): void {
