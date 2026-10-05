@@ -32,6 +32,13 @@ export type {
 };
 export { OrderSide, OrderStatus, InstrumentType, PriceHistory };
 
+/** Filters for order history, passed to the route's own query parameters. */
+export interface OrderFilter {
+  status?: OrderStatus;
+  from?: string;
+  to?: string;
+}
+
 /** The chart ranges the Trade REST API serves: minute bars for 1D, daily candles otherwise. */
 export type ChartRange = PriceHistory.RangeEnum;
 
@@ -57,16 +64,23 @@ export class TradeApi {
     return this.accounts.getPositions(accountId);
   }
 
-  orderHistory(accountId: number): Observable<OrderHistoryEntry[]> {
-    return this.accounts.getOrders(accountId);
+  /** Order history, optionally narrowed to one status and a placed-on window (ISO date-times). */
+  orderHistory(accountId: number, filter?: OrderFilter): Observable<OrderHistoryEntry[]> {
+    return filter
+      ? this.accounts.getOrders(accountId, filter.status, filter.from, filter.to)
+      : this.accounts.getOrders(accountId);
   }
 
   placeOrder(order: PlaceOrderRequest): Observable<OrderResponse> {
     return this.orders.placeOrder(order);
   }
 
+  /**
+   * Cancels a working order. The contract takes the bare UUID in the path,
+   * "without the ORD- display prefix" that order history shows.
+   */
   cancelOrder(orderId: string): Observable<OrderResponse> {
-    return this.orders.cancelOrder(orderId);
+    return this.orders.cancelOrder(orderId.replace(/^ORD-/, ''));
   }
 
   getInstruments(pageSize?: number, offset?: number): Observable<PaginatedInstrumentsResponse> {

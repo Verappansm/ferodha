@@ -16,7 +16,7 @@ headers {
 body:json {
   {
     "username": "{{seedEmail}}",
-    "password": "{{seedPassword}}"
+    "password": "{{passwordDigest}}"
   }
 }
 
@@ -58,4 +58,12 @@ assert {
   res.status: eq 200
   res.body.tokenType: eq Bearer
   res.body.expiresIn: eq 900
+}
+
+script:pre-request {
+  // B23: the browsers send sha256("ferodha-v1:" + lower-case email + ":"
+  // + password) in place of the password, so this request does too.
+  const CryptoJS = require("crypto-js");
+  const digestEmail = String(bru.getEnvVar("seedEmail")).trim().toLowerCase();
+  bru.setVar("passwordDigest", CryptoJS.SHA256(`ferodha-v1:${digestEmail}:${bru.getEnvVar("seedPassword")}`).toString());
 }

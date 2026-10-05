@@ -13,6 +13,9 @@ interface StoredSession {
 
 export const SESSION_STORAGE_KEY = 'trading-ui.session';
 
+/** An access token this close to expiry is renewed before it is sent. */
+export const REFRESH_AHEAD_MS = 30_000;
+
 /**
  * The signed-in session. Kept in sessionStorage so a reload keeps the user
  * signed in while closing the tab ends the session; nothing goes to
@@ -31,6 +34,9 @@ export class Session {
   /** The account the token says this session may trade. */
   readonly accountId = computed(() => this.state()?.user.accountId ?? null);
   readonly isSignedIn = computed(() => this.state() !== null);
+
+  /** The renewal in flight, shared by every request that needs it. */
+  private renewing: Promise<boolean> | null = null;
 
   /**
    * Logs in, then asks /auth/me who the token belongs to, as the contract
@@ -56,6 +62,45 @@ export class Session {
     }
   }
 
+  /** True when the stored access token has expired or is about to. */
+  accessTokenExpiring(): boolean {
+    const session = this.state();
+    return session !== null && session.expiresAt - REFRESH_AHEAD_MS <= Date.now();
+  }
+
+  /**
+   * Exchanges the refresh token for a new pair (POST /auth/refresh) and
+   * resolves true, or signs out and resolves false when that is refused.
+   * Only one renewal ever runs at a time: the auth service rotates refresh
+   * tokens and treats a token presented twice as theft, revoking the whole
+   * login (LEAP-005), so concurrent callers must share this one call.
+   */
+  refresh(): Promise<boolean> {
+    this.renewing ??= this.renew().finally(() => (this.renewing = null));
+    return this.renewing;
+  }
+
+  private async renew(): Promise<boolean> {
+    const current = this.state();
+    if (!current?.refreshToken) {
+      this.signOut();
+      return false;
+    }
+    try {
+      const tokens = await firstValueFrom(this.authApi.refresh(current.refreshToken));
+      this.save({
+        ...current,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: Date.now() + tokens.expiresIn * 1000,
+      });
+      return true;
+    } catch {
+      this.signOut();
+      return false;
+    }
+  }
+
   /** Forgets the tokens and the user, in memory and in sessionStorage. */
   signOut(): void {
     this.state.set(null);
@@ -77,13 +122,18 @@ export class Session {
   }
 }
 
-/** The stored session, unless it is missing, unreadable or expired. */
+/**
+ * The stored session, unless it is missing or unreadable. An expired access
+ * token is kept while there is a refresh token to renew it with: the first
+ * request renews it (see authTokenInterceptor).
+ */
 function restore(): StoredSession | null {
   try {
     const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw) as StoredSession;
-    if (!session.accessToken || !session.user || session.expiresAt <= Date.now()) {
+    const expired = session.expiresAt <= Date.now();
+    if (!session.accessToken || !session.user || (expired && !session.refreshToken)) {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       return null;
     }

@@ -21,7 +21,8 @@ dialog / older builds) and `collection.bru` (current builds).
 
 - The service is running and its database has the Sprint 3 seed.
 - The seeded holder of account 1 can log in: `john.carter@example.com` /
-  `seed-password-change-me`. A database seeded before that password existed
+  `seed-password-change-me`; every request sends the digest the UIs send in
+  its place (B23), computed in a pre-request script. A database seeded before that password existed
   needs the `UPDATE` in `windows/windows-setup.md` (Troubleshooting).
 
 ## What a green run proves

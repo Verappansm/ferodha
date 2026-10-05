@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { AuthService as GeneratedAuthService } from './generated/auth/api/auth.service';
 import { ProfileService } from './generated/auth/api/profile.service';
 import { RegisterRequest } from './generated/auth/model/register-request';
+import { passwordDigest } from '../core/auth/password-digest';
 import { TokenResponse } from './generated/auth/model/token-response';
 import { UserResponse } from './generated/auth/model/user-response';
 
@@ -18,8 +19,9 @@ export class AuthApi {
   private readonly auth = inject(GeneratedAuthService);
   private readonly profile = inject(ProfileService);
 
+  /** The password never leaves the browser: only its digest does (B23). */
   login(username: string, password: string): Observable<TokenResponse> {
-    return this.auth.login({ username, password });
+    return this.auth.login({ username, password: passwordDigest(username, password) });
   }
 
   /**
@@ -32,7 +34,11 @@ export class AuthApi {
    * account is opened for them. The cast is confined to this method.
    */
   register(name: string, email: string, password: string): Observable<UserResponse> {
-    const body = { name, username: email, password } as unknown as RegisterRequest;
+    const body = {
+      name,
+      username: email,
+      password: passwordDigest(email, password),
+    } as unknown as RegisterRequest;
     return this.auth.register(body);
   }
 

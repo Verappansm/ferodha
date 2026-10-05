@@ -82,19 +82,87 @@ describe('Session', () => {
     expect(sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 
-  it('restores an unexpired session after a reload and drops an expired one', () => {
+  it('restores a session after a reload, keeping an expired one that can still be renewed', () => {
     sessionStorage.setItem(
       SESSION_STORAGE_KEY,
       JSON.stringify({ ...TOKENS, expiresAt: Date.now() + 60_000, user: USER }),
     );
     expect(setup().session.accountId()).toBe(3);
 
+    // Expired access token, but a refresh token: kept, and renewed on first use.
     TestBed.resetTestingModule();
     sessionStorage.setItem(
       SESSION_STORAGE_KEY,
       JSON.stringify({ ...TOKENS, expiresAt: Date.now() - 1, user: USER }),
     );
+    const kept = setup().session;
+    expect(kept.isSignedIn()).toBe(true);
+    expect(kept.accessTokenExpiring()).toBe(true);
+
+    // Expired with nothing to renew it with: dropped.
+    TestBed.resetTestingModule();
+    sessionStorage.setItem(
+      SESSION_STORAGE_KEY,
+      JSON.stringify({ ...TOKENS, refreshToken: '', expiresAt: Date.now() - 1, user: USER }),
+    );
     expect(setup().session.isSignedIn()).toBe(false);
     expect(sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+  });
+
+  describe('refresh', () => {
+    function signedIn(expiresAt: number): { session: Session; backend: HttpTestingController } {
+      sessionStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ ...TOKENS, expiresAt, user: USER }),
+      );
+      return setup();
+    }
+
+    it('swaps the token pair through /auth/refresh and keeps the user', async () => {
+      const { session, backend } = signedIn(Date.now() - 1);
+
+      const renewing = session.refresh();
+      const request = backend.expectOne(`${URLS.authApiUrl}/auth/refresh`);
+      expect(request.request.body).toEqual({ refreshToken: 'refresh' });
+      // The refresh call itself never carries a bearer token.
+      expect(request.request.headers.has('Authorization')).toBe(false);
+      request.flush({ ...TOKENS, accessToken: 'access-2', refreshToken: 'refresh-2' });
+
+      expect(await renewing).toBe(true);
+      expect(session.accessToken()).toBe('access-2');
+      expect(session.accountId()).toBe(3);
+      expect(session.accessTokenExpiring()).toBe(false);
+      const stored = JSON.parse(sessionStorage.getItem(SESSION_STORAGE_KEY)!);
+      expect(stored.refreshToken).toBe('refresh-2');
+      backend.verify();
+    });
+
+    it('runs one renewal for any number of callers, never presenting a refresh token twice', async () => {
+      const { session, backend } = signedIn(Date.now() - 1);
+
+      const all = Promise.all([session.refresh(), session.refresh(), session.refresh()]);
+      backend
+        .expectOne(`${URLS.authApiUrl}/auth/refresh`)
+        .flush({ ...TOKENS, accessToken: 'access-2', refreshToken: 'refresh-2' });
+
+      expect(await all).toEqual([true, true, true]);
+      backend.verify();
+    });
+
+    it('signs out when the refresh token is refused', async () => {
+      const { session, backend } = signedIn(Date.now() - 1);
+
+      const renewing = session.refresh();
+      backend
+        .expectOne(`${URLS.authApiUrl}/auth/refresh`)
+        .flush(
+          { errorCode: 'AUTH-401', message: 'Unauthorised' },
+          { status: 401, statusText: 'Unauthorized' },
+        );
+
+      expect(await renewing).toBe(false);
+      expect(session.isSignedIn()).toBe(false);
+      expect(sessionStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    });
   });
 });

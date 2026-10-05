@@ -78,6 +78,43 @@
           {{ priceError() }}
         </div>
       }
+      @if (quote(); as q) {
+        <div class="current-price" data-testid="order-current-price">
+          @if (q.mid != null) {
+            Current price <strong>{{ q.mid | number: '1.2-4' }} {{ q.currency }}</strong>
+            @if (q.bid != null && q.ask != null) {
+              (bid {{ q.bid | number: '1.2-4' }} / ask {{ q.ask | number: '1.2-4' }})
+            }
+            @if (q.stale) {
+              <span class="stale" data-testid="order-quote-stale">
+                stale{{ q.asOf ? ', last priced ' + (q.asOf | date: 'shortTime') : '' }}
+              </span>
+            } @else if (q.asOf) {
+              · live {{ q.asOf | date: 'mediumTime' }}
+            }
+            @if (suggestedPrice(); as s) {
+              <div data-testid="order-suggested-price">
+                Suggested limit {{ s | number: '1.2-2' }} ({{
+                  form.controls.side.value === 'BUY' ? '+' : '−'
+                }}{{ bufferPercent }}% past the
+                {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})
+                @if (form.controls.price.value !== s) {
+                  <button
+                    type="button"
+                    class="link-button"
+                    data-testid="order-use-suggested"
+                    (click)="useSuggestedPrice()"
+                  >
+                    Use it
+                  </button>
+                }
+              </div>
+            }
+          } @else {
+            No live price for {{ q.symbol }} yet.
+          }
+        </div>
+      }
     </div>
 
     <!-- Submit Button -->

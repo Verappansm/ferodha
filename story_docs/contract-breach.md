@@ -36,6 +36,7 @@ below is a decision the team has taken and will defend at review.
 | B20 | Portfolio pricing and FX | `contracts/portfolio-api.yaml` | Last prices from Fauxnance `GET /quotes`, batched; totals converted with live `FX:` rates | Last prices from the `market-data` topic (mid of bid and ask), falling back to the newest stored minute bar or daily candle (`Market_Data` was replaced by `market_candles` and `market_bars`, B21); totals converted at the executor's fixed 90 INR = 1 USD until LEAP-006 |
 | B21 | Market data routes and tables | `contracts/trade-api.yaml`; LEAP-016 story | No instrument routes; chart history "from `Market_Data`" | `GET /api/v1/instruments`, `/instruments/{symbol}`, `/{symbol}/quote` and `/{symbol}/history` added to `design/trade-api.yaml`. `Market_Data` is dropped (Liquibase 010) for `market_candles` (Fauxnance daily candles) and `market_bars` (1-minute bars from `pricing_generator`'s ticks, Liquibase 011); no news panel |
 | B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
+| B23 | Password on the wire | `contracts/auth-api.yaml` RegisterRequest, LoginRequest; admin login (B18) | `password` is the password itself, 12 to 128 characters | The trading UI and the admin console send `sha256("ferodha-v1:" + lower-case email + ":" + password)`, 64 hex characters, in its place; the auth service bcrypts what arrives, unchanged. The 12-character minimum is enforced in the browser on the typed password. Seed users re-hashed by trade-api Liquibase 012 |
 
 ## Why
 
@@ -173,3 +174,22 @@ joining date, and lets the user change the name and phone, so the auth
 service, which owns `Users`, serves `/profile`. There is no user id in either
 route: both read the user from the verified token, so nobody can read or change
 another user's profile. The email is the username and stays read-only.
+
+**B23 (password on the wire).** The typed password never leaves the browser:
+the UIs send a SHA-256 digest of it, salted with a fixed label and the user's
+email so two users with the same password send different values. The auth
+service is unchanged and still stores bcrypt (cost 12) of whatever it
+receives, so a stolen database is no easier to crack. What this buys is
+narrow: the plain password no longer appears in request bodies, proxy or
+browser logs and network captures, so a password reused on another site is
+not exposed there. It is not a substitute for HTTPS: the digest is itself the
+credential, so anyone who captures it can sign in with it until the password
+changes. Consequences:
+
+- The password rules (12 to 128 characters) are checked in the browser on the
+  typed password; the server can only see a 64-character digest.
+- Every client sends the digest: the two UIs, `scripts/demo.sh`,
+  `windows/test-windows.sh` and the Bruno collection.
+- trade-api Liquibase 012 re-hashes the six seed users for the seed password.
+  A user who registered before this change cannot sign in until they register
+  again: their plain password was never kept, so it cannot be re-hashed.

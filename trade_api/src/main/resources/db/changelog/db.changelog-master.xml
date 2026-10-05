@@ -24,5 +24,6 @@
     <include file="db/changelog/009-admin-console.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/010-market-candles-schema.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/011-market-bars.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/012-client-digest-seed-passwords.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

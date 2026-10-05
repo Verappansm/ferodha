@@ -20,6 +20,7 @@ import {
 } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
 import { pnlDirection, pnlSign, pnlWord } from '../../core/format/pnl';
+import { suggestedLimitPrice } from '../../core/format/limit-price';
 import { CHART_FACTORY, DrawnChart } from './price-chart';
 
 export const RANGES: { value: ChartRange; label: string }[] = [
@@ -131,8 +132,16 @@ export class InstrumentDetailsComponent implements OnInit {
     this.loadHistory();
   }
 
+  /**
+   * Opens the order ticket pre-filled with the symbol, the side and a
+   * suggested limit price (0.02% past the touch) when there is a quote.
+   */
   trade(side: 'BUY' | 'SELL'): void {
-    this.router.navigate(['/order'], { queryParams: { symbol: this.symbol(), side } });
+    const price = suggestedLimitPrice(this.quote(), side);
+    this.router.navigate(['/order'], {
+      queryParams:
+        price === null ? { symbol: this.symbol(), side } : { symbol: this.symbol(), side, price },
+    });
   }
 
   label(time: string): string {

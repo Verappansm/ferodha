@@ -88,14 +88,29 @@ describe('InstrumentDetailsComponent', () => {
   }
 
   describe('buy and sell open the ticket pre-filled with symbol and side', () => {
-    it.each(['BUY', 'SELL'] as const)('%s', (side) => {
+    it.each([
+      ['BUY', 230.35], // ask 230.30 + 0.02%, rounded up
+      ['SELL', 230.05], // bid 230.10 - 0.02%, rounded down
+    ] as const)('%s, with a suggested price of %s', (side, price) => {
       open();
       const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
 
       click(side === 'BUY' ? 'buy' : 'sell');
 
       expect(navigate).toHaveBeenCalledWith(['/order'], {
-        queryParams: { symbol: 'AAPL', side },
+        queryParams: { symbol: 'AAPL', side, price },
+      });
+    });
+
+    it('sends no price when there is no quote to suggest one from', () => {
+      quote.mockReturnValue(of({ ...QUOTE, bid: null, ask: null, mid: null, stale: true }));
+      open();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      click('buy');
+
+      expect(navigate).toHaveBeenCalledWith(['/order'], {
+        queryParams: { symbol: 'AAPL', side: 'BUY' },
       });
     });
   });

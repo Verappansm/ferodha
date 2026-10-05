@@ -45,6 +45,21 @@ ADMIN_LOG="$RUN_DIR/admin-ui.log"
 # trading sections run as this one.
 SEED_EMAIL="${SEED_EMAIL:-john.carter@example.com}"
 SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
+
+# B23: the trading UI and the admin console send this digest in place of the
+# password, and the auth service bcrypts whatever arrives, so a script has to
+# send the same: sha256("ferodha-v1:" + lower-case email + ":" + password).
+password_digest() {
+    local input
+    input="ferodha-v1:$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]'):$2"
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s' "$input" | sha256sum | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
+    else
+        printf '%s' "$input" | openssl dgst -sha256 -r | cut -d' ' -f1
+    fi
+}
 ACCOUNT_ID=1
 
 FRESH=0
@@ -132,12 +147,12 @@ login_seed_user() {
     local response
     response=$(curl -s -X POST "$AUTH_BASE/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"$SEED_EMAIL\",\"password\":\"$SEED_PASSWORD\"}")
+        -d "{\"username\":\"$SEED_EMAIL\",\"password\":\"$(password_digest "$SEED_EMAIL" "$SEED_PASSWORD")\"}")
     JWT_TOKEN=$(echo "$response" | jq -r '.accessToken // empty' 2>/dev/null)
     if [[ -z "$JWT_TOKEN" ]]; then
         echo -e "${RED}✗ Could not log in as $SEED_EMAIL: $response${NC}"
-        echo "  A database seeded before the seed password existed needs a reset:"
-        echo "  run ./scripts/demo.sh --fresh"
+        echo "  A database from before the seed password (or before trade-api's Liquibase 012"
+        echo "  re-hashed it for browser-side digests) needs a reset: run ./scripts/demo.sh --fresh"
         exit 1
     fi
 }
@@ -415,11 +430,11 @@ auth_demo() {
     email="demo.$(date +%s).$RANDOM@example.com"
     password="demo-password-123"
     CURL_CMD="curl -s -X POST $AUTH_BASE/auth/register -H 'Content-Type: application/json' \
-  -d '{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}'"
+  -d '{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"<sha256 digest of the password>\"}'"
     print_curl "$CURL_CMD"
     response=$(curl -s -w $'\n%{http_code}' -X POST "$AUTH_BASE/auth/register" \
         -H "Content-Type: application/json" \
-        -d "{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}")
+        -d "{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$(password_digest "$email" "$password")\"}")
     code="${response##*$'\n'}"
     print_response "${response%$'\n'*}"
     if [[ "$code" == "201" ]]; then
@@ -433,7 +448,7 @@ auth_demo() {
     print_subheader "1.2 That user logs in before an account is opened for them"
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$AUTH_BASE/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"$email\",\"password\":\"$password\"}")
+        -d "{\"username\":\"$email\",\"password\":\"$(password_digest "$email" "$password")\"}")
     if [[ "$code" == "401" ]]; then
         echo -e "${GREEN}✓ 401 - no trading account yet, so no token to issue${NC}"
     else
@@ -444,7 +459,7 @@ auth_demo() {
 
     print_subheader "1.3 Log in as the holder of account $ACCOUNT_ID"
     CURL_CMD="curl -s -X POST $AUTH_BASE/auth/login -H 'Content-Type: application/json' \
-  -d '{\"username\":\"$SEED_EMAIL\",\"password\":\"<seed password>\"}'"
+  -d '{\"username\":\"$SEED_EMAIL\",\"password\":\"<sha256 digest of the seed password>\"}'"
     print_curl "$CURL_CMD"
     login_seed_user
     echo -e "${GREEN}✓ Got an access token (${#JWT_TOKEN} chars). Its claims:${NC}"

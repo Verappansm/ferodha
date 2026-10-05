@@ -215,8 +215,23 @@ pause
 # placed as the seeded holder of account $ACCOUNT_ID instead.
 stage "Login - a real token from auth-service" "Register a new user (no account yet, so no login), then log in as the holder of account $ACCOUNT_ID."
 EMAIL="demo.$(date +%s).$RANDOM@example.com"
+# B23: the trading UI and the admin console send this digest in place of the
+# password, and the auth service bcrypts whatever arrives, so a script has to
+# send the same: sha256("ferodha-v1:" + lower-case email + ":" + password).
+password_digest() {
+    local input
+    input="ferodha-v1:$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]'):$2"
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s' "$input" | sha256sum | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
+    else
+        printf '%s' "$input" | openssl dgst -sha256 -r | cut -d' ' -f1
+    fi
+}
+
 PASSWORD="windows-demo-password-123"
-REGISTER_BODY="{\"name\":\"Windows Demo\",\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+REGISTER_BODY="{\"name\":\"Windows Demo\",\"username\":\"$EMAIL\",\"password\":\"$(password_digest "$EMAIL" "$PASSWORD")\"}"
 show_cmd "curl -X POST $AUTH/auth/register -d '$REGISTER_BODY'"
 REGISTER_RESPONSE=$(curl -s -w $'\n%{http_code}' -X POST "$AUTH/auth/register" \
   -H "Content-Type: application/json" -d "$REGISTER_BODY")
@@ -226,7 +241,7 @@ pass "registered $EMAIL (HTTP 201)"
 show_json "${REGISTER_RESPONSE%$'\n'*}"
 
 NEW_USER_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$AUTH/auth/login" \
-  -H "Content-Type: application/json" -d "{\"username\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
+  -H "Content-Type: application/json" -d "{\"username\":\"$EMAIL\",\"password\":\"$(password_digest "$EMAIL" "$PASSWORD")\"}")
 [[ "$NEW_USER_CODE" == "401" ]] || fail "new user without an account got $NEW_USER_CODE at login (expected 401)"
 pass "the new user has no trading account yet, so login answers 401"
 echo ""
@@ -234,11 +249,11 @@ echo ""
 # The seeded holder of account 1 (database/seeds/001_seed_data.sql).
 SEED_EMAIL="${SEED_EMAIL:-john.carter@example.com}"
 SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
-LOGIN_BODY="{\"username\":\"$SEED_EMAIL\",\"password\":\"$SEED_PASSWORD\"}"
+LOGIN_BODY="{\"username\":\"$SEED_EMAIL\",\"password\":\"$(password_digest "$SEED_EMAIL" "$SEED_PASSWORD")\"}"
 show_cmd "curl -X POST $AUTH/auth/login -d '$LOGIN_BODY'"
 LOGIN_RESPONSE=$(curl -s -X POST "$AUTH/auth/login" -H "Content-Type: application/json" -d "$LOGIN_BODY")
 TOKEN=$(json_field accessToken "$LOGIN_RESPONSE")
-[[ -n "$TOKEN" ]] || fail "no token for $SEED_EMAIL. A database seeded before the seed password existed needs the UPDATE in windows/windows-setup.md (Troubleshooting). Response: $LOGIN_RESPONSE"
+[[ -n "$TOKEN" ]] || fail "no token for $SEED_EMAIL. A database from before the seed password, or before trade-api's Liquibase 012 re-hashed it for browser-side digests, needs a reset: see windows/windows-setup.md (Troubleshooting). Response: $LOGIN_RESPONSE"
 pass "logged in - got an access token (${#TOKEN} chars)"
 info "decoded token header:  $(jwt_part "${TOKEN%%.*}")"
 PAYLOAD_SEG="${TOKEN#*.}"; PAYLOAD_SEG="${PAYLOAD_SEG%%.*}"

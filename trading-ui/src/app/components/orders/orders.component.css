@@ -78,3 +78,61 @@ th {
   font-family: var(--font-mono);
   font-size: 0.8rem;
 }
+
+h3 {
+  margin: 20px 0 8px;
+  font-size: 1rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--ink-500);
+}
+
+.filters select,
+.filters input {
+  height: 36px;
+  padding: 0 8px;
+  font: inherit;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+}
+
+.outcome {
+  color: var(--positive);
+}
+
+.cancel-cell {
+  text-align: right;
+}
+
+.confirm {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.danger {
+  height: 36px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--negative);
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}

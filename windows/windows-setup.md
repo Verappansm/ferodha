@@ -243,7 +243,7 @@ pricing-generator behaves the same either way. trade-executor's own market-data 
 | Preflight passes, but the trade-executor log shows connection errors to a **different** address | Kafka advertises the wrong address. Re-run A4 with `KAFKA_ADVERTISED_HOST` set to the IP Windows uses. |
 | `psql failed` or `password authentication failed` | Check `POSTGRES_USER` and `POSTGRES_PASSWORD`, and set `PSQL_BIN_DIR` if psql isn't found. |
 | trade-api: `type "account_status_enum" already exists` | An older `database\apply.sh` ran a Sprint 8 migration on this database. Drop the `tradedb` database and run B5 again. |
-| Stage 3: `no token for john.carter@example.com` | The database was seeded before the seed users had a real password. Run `UPDATE users SET password_hash = '$2b$12$QgvqQO.57WsjZ6TBnhlbA.xVIXPBZTo1vmiVNvprTBbA6V8n34SE2' WHERE email LIKE '%@example.com';` in psql (password `seed-password-change-me`), or drop `tradedb` and run B5 again. |
+| Stage 3: `no token for john.carter@example.com`, or sign-in refused for a seed user | The database is older than the seed password, or than trade-api's Liquibase 012 (the browsers now send a digest of the password, B23). Drop `tradedb` and run B5 again. A user you registered yourself before that change has to register again. |
 | `Port 8080 is already in use` | A previous run is still up. Run `stop-windows.ps1`. |
 | A service `exited during startup` | The script prints its log. Full logs are in `windows\.run\logs\<service>.log` and `.err.log`. |
 | `still waiting for trading-ui` until it fails, but http://localhost:4200 opens | Old copy of the script: the check asked the dev server for JSON, which it answers with 404. `git pull`. |
