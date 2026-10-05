@@ -20,5 +20,11 @@
     <include file="db/changelog/005-partial-fill-columns.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/006-market-maker-account.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/007-order-published-at.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/008-account-requests.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/009-admin-console.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/010-market-candles-schema.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/011-market-bars.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/012-client-digest-seed-passwords.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

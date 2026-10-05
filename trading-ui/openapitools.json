@@ -1,0 +1,87 @@
+{
+  "$schema": "./node_modules/@openapitools/openapi-generator-cli/config.schema.json",
+  "spaces": 2,
+  "generator-cli": {
+    "version": "7.25.0",
+    "generators": {
+      "trade-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/trade-api.yaml",
+        "output": "src/app/api/generated/trade",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
+      "auth-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/auth-api.yaml",
+        "output": "src/app/api/generated/auth",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
+      "portfolio-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/portfolio-api.yaml",
+        "output": "src/app/api/generated/portfolio",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
+      "profile-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/profile-api.yaml",
+        "output": "src/app/api/generated/profile",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
+      "admin-trade-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/admin-trade-api.yaml",
+        "output": "projects/admin/src/app/api/generated/trade",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
+      "admin-auth-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/admin-auth-api.yaml",
+        "output": "projects/admin/src/app/api/generated/auth",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      }
+    }
+  }
+}

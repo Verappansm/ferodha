@@ -9,6 +9,8 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginAttemptLimiter } from './login-attempt-limiter';
 import { LoginThrottleGuard } from './login-throttle.guard';
 import { PasswordService } from './password.service';
+import { ProfileController } from './profile.controller';
+import { ProfileService } from './profile.service';
 
 @Module({
   imports: [
@@ -26,14 +28,15 @@ import { PasswordService } from './password.service';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, ProfileController],
   providers: [
     AuthService,
+    ProfileService,
     PasswordService,
     JwtAuthGuard,
     LoginAttemptLimiter,
     LoginThrottleGuard,
   ],
-  exports: [AuthService],
+  exports: [AuthService, ProfileService],
 })
 export class AuthModule {}

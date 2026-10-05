@@ -1,0 +1,43 @@
+.dashboard {
+  padding: 28px 24px;
+}
+
+.dashboard-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.dashboard-header h2 {
+  margin: 0;
+}
+
+.updated {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.refresh {
+  height: 36px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.refresh:hover {
+  background: var(--ink-100);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}

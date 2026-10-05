@@ -19,34 +19,35 @@ def load_dim_date(con: duckdb.DuckDBPyConnection, start_year: int, num_years: in
     """
     start = date(start_year, 1, 1)
     end = date(start_year + num_years, 1, 1)
-    rows = []
-    d = start
-    while d < end:
-        rows.append((
-            int(d.strftime("%Y%m%d")),
-            d,
-            d.day,
-            d.month,
-            d.year,
-            (d.month - 1) // 3 + 1,
-            d.weekday(),
-            _DAY_NAMES[d.weekday()],
-            _MONTH_NAMES[d.month - 1],
-            d.weekday() < 5,
-        ))
-        d += timedelta(days=1)
 
-    con.executemany(
+    # One set-based INSERT instead of executemany: DuckDB runs executemany
+    # row by row, which took ~1 minute for a 10-year calendar.
+    # day_of_week is Monday=0..Sunday=6 (Python's weekday()), i.e. isodow - 1.
+    con.execute(
         """
         INSERT INTO dim_date
             (date_key, full_date, day, month, year, quarter,
              day_of_week, day_name, month_name, is_weekday)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        SELECT
+            CAST(strftime(d, '%Y%m%d') AS INTEGER),
+            d,
+            day(d),
+            month(d),
+            year(d),
+            quarter(d),
+            isodow(d) - 1,
+            list_extract(?, isodow(d)),
+            list_extract(?, month(d)),
+            isodow(d) <= 5
+        FROM (
+            SELECT CAST(range AS DATE) AS d
+            FROM range(CAST(? AS DATE), CAST(? AS DATE), INTERVAL 1 DAY)
+        )
         ON CONFLICT (full_date) DO NOTHING
         """,
-        rows,
+        [_DAY_NAMES, _MONTH_NAMES, start, end],
     )
-    return len(rows)
+    return (end - start).days
 
 
 def load_dim_instrument(con: duckdb.DuckDBPyConnection, instruments: list[dict[str, Any]], now: datetime) -> int:

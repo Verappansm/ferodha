@@ -1,0 +1,57 @@
+<section class="panel" data-testid="positions-panel" aria-labelledby="positions-title">
+  <header class="panel-header">
+    <h3 id="positions-title">Top positions</h3>
+    <a class="panel-link" routerLink="/portfolio">Portfolio</a>
+  </header>
+
+  @if (state().loading) {
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <span class="visually-hidden">Loading positions</span>
+  } @else if (state().error) {
+    <div class="panel-error" role="alert">
+      <p data-testid="positions-panel-error">{{ state().error }}</p>
+      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
+    </div>
+  } @else if (state().data; as positions) {
+    @if (positions.length === 0) {
+      <p class="muted" data-testid="positions-panel-empty">
+        You do not hold anything yet. Filled buy orders appear here.
+      </p>
+    } @else {
+      <ul class="rows">
+        @for (position of positions; track position.symbol) {
+          <li data-testid="positions-panel-row">
+            <span>
+              <span class="symbol">{{ position.symbol }}</span>
+              {{ position.quantity }}
+              @if (position.stale) {
+                <span class="stale" data-testid="positions-panel-stale">
+                  @if (position.priceAsOf) {
+                    Stale, priced {{ position.priceAsOf | date: 'short' }}
+                  } @else {
+                    No price
+                  }
+                </span>
+              }
+            </span>
+            @if (position.marketValue != null) {
+              <span class="num">
+                {{ position.marketValue | number: '1.2-2' }} {{ position.currency }}
+                <br />
+                <span [class]="direction(position.unrealisedPnl)">
+                  {{ sign(position.unrealisedPnl)
+                  }}{{ abs(position.unrealisedPnl ?? 0) | number: '1.2-2' }}
+                  {{ word(position.unrealisedPnl) }}
+                </span>
+              </span>
+            } @else {
+              <span class="num muted">Not priced</span>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

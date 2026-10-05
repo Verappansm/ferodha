@@ -61,8 +61,24 @@ export class AppConfigService implements OnModuleInit {
     return this.configService.get<string>('POSTGRES_PASSWORD') || '';
   }
 
+  /** The browser origins allowed to call this service, from CORS_ALLOWED_ORIGINS. */
+  get corsAllowedOrigins(): string[] {
+    return parseOrigins(
+      this.configService.get<string>('CORS_ALLOWED_ORIGINS') ||
+        'http://localhost:4200,http://localhost:4300',
+    );
+  }
+
   /** Contains the database password: never log this value. */
   get postgresUrl(): string {
     return `postgresql://${this.postgresUser}:${this.postgresPassword}@${this.postgresHost}:${this.postgresPort}/${this.postgresDb}`;
   }
+}
+
+/** Splits a comma-separated origin list, dropping blanks and stray spaces. */
+export function parseOrigins(value: string): string[] {
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
 }

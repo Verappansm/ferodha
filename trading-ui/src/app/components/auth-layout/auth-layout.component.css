@@ -1,0 +1,213 @@
+.auth-page {
+  display: grid;
+  grid-template-columns: minmax(380px, 5fr) 7fr;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--page);
+}
+
+/* The brand panel stays dark green in both themes. */
+.brand-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  padding: 44px 52px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  color: #c6e6d7;
+  background:
+    radial-gradient(circle at 15% 0%, rgb(60 194 143 / 22%), transparent 50%),
+    linear-gradient(165deg, #0d4c37 0%, #06291d 100%);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #06291d;
+  background: #3cc28f;
+  border-radius: 9px;
+}
+
+.brand-name {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f0b43c;
+  text-transform: uppercase;
+}
+
+.pitch h2 {
+  max-width: 440px;
+  margin: 0 0 12px;
+  font-size: 31px;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.lead {
+  max-width: 420px;
+  margin: 0 0 28px;
+  color: #a9d2bf;
+}
+
+.features {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.features li {
+  display: flex;
+  gap: 14px;
+  max-width: 430px;
+  font-size: 14px;
+}
+
+.features strong {
+  display: block;
+  color: #fff;
+}
+
+.feature-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 9px;
+}
+
+.feature-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: #3cc28f;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart {
+  margin: auto 0 0;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: 110px;
+}
+
+.chart-area {
+  fill: url(#ferodha-chart-fill);
+}
+
+.chart-line {
+  fill: none;
+  stroke: #3cc28f;
+  stroke-width: 2.5;
+}
+
+.legal {
+  margin: 0;
+  font-size: 12px;
+  color: #86b5a0;
+}
+
+.form-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.form-panel-top {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  padding: 28px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  background: var(--ink-100);
+  border-radius: var(--radius);
+}
+
+.tab {
+  padding: 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-500);
+  text-align: center;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.tab:hover {
+  color: var(--ink-900);
+}
+
+.tab.active {
+  color: var(--ink-900);
+  background: var(--surface-raised);
+  box-shadow: 0 1px 3px rgb(15 28 23 / 12%);
+}
+
+@media (width <= 900px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+    height: 100vh;
+  }
+
+  .brand-panel {
+    display: none;
+  }
+
+  .form-panel {
+    height: 100%;
+  }
+
+  .pitch,
+  .chart,
+  .legal {
+    display: none;
+  }
+}

@@ -100,6 +100,20 @@ describe('AuthService login - one answer for every failure', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
+  it('refuses an administrator: operators sign in to the console, never here', async () => {
+    addUser('operator@example.com', 'ACTIVE', 9);
+    usersByEmail.get('operator@example.com')!.roles = [Role.ADMIN];
+
+    const body = await failureBody(
+      buildService().login({
+        username: 'operator@example.com',
+        password: PASSWORD,
+      }),
+    );
+
+    expect(body).toEqual({ errorCode: 'AUTH-401', message: 'Unauthorised' });
+  });
+
   it('an unknown user and a wrong password return the same status and body', async () => {
     const service = buildService();
     const unknown = await failureBody(

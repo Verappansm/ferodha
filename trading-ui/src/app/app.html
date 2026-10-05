@@ -1,0 +1,50 @@
+<div class="app-container">
+  <!-- The sign-in and create-account pages are full-screen; the bar appears once signed in. -->
+  @if (session.isSignedIn()) {
+  <header class="navbar">
+    <a class="nav-brand" routerLink="/dashboard">
+      <span class="brand-mark" aria-hidden="true">F</span>
+      Ferodha
+    </a>
+    <nav aria-label="Main">
+      <ul class="nav-links">
+        <li><a routerLink="/dashboard" routerLinkActive="active">Dashboard</a></li>
+        <li><a routerLink="/portfolio" routerLinkActive="active">Portfolio</a></li>
+        <li><a routerLink="/instruments" routerLinkActive="active">Markets</a></li>
+        <li><a routerLink="/orders" routerLinkActive="active">Orders</a></li>
+        <li><a routerLink="/watchlist" routerLinkActive="active">Watchlist</a></li>
+        <li><a routerLink="/bank" routerLinkActive="active">Bank</a></li>
+      </ul>
+    </nav>
+    <div class="nav-actions">
+      <a
+        routerLink="/profile"
+        class="profile-icon"
+        title="View Profile"
+        aria-label="View your profile"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+      </a>
+      <app-theme-toggle />
+      <button type="button" class="sign-out" data-testid="sign-out" (click)="signOut()">
+        Sign out
+      </button>
+    </div>
+  </header>
+  }
+
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>

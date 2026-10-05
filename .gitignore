@@ -27,6 +27,7 @@ build/
 
 # Runtime state of the windows profile (windows/windows-setup.md)
 windows/.run/
+/.run/
 
 # Logs
 *.log
@@ -45,5 +46,6 @@ logic.md
 explain.md
 RUN.md
 DOCKER.md
+frontend.md
 /temp/
 /temp.zip

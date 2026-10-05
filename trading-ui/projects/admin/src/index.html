@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Ferodha Operations</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- An internal tool: never indexed. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- Applies a saved light/dark choice before the console starts, so it never flashes the wrong theme. -->
+    <script>
+      try {
+        var t = localStorage.getItem('ferodha-ops.theme');
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <adm-root></adm-root>
+  </body>
+</html>

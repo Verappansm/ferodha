@@ -4,7 +4,7 @@ services:
     image: postgres:16-alpine
     container_name: trade-postgres
     ports:
-      - "8090:5432"
+      - "5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
@@ -32,7 +32,7 @@ services:
     # trade-net never go through the host port mapping, they use the
     # internal listener (kafka:29092) directly over the compose network.
     ports:
-      - "8092:9092"
+      - "9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -81,7 +81,7 @@ services:
       context: ./trade_api
       dockerfile: Dockerfile
     ports:
-      - "8094:8080"
+      - "8080:8080"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -113,7 +113,7 @@ services:
       context: ./auth_service
       dockerfile: Dockerfile
     ports:
-      - "8096:3000"
+      - "3000:3000"
     environment:
       NODE_ENV: development
       PORT: 3000
@@ -145,7 +145,7 @@ services:
     # a working config unprompted; now that everything is being wired
     # together on one box with explicit port choices, applying it.
     ports:
-      - "8093:8082"
+      - "8082:8082"
     environment:
       SERVER_PORT: 8082
       POSTGRES_HOST: postgres
@@ -156,11 +156,16 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
       FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
+      # The executor's own market-data poller stays off: pricing-generator is
+      # the live price feed under every profile. POLL_INTERVAL_SECONDS only
+      # applies if it is switched back on.
+      EXECUTOR_MARKET_DATA_POLLER_ENABLED: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:-false}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
-      # Empty/unset = the spec-exact story this repo was built against (real
-      # Fauxnance, fill-or-reject, no partial fills). Set to market-sim to
-      # switch trade_executor onto pricing-generator's simulated prices
-      # instead - see TradesGeneratorQuoteSource / FauxnanceQuoteClient.
+      # The profile only changes how orders settle. Empty/unset = the
+      # spec-exact story (one real Fauxnance quote per order, fill-or-reject,
+      # no partial fills). market-sim = an order book at pricing-generator's
+      # prices, with partial fills and expiry - see TradesGeneratorQuoteSource
+      # / FauxnanceQuoteClient.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       TRADES_GENERATOR_URL: http://pricing-generator:8084
     healthcheck:
@@ -180,16 +185,20 @@ services:
     networks:
       - trade-net
 
-  # Only calls Fauxnance and publishes to market-data under market-sim -
-  # otherwise trade-executor's MarketDataPoller does, so the quota is never
-  # spent twice.
+  # The platform's live price feed, under every profile: refreshes real
+  # Fauxnance quotes every 5 minutes as anchors, publishes a simulated tick
+  # for every tradable instrument to market-data every 5 seconds (trade-api's
+  # portfolio and instrument pages read it), records 1-minute bars for the
+  # 1D chart (market_bars) and stores daily candles once a day
+  # (market_candles). Under market-sim it also prices trade-executor's fills.
+  # Starts after trade-api, whose Liquibase creates those tables.
   pricing-generator:
     container_name: pricing-generator
     build:
       context: ./pricing_generator
       dockerfile: Dockerfile
     ports:
-      - "8097:8084"
+      - "8084:8084"
     environment:
       SERVER_PORT: 8084
       POSTGRES_HOST: postgres
@@ -200,6 +209,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
       FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
+      GENERATOR_BAR_RETENTION_HOURS: ${GENERATOR_BAR_RETENTION_HOURS:-26}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
@@ -221,7 +231,7 @@ services:
       context: ./trades_generator
       dockerfile: Dockerfile
     ports:
-      - "8095:8083"
+      - "8083:8083"
     environment:
       SERVER_PORT: 8083
       POSTGRES_HOST: postgres

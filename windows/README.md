@@ -1,7 +1,8 @@
 # windows
 
-A split setup: the services run natively on Windows and Kafka runs in Docker
-on a Linux machine.
+A split setup: the services and the trading UI (http://localhost:4200) run
+natively on Windows and Kafka runs in Docker on a Linux machine. Pass
+`-SkipUi` to `start-windows.ps1` to leave the UI out.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1   # Windows

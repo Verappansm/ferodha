@@ -9,16 +9,20 @@ public class Instrument {
     private final String displayName;
     private final InstrumentType assetClass;
     private final String quoteCurrency;
+    private final String exchange;
+    private final String sector;
 
     // can no longer be traded.
     private boolean tradable;
 
     public Instrument(String symbol, String displayName, InstrumentType assetClass,
-                       String quoteCurrency) {
+                       String quoteCurrency, String exchange, String sector) {
         this.symbol = symbol;
         this.displayName = displayName;
         this.assetClass = assetClass;
         this.quoteCurrency = quoteCurrency;
+        this.exchange = exchange;
+        this.sector = sector;
         this.tradable = true;
     }
 
@@ -45,5 +49,13 @@ public class Instrument {
 
     public String getQuoteCurrency() {
         return quoteCurrency;
+    }
+
+    public String getExchange() {
+        return exchange;
+    }
+
+    public String getSector() {
+        return sector;
     }
 }

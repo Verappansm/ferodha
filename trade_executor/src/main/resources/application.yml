@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8082}
 
 spring:
   application:
@@ -71,6 +71,9 @@ executor:
   publish:
     timeout-ms: ${EXECUTOR_PUBLISH_TIMEOUT_MS:5000}
   market-data:
+    # The poller is off: pricing_generator publishes market-data under every
+    # profile (see MarketDataPoller). Fills still use their own quote.
+    poller-enabled: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:false}
     # Same env var the sprint brief names for the poller specifically -
     # not reused from anything order-placement related.
     poll-interval-seconds: ${POLL_INTERVAL_SECONDS:60}

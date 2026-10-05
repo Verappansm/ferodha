@@ -10,13 +10,29 @@
             <arg column="type" javaType="java.lang.String"/>
             <arg column="currency" javaType="java.lang.String"/>
             <arg column="tradable" javaType="boolean"/>
+            <arg column="exchange" javaType="java.lang.String"/>
+            <arg column="sector" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <select id="findBySymbol" resultMap="instrumentRow">
-        SELECT instrument_id, ticker, name, type, currency, tradable
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
         FROM Instruments
         WHERE ticker = #{symbol}
+    </select>
+
+    <select id="findAllTradable" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        WHERE tradable = true
+        ORDER BY ticker ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countTradable" resultType="long">
+        SELECT COUNT(*)
+        FROM Instruments
+        WHERE tradable = true
     </select>
 
 </mapper>

@@ -1,0 +1,69 @@
+<div class="sign-in-page">
+  <div class="theme-corner"><adm-theme-toggle /></div>
+  <main class="panel">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">F</span>
+      <div>
+        <div class="brand-name">Ferodha</div>
+        <div class="brand-sub">Operations</div>
+      </div>
+    </div>
+
+    <h1>Administrator sign-in</h1>
+    <p class="lead">Restricted to platform operators. Every action you take here is recorded.</p>
+
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label class="field-label" for="email">Work email</label>
+        <input
+          id="email"
+          class="input"
+          type="email"
+          formControlName="email"
+          autocomplete="username"
+          data-testid="admin-email"
+          [attr.aria-invalid]="showError('email')"
+          aria-describedby="email-error"
+        />
+        @if (showError('email')) {
+          <p id="email-error" class="field-error">Enter a valid email address.</p>
+        }
+      </div>
+      <div class="field">
+        <label class="field-label" for="password">Password</label>
+        <input
+          id="password"
+          class="input"
+          type="password"
+          formControlName="password"
+          autocomplete="current-password"
+          data-testid="admin-password"
+          [attr.aria-invalid]="showError('password')"
+          aria-describedby="password-error"
+        />
+        @if (showError('password')) {
+          <p id="password-error" class="field-error">Enter your password.</p>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="notice notice-error" role="alert" data-testid="admin-sign-in-error">
+          {{ error() }}
+        </p>
+      }
+
+      <button
+        type="submit"
+        class="btn btn-primary"
+        data-testid="admin-sign-in"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+
+    <p class="footnote">
+      Sessions last 15 minutes and are not renewed automatically. Closing this tab signs you out.
+    </p>
+  </main>
+</div>

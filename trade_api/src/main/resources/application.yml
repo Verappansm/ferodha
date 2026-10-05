@@ -26,6 +26,11 @@ spring:
       max-in-flight-requests-per-connection: 5
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    # market-data quotes for the portfolio routes (see MarketDataListener)
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -39,6 +44,22 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     issuer: auth-service
+
+  # Where the operations console's health page probes (LEAP-023). Service
+  # names inside Docker; the defaults suit the Windows profile.
+  admin:
+    health:
+      auth-url: ${AUTH_HEALTH_URL:http://localhost:3000/health}
+      executor-url: ${EXECUTOR_HEALTH_URL:http://localhost:8082/actuator/health}
+
+# Portfolio pricing (contracts/portfolio-api.yaml). A quote older than
+# stale-after-seconds is still shown, flagged stale. The group id is unique
+# per start so the listener always re-reads the retained quotes.
+portfolio:
+  quotes:
+    stale-after-seconds: ${PORTFOLIO_STALE_AFTER_SECONDS:300}
+    group-id: trade-api-quotes-${random.uuid}
+    listen: ${PORTFOLIO_QUOTES_LISTEN:true}
 
 logging:
   level:

@@ -55,7 +55,7 @@ describe('auth service (e2e)', () => {
       .get('/nope')
       .expect(404, { errorCode: 'VAL-422', message: 'Invalid input' }));
 
-  it('registers a user without an account, who then cannot log in yet', async () => {
+  it('registers a user with a pending account request, who cannot log in until it is approved', async () => {
     const email = `E2E.${Date.now()}@Example.com`;
 
     const registered = await request(app.getHttpServer())

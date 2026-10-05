@@ -1,0 +1,39 @@
+<section class="panel" data-testid="pnl-panel" aria-labelledby="pnl-title">
+  <header class="panel-header">
+    <h3 id="pnl-title">Today's P&amp;L</h3>
+    <a class="panel-link" routerLink="/portfolio">Portfolio</a>
+  </header>
+
+  @if (state().loading) {
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <span class="visually-hidden">Loading profit and loss</span>
+  } @else if (state().error) {
+    <div class="panel-error" role="alert">
+      <p data-testid="pnl-error">{{ state().error }}</p>
+      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
+    </div>
+  } @else if (state().data; as pnl) {
+    <p class="figure" [class]="direction(pnl.totalPnl)" data-testid="pnl-total">
+      {{ sign(pnl.totalPnl) }}{{ abs(pnl.totalPnl) | number: '1.2-2'
+      }}<span class="currency">{{ pnl.baseCurrency }}</span>
+    </p>
+    <p class="muted" data-testid="pnl-word">{{ word(pnl.totalPnl) }}</p>
+    <ul class="rows">
+      <li>
+        <span>Realised today</span>
+        <span class="num" [class]="direction(pnl.realisedPnl)" data-testid="pnl-realised">
+          {{ sign(pnl.realisedPnl) }}{{ abs(pnl.realisedPnl) | number: '1.2-2' }}
+          {{ word(pnl.realisedPnl) }}
+        </span>
+      </li>
+      <li>
+        <span>Unrealised now</span>
+        <span class="num" [class]="direction(pnl.unrealisedPnl)" data-testid="pnl-unrealised">
+          {{ sign(pnl.unrealisedPnl) }}{{ abs(pnl.unrealisedPnl) | number: '1.2-2' }}
+          {{ word(pnl.unrealisedPnl) }}
+        </span>
+      </li>
+    </ul>
+  }
+</section>

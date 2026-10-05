@@ -15,6 +15,10 @@ export enum ErrorCode {
   Conflict = 'AUTH-409',
   InvalidInput = 'VAL-422',
   Internal = 'INTERNAL-500',
+  // The admin routes' extra codes (design/admin-auth-api.yaml).
+  Forbidden = 'AUTH-403',
+  AdminNotFound = 'ADM-404',
+  AdminConflict = 'ADM-409',
 }
 
 export interface ErrorEnvelope {
@@ -31,6 +35,7 @@ export const UNAUTHORISED = 'Unauthorised';
 export const REGISTRATION_FAILED = 'Registration failed';
 export const INVALID_INPUT = 'Invalid input';
 export const UNEXPECTED_ERROR = 'An unexpected error occurred';
+export const FORBIDDEN = 'Forbidden';
 
 /**
  * Derives the envelope for an HTTP status that arrived without one - an
@@ -45,6 +50,8 @@ export function envelopeForStatus(status: HttpStatus): ErrorEnvelope {
   switch (status) {
     case HttpStatus.UNAUTHORIZED:
       return { errorCode: ErrorCode.Unauthorised, message: UNAUTHORISED };
+    case HttpStatus.FORBIDDEN:
+      return { errorCode: ErrorCode.Forbidden, message: FORBIDDEN };
     case HttpStatus.CONFLICT:
       return { errorCode: ErrorCode.Conflict, message: REGISTRATION_FAILED };
     case HttpStatus.BAD_REQUEST:
@@ -101,5 +108,29 @@ export function invalidInput(): HttpException {
   return new HttpException(
     { errorCode: ErrorCode.InvalidInput, message: INVALID_INPUT },
     HttpStatus.UNPROCESSABLE_ENTITY,
+  );
+}
+
+/** A genuine token that is not an admin token, on an admin route. */
+export function forbidden(): HttpException {
+  return new HttpException(
+    { errorCode: ErrorCode.Forbidden, message: FORBIDDEN },
+    HttpStatus.FORBIDDEN,
+  );
+}
+
+/** The user an admin action names does not exist. */
+export function adminNotFound(): HttpException {
+  return new HttpException(
+    { errorCode: ErrorCode.AdminNotFound, message: 'Not found' },
+    HttpStatus.NOT_FOUND,
+  );
+}
+
+/** The user's state does not allow the admin action (or it is the admin themself). */
+export function adminConflict(): HttpException {
+  return new HttpException(
+    { errorCode: ErrorCode.AdminConflict, message: 'Conflict' },
+    HttpStatus.CONFLICT,
   );
 }

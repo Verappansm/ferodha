@@ -7,7 +7,7 @@ one transaction, and publishes `ORDER_FILLED` / `ORDER_REJECTED` to
 
 ```bash
 mvn test
-mvn spring-boot:run       # port 8081 by default (8082 in compose and on Windows)
+mvn spring-boot:run       # port 8082, the same in compose and on Windows
 ```
 
 `SPRING_PROFILES_ACTIVE=market-sim` switches on the order-book matching engine,
