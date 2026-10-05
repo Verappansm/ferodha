@@ -471,3 +471,27 @@
     font-size: 0.8rem;
   }
 }
+
+/* th carries its own text-align (above), so the centred columns are set on
+   both cells at the same specificity: headings line up with their content. */
+.instruments-table th.col-type,
+.instruments-table th.col-currency,
+.instruments-table th.col-actions {
+  text-align: center;
+}
+
+.instruments-table .col-price {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stale-price,
+.no-price {
+  color: var(--ink-500);
+}
+
+.stale-dot {
+  margin-left: 0.25rem;
+  color: var(--warning);
+}

@@ -1,8 +1,12 @@
-import { Component, computed, inject, signal, effect } from '@angular/core';
+import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TradeApi, InstrumentResponse, InstrumentType } from '../../api/trade-api';
+import { TradeApi, InstrumentResponse, InstrumentType, PriceSnapshot } from '../../api/trade-api';
+import { suggestedLimitPrice } from '../../core/format/limit-price';
+
+/** How often the prices of the rows on screen are re-read. */
+export const PRICE_REFRESH_MS = 15_000;
 
 @Component({
   selector: 'app-instruments',
@@ -114,9 +118,50 @@ export class InstrumentsComponent {
 
   readonly hasPrevPage = computed(() => this.currentOffset() > 0);
 
+  /** The latest price per symbol, for the rows on screen. */
+  readonly prices = signal<ReadonlyMap<string, PriceSnapshot>>(new Map());
+
   constructor() {
     // Load all instruments once when component initializes
     this.loadAllInstruments();
+
+    // Price the rows on screen whenever they change (page, search, filters)...
+    effect(() => {
+      const symbols = this.paginatedInstruments().map((i) => i.symbol);
+      untracked(() => this.loadPrices(symbols));
+    });
+    // ...and keep them current while the page is open.
+    const timer = setInterval(
+      () => this.loadPrices(this.paginatedInstruments().map((i) => i.symbol)),
+      PRICE_REFRESH_MS,
+    );
+    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+  }
+
+  priceOf(symbol: string): PriceSnapshot | undefined {
+    return this.prices().get(symbol);
+  }
+
+  /** One request for every symbol on screen; a failure keeps the last prices shown. */
+  private loadPrices(symbols: string[]): void {
+    if (symbols.length === 0) return;
+    this.tradeApi.prices(symbols).subscribe({
+      next: (prices) =>
+        this.prices.update((current) => {
+          const next = new Map(current);
+          for (const price of prices) next.set(price.symbol, price);
+          return next;
+        }),
+      error: () => {
+        // Prices are a convenience on this page: the list stays usable without them.
+      },
+    });
+  }
+
+  /** The ticket link, with a suggested price (0.02% past the touch) when there is a quote. */
+  private ticketParams(symbol: string, side: 'BUY' | 'SELL'): Record<string, string | number> {
+    const price = suggestedLimitPrice(this.priceOf(symbol), side);
+    return price === null ? { symbol, side } : { symbol, side, price };
   }
 
   private loadAllInstruments(): void {
@@ -174,12 +219,12 @@ export class InstrumentsComponent {
 
   buyInstrument(symbol: string): void {
     // Navigate to the order ticket with symbol and side pre-filled
-    this.router.navigate(['/order'], { queryParams: { symbol, side: 'BUY' } });
+    this.router.navigate(['/order'], { queryParams: this.ticketParams(symbol, 'BUY') });
   }
 
   sellInstrument(symbol: string): void {
     // Navigate to the order ticket with symbol and side pre-filled
-    this.router.navigate(['/order'], { queryParams: { symbol, side: 'SELL' } });
+    this.router.navigate(['/order'], { queryParams: this.ticketParams(symbol, 'SELL') });
   }
 
   viewDetails(symbol: string): void {

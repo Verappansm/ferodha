@@ -117,6 +117,7 @@
             <th class="col-exchange">Exchange</th>
             <th class="col-sector">Sector</th>
             <th class="col-currency">Currency</th>
+            <th class="col-price">Price</th>
             <th class="col-actions">Actions</th>
           </tr>
         </thead>
@@ -135,6 +136,18 @@
               <td class="col-exchange">{{ instrument.exchange }}</td>
               <td class="col-sector">{{ instrument.sector || '—' }}</td>
               <td class="col-currency">{{ instrument.currency }}</td>
+              <td class="col-price" data-testid="instrument-price">
+                @if (priceOf(instrument.symbol)?.mid; as mid) {
+                  <span [class.stale-price]="priceOf(instrument.symbol)?.stale">{{
+                    mid | number: '1.2-2'
+                  }}</span>
+                  @if (priceOf(instrument.symbol)?.stale) {
+                    <span class="stale-dot" title="Stale price" aria-label="stale">•</span>
+                  }
+                } @else {
+                  <span class="no-price">—</span>
+                }
+              </td>
               <td class="col-actions">
                 <div class="action-buttons">
                   <button

@@ -407,6 +407,44 @@ paths:
         '422':
           $ref: '#/components/responses/InvalidInput'
 
+  /api/v1/instruments/prices:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentPrices
+      summary: Get the latest price of several instruments
+      description: |
+        One price per symbol asked for, in the order asked, for the market list: the latest
+        `market-data` quote, else the close of the newest stored minute bar or daily candle. No
+        statistics, so a page of instruments costs one request. A symbol with no price comes back
+        with null prices and `stale: true`.
+      parameters:
+        - name: symbols
+          in: query
+          required: true
+          description: Comma-separated tickers, 1 to 100.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items:
+              type: string
+              maxLength: 20
+      responses:
+        '200':
+          description: The prices.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
   /api/v1/instruments/{symbol}:
     get:
       tags: [Instruments]
@@ -979,3 +1017,24 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PricePoint'
+
+    PriceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [symbol, stale]
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+        bid:
+          type: [number, 'null']
+        ask:
+          type: [number, 'null']
+        mid:
+          type: [number, 'null']
+          description: Midpoint of bid and ask, or the stored close. Null when there is no price.
+        asOf:
+          type: [string, 'null']
+          format: date-time
+        stale:
+          type: boolean

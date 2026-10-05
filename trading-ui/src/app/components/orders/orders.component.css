@@ -119,10 +119,19 @@ h3 {
   text-align: right;
 }
 
-.confirm {
+.confirm-row td {
+  background: var(--warning-bg);
+  white-space: normal;
+}
+
+.confirm-text {
+  margin-right: 12px;
+}
+
+.confirm-actions {
   display: inline-flex;
   gap: 6px;
-  align-items: center;
+  vertical-align: middle;
 }
 
 .danger {

@@ -311,7 +311,11 @@ describe('OrdersComponent', () => {
 
       click('cancel-order');
       expect(cancelOrder).not.toHaveBeenCalled();
-      expect(byTestId('cancel-confirm')?.textContent).toContain('Cancel this order?');
+      // The question is its own full-width row under the order: the table never widens.
+      const confirmRow = byTestId('cancel-confirm')!;
+      expect(confirmRow.tagName).toBe('TR');
+      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('9');
+      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00?');
 
       orderHistory.mockReturnValue(
         of([order('ORD-abc', OrderStatus.CANCELLED, '2026-09-30T09:00:00Z')]),

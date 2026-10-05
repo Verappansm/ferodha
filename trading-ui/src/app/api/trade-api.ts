@@ -17,6 +17,7 @@ import { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-
 import { InstrumentQuote } from './generated/trade/model/instrument-quote';
 import { PriceHistory } from './generated/trade/model/price-history';
 import { PricePoint } from './generated/trade/model/price-point';
+import { PriceSnapshot } from './generated/trade/model/price-snapshot';
 
 export type {
   AccountResponse,
@@ -29,6 +30,7 @@ export type {
   PaginatedInstrumentsResponse,
   InstrumentQuote,
   PricePoint,
+  PriceSnapshot,
 };
 export { OrderSide, OrderStatus, InstrumentType, PriceHistory };
 
@@ -89,6 +91,11 @@ export class TradeApi {
 
   instrument(symbol: string): Observable<InstrumentResponse> {
     return this.instruments.getInstrument(symbol);
+  }
+
+  /** The latest price of up to 100 instruments in one request (the market list). */
+  prices(symbols: string[]): Observable<PriceSnapshot[]> {
+    return this.instruments.getInstrumentPrices(symbols);
   }
 
   quote(symbol: string): Observable<InstrumentQuote> {

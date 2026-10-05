@@ -5,7 +5,7 @@
     <resultMap id="marketMakerAccountRow" type="com.trade.generator.mapper.MarketMakerAccountRow">
         <constructor>
             <idArg column="account_uuid" javaType="java.util.UUID" typeHandler="com.trade.generator.mapper.UuidTypeHandler"/>
-            <arg column="account_id" javaType="long"/>
+            <arg column="account_id" javaType="_long"/>
             <arg column="user_id" javaType="java.util.UUID" typeHandler="com.trade.generator.mapper.UuidTypeHandler"/>
         </constructor>
     </resultMap>

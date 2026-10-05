@@ -26,6 +26,8 @@ import { InstrumentResponse } from '../model/instrument-response';
 import { PaginatedInstrumentsResponse } from '../model/paginated-instruments-response';
 // @ts-ignore
 import { PriceHistory } from '../model/price-history';
+// @ts-ignore
+import { PriceSnapshot } from '../model/price-snapshot';
 
 // @ts-ignore
 import { BASE_PATH, COLLECTION_FORMATS }                     from '../variables';
@@ -162,6 +164,78 @@ export class InstrumentsService extends BaseService {
         let localVarPath = `/api/v1/instruments/${this.configuration.encodeParam({name: "symbol", value: symbol, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: undefined})}/history`;
         const { basePath, withCredentials } = this.configuration;
         return this.httpClient.request<PriceHistory>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                params: localVarQueryParameters.toHttpParams(),
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * Get the latest price of several instruments
+     * One price per symbol asked for, in the order asked, for the market list: the latest &#x60;market-data&#x60; quote, else the close of the newest stored minute bar or daily candle. No statistics, so a page of instruments costs one request. A symbol with no price comes back with null prices and &#x60;stale: true&#x60;. 
+     * @endpoint get /api/v1/instruments/prices
+     * @param symbols Comma-separated tickers, 1 to 100.
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public getInstrumentPrices(symbols: Array<string>, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<Array<PriceSnapshot>>;
+    public getInstrumentPrices(symbols: Array<string>, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<Array<PriceSnapshot>>>;
+    public getInstrumentPrices(symbols: Array<string>, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<Array<PriceSnapshot>>>;
+    public getInstrumentPrices(symbols: Array<string>, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (symbols === null || symbols === undefined) {
+            throw new Error('Required parameter symbols was null or undefined when calling getInstrumentPrices.');
+        }
+
+        let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'symbols',
+            <any>symbols,
+            QueryParamStyle.Form,
+            false,
+        );
+
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/instruments/prices`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<Array<PriceSnapshot>>('get', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 params: localVarQueryParameters.toHttpParams(),

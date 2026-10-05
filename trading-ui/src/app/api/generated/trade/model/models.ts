@@ -14,3 +14,4 @@ export * from './place-order-request';
 export * from './position-response';
 export * from './price-history';
 export * from './price-point';
+export * from './price-snapshot';

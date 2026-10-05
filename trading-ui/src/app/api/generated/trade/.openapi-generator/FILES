@@ -22,6 +22,7 @@ model/place-order-request.ts
 model/position-response.ts
 model/price-history.ts
 model/price-point.ts
+model/price-snapshot.ts
 param.ts
 provide-api.ts
 query.params.ts

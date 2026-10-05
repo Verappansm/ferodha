@@ -4,6 +4,7 @@ import com.trade.dto.InstrumentQuoteDto;
 import com.trade.dto.InstrumentResponseDto;
 import com.trade.dto.PaginatedInstrumentsResponseDto;
 import com.trade.dto.PriceHistoryResponseDto;
+import com.trade.dto.PriceSnapshotDto;
 import com.trade.exception.DomainException;
 import com.trade.security.AuthenticatedPrincipal;
 import com.trade.security.JwtAuthFilter;
@@ -15,6 +16,8 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 // The market list (LEAP-015) and the instrument page (LEAP-016). Every route
 // needs a customer token; a delisted instrument is never returned.
@@ -37,6 +40,15 @@ public class InstrumentController {
             @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
         return instrumentService.getInstruments(pageSize, offset);
+    }
+
+    // A literal path: Spring prefers it over /{symbol}, so it never reads as a ticker.
+    @GetMapping("/prices")
+    public List<PriceSnapshotDto> getPrices(
+            @RequestParam List<String> symbols,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws DomainException {
+        return marketDataService.getPrices(symbols);
     }
 
     @GetMapping("/{symbol}")

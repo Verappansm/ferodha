@@ -7,7 +7,10 @@ import com.trade.dto.PriceHistoryResponseDto;
 import com.trade.enums.InstrumentType;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InvalidParameterException;
+import com.trade.dto.PriceSnapshotDto;
 import com.trade.mapper.MarketHistoryMapper;
+import com.trade.mapper.PortfolioMapper;
+import com.trade.mapper.StoredPriceRow;
 import com.trade.mapper.PriceBarRow;
 import com.trade.mapper.PriceRangeRow;
 import com.trade.service.portfolio.LatestQuotes;
@@ -43,6 +46,7 @@ class MarketDataServiceTest {
 
     private InstrumentRepository instruments;
     private MarketHistoryMapper history;
+    private PortfolioMapper storedPrices;
     private LatestQuotes quotes;
     private MarketDataService service;
 
@@ -50,8 +54,9 @@ class MarketDataServiceTest {
     void setUp() {
         instruments = mock(InstrumentRepository.class);
         history = mock(MarketHistoryMapper.class);
+        storedPrices = mock(PortfolioMapper.class);
         quotes = new LatestQuotes();
-        service = new MarketDataService(instruments, history, quotes, Duration.ofMinutes(5),
+        service = new MarketDataService(instruments, history, storedPrices, quotes, Duration.ofMinutes(5),
                 Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));
         when(instruments.findBySymbol("AAPL")).thenReturn(Optional.of(
                 new Instrument("AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology")));
@@ -159,6 +164,33 @@ class MarketDataServiceTest {
 
         assertThrows(InstrumentNotFoundException.class, () -> service.getQuote("OLD"));
         assertThrows(InstrumentNotFoundException.class, () -> service.getHistory("NOPE", "1M"));
+    }
+
+    @Test
+    @DisplayName("prices: live quotes first, one stored-price query for the rest, nulls for none, in the order asked")
+    void pricesForAPage() throws Exception {
+        quotes.record("AAPL", new LatestQuotes.Quote(new BigDecimal("100.05"), new BigDecimal("100.00"),
+                new BigDecimal("100.10"), NOW.minusSeconds(5)));
+        when(storedPrices.findLatestStoredPrices(List.of("MSFT", "NOPE"))).thenReturn(List.of(
+                new StoredPriceRow("MSFT", new BigDecimal("410.00"), NOW.minusHours(3))));
+
+        List<PriceSnapshotDto> prices = service.getPrices(List.of("aapl", "MSFT", "NOPE", "AAPL"));
+
+        assertEquals(List.of("AAPL", "MSFT", "NOPE"), prices.stream().map(PriceSnapshotDto::symbol).toList());
+        assertEquals(new BigDecimal("100.00"), prices.get(0).bid());
+        assertFalse(prices.get(0).stale());
+        assertEquals(new BigDecimal("410.00"), prices.get(1).mid());
+        assertTrue(prices.get(1).stale());
+        assertNull(prices.get(2).mid());
+        assertTrue(prices.get(2).stale());
+    }
+
+    @Test
+    @DisplayName("prices: none, or more than 100 symbols, is VAL-422")
+    void pricesNeedOneToAHundredSymbols() {
+        assertThrows(InvalidParameterException.class, () -> service.getPrices(List.of()));
+        List<String> tooMany = java.util.stream.IntStream.range(0, 101).mapToObj(i -> "S" + i).toList();
+        assertThrows(InvalidParameterException.class, () -> service.getPrices(tooMany));
     }
 
     private static PriceBarRow bar(OffsetDateTime time, String close) {

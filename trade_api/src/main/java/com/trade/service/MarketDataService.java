@@ -5,12 +5,15 @@ import com.trade.domain.InstrumentRepository;
 import com.trade.dto.InstrumentQuoteDto;
 import com.trade.dto.PriceHistoryResponseDto;
 import com.trade.dto.PricePointDto;
+import com.trade.dto.PriceSnapshotDto;
 import com.trade.exception.DomainException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InvalidParameterException;
 import com.trade.mapper.MarketHistoryMapper;
+import com.trade.mapper.PortfolioMapper;
 import com.trade.mapper.PriceBarRow;
 import com.trade.mapper.PriceRangeRow;
+import com.trade.mapper.StoredPriceRow;
 import com.trade.service.portfolio.LatestQuotes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +26,9 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,25 +45,29 @@ public class MarketDataService {
     // the rest use daily candles.
     private static final Map<String, Duration> MINUTE_RANGES = Map.of("1D", Duration.ofDays(1));
     private static final Map<String, Integer> DAILY_RANGE_DAYS = Map.of("1W", 7, "1M", 31, "6M", 183, "1Y", 366);
+    // The most symbols one prices request may ask for.
+    static final int MAX_PRICE_SYMBOLS = 100;
 
     private final InstrumentRepository instrumentRepository;
     private final MarketHistoryMapper historyMapper;
+    private final PortfolioMapper storedPrices;
     private final LatestQuotes latestQuotes;
     private final Duration staleAfter;
     private final Clock clock;
 
     @Autowired
     public MarketDataService(InstrumentRepository instrumentRepository, MarketHistoryMapper historyMapper,
-                             LatestQuotes latestQuotes,
+                             PortfolioMapper storedPrices, LatestQuotes latestQuotes,
                              @Value("${portfolio.quotes.stale-after-seconds:300}") long staleAfterSeconds) {
-        this(instrumentRepository, historyMapper, latestQuotes, Duration.ofSeconds(staleAfterSeconds),
+        this(instrumentRepository, historyMapper, storedPrices, latestQuotes, Duration.ofSeconds(staleAfterSeconds),
                 Clock.systemUTC());
     }
 
     MarketDataService(InstrumentRepository instrumentRepository, MarketHistoryMapper historyMapper,
-                      LatestQuotes latestQuotes, Duration staleAfter, Clock clock) {
+                      PortfolioMapper storedPrices, LatestQuotes latestQuotes, Duration staleAfter, Clock clock) {
         this.instrumentRepository = instrumentRepository;
         this.historyMapper = historyMapper;
+        this.storedPrices = storedPrices;
         this.latestQuotes = latestQuotes;
         this.staleAfter = staleAfter;
         this.clock = clock;
@@ -104,6 +114,45 @@ public class MarketDataService {
                 previousClose,
                 yearRange.low(),
                 yearRange.high());
+    }
+
+    /**
+     * The latest price of each symbol asked for, in the order asked: the live
+     * quote, else the newest stored minute bar or daily candle (one query for
+     * all of them). A symbol with no price at all comes back with nulls.
+     */
+    public List<PriceSnapshotDto> getPrices(List<String> symbols) throws InvalidParameterException {
+        LinkedHashSet<String> wanted = new LinkedHashSet<>();
+        for (String symbol : symbols) {
+            if (symbol != null && !symbol.isBlank()) {
+                wanted.add(symbol.trim().toUpperCase());
+            }
+        }
+        if (wanted.isEmpty() || wanted.size() > MAX_PRICE_SYMBOLS) {
+            throw new InvalidParameterException("symbols");
+        }
+        OffsetDateTime freshAfter = now().minus(staleAfter);
+
+        Map<String, LatestQuotes.Quote> quotes = new HashMap<>();
+        List<String> unquoted = new ArrayList<>();
+        for (String symbol : wanted) {
+            latestQuotes.find(symbol).ifPresentOrElse(q -> quotes.put(symbol, q), () -> unquoted.add(symbol));
+        }
+        if (!unquoted.isEmpty()) {
+            for (StoredPriceRow row : storedPrices.findLatestStoredPrices(unquoted)) {
+                quotes.put(row.symbol(), new LatestQuotes.Quote(row.price(), row.asOf()));
+            }
+        }
+
+        List<PriceSnapshotDto> prices = new ArrayList<>();
+        for (String symbol : wanted) {
+            LatestQuotes.Quote quote = quotes.get(symbol);
+            prices.add(quote == null
+                    ? new PriceSnapshotDto(symbol, null, null, null, null, true)
+                    : new PriceSnapshotDto(symbol, quote.bid(), quote.ask(), quote.price(), quote.asOf(),
+                            quote.asOf() == null || quote.asOf().isBefore(freshAfter)));
+        }
+        return prices;
     }
 
     public PriceHistoryResponseDto getHistory(String symbol, String range) throws DomainException {

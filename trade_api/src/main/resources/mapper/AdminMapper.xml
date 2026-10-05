@@ -3,7 +3,9 @@
 <!--
     The operations console's statements (design/admin-trade-api.yaml). UUIDs
     and enums are read as text and written with an explicit cast, so no type
-    handler is needed; every value is a bound parameter.
+    handler is needed; every value is a bound parameter. A primitive record
+    component is declared with MyBatis's underscore alias (_long, _int,
+    _boolean): plain `long` means java.lang.Long, which matches no constructor.
 -->
 <mapper namespace="com.trade.admin.mapper.AdminMapper">
 
@@ -11,13 +13,13 @@
 
     <resultMap id="summary" type="com.trade.admin.dto.AdminDtos$AdminSummaryDto">
         <constructor>
-            <arg column="pending_requests" javaType="long"/>
-            <arg column="active_users" javaType="long"/>
-            <arg column="suspended_users" javaType="long"/>
-            <arg column="active_accounts" javaType="long"/>
-            <arg column="orders_today" javaType="long"/>
-            <arg column="orders_working" javaType="long"/>
-            <arg column="tradable_instruments" javaType="long"/>
+            <arg column="pending_requests" javaType="_long"/>
+            <arg column="active_users" javaType="_long"/>
+            <arg column="suspended_users" javaType="_long"/>
+            <arg column="active_accounts" javaType="_long"/>
+            <arg column="orders_today" javaType="_long"/>
+            <arg column="orders_working" javaType="_long"/>
+            <arg column="tradable_instruments" javaType="_long"/>
         </constructor>
     </resultMap>
 
@@ -153,14 +155,14 @@
 
     <resultMap id="adminAccount" type="com.trade.admin.dto.AdminDtos$AdminAccountDto">
         <constructor>
-            <arg column="account_id" javaType="long"/>
+            <arg column="account_id" javaType="_long"/>
             <arg column="business_ref" javaType="java.lang.String"/>
             <arg column="owner_name" javaType="java.lang.String"/>
             <arg column="owner_email" javaType="java.lang.String"/>
             <arg column="currency" javaType="java.lang.String"/>
             <arg column="cash_balance" javaType="java.math.BigDecimal"/>
             <arg column="status" javaType="java.lang.String"/>
-            <arg column="working_orders" javaType="int"/>
+            <arg column="working_orders" javaType="_int"/>
             <arg column="created_on" javaType="java.time.OffsetDateTime"/>
         </constructor>
     </resultMap>
@@ -240,7 +242,7 @@
             <arg column="currency" javaType="java.lang.String"/>
             <arg column="type" javaType="java.lang.String"/>
             <arg column="sector" javaType="java.lang.String"/>
-            <arg column="tradable" javaType="boolean"/>
+            <arg column="tradable" javaType="_boolean"/>
             <arg column="changed_by_name" javaType="java.lang.String"/>
             <arg column="changed_at" javaType="java.time.OffsetDateTime"/>
         </constructor>
@@ -301,11 +303,11 @@
     <resultMap id="adminOrder" type="com.trade.admin.dto.AdminDtos$AdminOrderDto">
         <constructor>
             <arg column="order_id" javaType="java.lang.String"/>
-            <arg column="account_id" javaType="long"/>
+            <arg column="account_id" javaType="_long"/>
             <arg column="owner_email" javaType="java.lang.String"/>
             <arg column="symbol" javaType="java.lang.String"/>
             <arg column="side" javaType="java.lang.String"/>
-            <arg column="quantity" javaType="long"/>
+            <arg column="quantity" javaType="_long"/>
             <arg column="filled_quantity" javaType="java.lang.Long"/>
             <arg column="price" javaType="java.math.BigDecimal"/>
             <arg column="executed_price" javaType="java.math.BigDecimal"/>
@@ -361,7 +363,7 @@
 
     <resultMap id="auditEntry" type="com.trade.admin.dto.AdminDtos$AuditEntryDto">
         <constructor>
-            <arg column="id" javaType="long"/>
+            <arg column="id" javaType="_long"/>
             <arg column="actor_name" javaType="java.lang.String"/>
             <arg column="action" javaType="java.lang.String"/>
             <arg column="target_type" javaType="java.lang.String"/>

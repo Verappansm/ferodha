@@ -93,9 +93,29 @@
                 <td class="num">{{ value(order) | number: '1.2-2' }}</td>
                 <td><app-order-status-badge [status]="order.status" /></td>
                 <td class="cancel-cell">
-                  @if (confirmingId() === order.orderId) {
-                    <span class="confirm" data-testid="cancel-confirm">
-                      Cancel this order?
+                  <button
+                    type="button"
+                    class="refresh"
+                    data-testid="cancel-order"
+                    [attr.aria-label]="'Cancel order ' + order.orderId"
+                    [attr.aria-expanded]="confirmingId() === order.orderId"
+                    [disabled]="confirmingId() === order.orderId || cancellingId() !== null"
+                    (click)="askCancel(order.orderId)"
+                  >
+                    Cancel
+                  </button>
+                </td>
+              </tr>
+              <!-- The question gets a full-width row of its own under the order,
+                   so the table never widens and no horizontal scroll appears. -->
+              @if (confirmingId() === order.orderId) {
+                <tr class="confirm-row" data-testid="cancel-confirm">
+                  <td colspan="9">
+                    <span class="confirm-text">
+                      Cancel {{ order.side }} {{ order.quantity | number }} {{ order.symbol }} at
+                      {{ order.price | number: '1.2-2' }}? Nothing is sent until you confirm.
+                    </span>
+                    <span class="confirm-actions">
                       <button
                         type="button"
                         class="danger"
@@ -115,19 +135,9 @@
                         Keep it
                       </button>
                     </span>
-                  } @else {
-                    <button
-                      type="button"
-                      class="refresh"
-                      data-testid="cancel-order"
-                      [attr.aria-label]="'Cancel order ' + order.orderId"
-                      (click)="askCancel(order.orderId)"
-                    >
-                      Cancel
-                    </button>
-                  }
-                </td>
-              </tr>
+                  </td>
+                </tr>
+              }
             }
           </tbody>
         </table>
