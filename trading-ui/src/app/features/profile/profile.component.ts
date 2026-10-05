@@ -67,8 +67,18 @@ export class ProfileComponent implements OnInit {
     });
   }
 
-  toggleEditMode(): void {
-    this.isEditMode.update(v => !v);
+  startEdit(): void {
+    this.saved.set(false);
+    this.saveError.set(null);
+    this.isEditMode.set(true);
+  }
+
+  /** Leaves edit mode without saving: the form goes back to the saved details. */
+  cancelEdit(): void {
+    const profile = this.profile();
+    if (profile) this.show(profile);
+    this.saveError.set(null);
+    this.isEditMode.set(false);
   }
 
   nameError(): string | null {

@@ -30,15 +30,25 @@
       <div class="profile-display">
         <div class="profile-card">
           <h3>Your Information</h3>
+          @if (saved()) {
+            <p class="saved" role="status" data-testid="profile-saved">Your profile is saved.</p>
+          }
           <div class="info-item">
             <label>Name</label>
-            <p class="info-value">{{ p.name }}</p>
+            <p class="info-value" data-testid="profile-view-name">{{ p.name }}</p>
           </div>
           <div class="info-item">
             <label>Phone</label>
-            <p class="info-value">{{ p.phone || 'Not provided' }}</p>
+            <p class="info-value" data-testid="profile-view-phone">
+              {{ p.phone || 'Not provided' }}
+            </p>
           </div>
-          <button type="button" class="btn btn-primary" (click)="toggleEditMode()">
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-testid="profile-edit"
+            (click)="startEdit()"
+          >
             Edit Information
           </button>
         </div>
@@ -49,7 +59,7 @@
     @if (isEditMode()) {
       <form class="form" [formGroup]="form" (ngSubmit)="save()" novalidate>
         <div class="form-title">Edit Information</div>
-        
+
         <div class="field">
           <label class="field-label" for="profile-name">Name</label>
           <input
@@ -91,9 +101,6 @@
         @if (saveError()) {
           <p class="form-error" role="alert" data-testid="profile-save-error">{{ saveError() }}</p>
         }
-        @if (saved()) {
-          <p class="saved" role="status" data-testid="profile-saved">Your profile is saved.</p>
-        }
 
         <div class="form-actions">
           <button
@@ -107,7 +114,8 @@
           <button
             type="button"
             class="btn btn-secondary"
-            (click)="toggleEditMode()"
+            data-testid="profile-cancel"
+            (click)="cancelEdit()"
             [disabled]="saving()"
           >
             Cancel

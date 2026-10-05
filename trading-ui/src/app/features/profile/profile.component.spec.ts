@@ -34,6 +34,13 @@ describe('ProfileComponent', () => {
     fixture.detectChanges();
   }
 
+  /** The profile opens read-only; the form appears after Edit Information. */
+  function openEditor(): void {
+    open();
+    element<HTMLButtonElement>('profile-edit').click();
+    fixture.detectChanges();
+  }
+
   function element<T extends HTMLElement>(testId: string): T {
     return fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
   }
@@ -64,17 +71,28 @@ describe('ProfileComponent', () => {
     expect(text('profile-account')).toBe('Account 1');
     expect(text('profile-details')).toContain('Customer');
     expect(text('profile-details')).toContain('2026');
+    expect(text('profile-view-name')).toBe('John Carter');
+    expect(text('profile-view-phone')).toBe('+1-202-555-0101');
+  });
+
+  it('opens read-only, with the form behind Edit Information, filled with the saved details', () => {
+    open();
+    expect(fixture.nativeElement.querySelector('form')).toBeNull();
+
+    element<HTMLButtonElement>('profile-edit').click();
+    fixture.detectChanges();
+
     expect(element<HTMLInputElement>('profile-name').value).toBe('John Carter');
     expect(element<HTMLInputElement>('profile-phone').value).toBe('+1-202-555-0101');
   });
 
   it('shows the email but never offers it for editing', () => {
-    open();
+    openEditor();
     expect(fixture.nativeElement.querySelectorAll('input').length).toBe(2);
   });
 
   it('blocks an invalid phone number before submission', () => {
-    open();
+    openEditor();
     type('profile-phone', 'call me');
     save();
     expect(update).not.toHaveBeenCalled();
@@ -82,25 +100,41 @@ describe('ProfileComponent', () => {
   });
 
   it('blocks a blank name before submission', () => {
-    open();
+    openEditor();
     type('profile-name', '   ');
     save();
     expect(update).not.toHaveBeenCalled();
     expect(text('profile-name-error')).toBe('Enter your name.');
   });
 
-  it('saves the name and phone through the auth service and says so', () => {
-    open();
+  it('saves the name and phone through the auth service, then shows them and says so', () => {
+    openEditor();
     type('profile-name', 'John A. Carter');
     type('profile-phone', '+44 20 7946 0000');
     save();
     expect(update).toHaveBeenCalledWith({ name: 'John A. Carter', phone: '+44 20 7946 0000' });
+    // Back to the read-only view, which carries the confirmation.
+    expect(fixture.nativeElement.querySelector('form')).toBeNull();
     expect(text('profile-saved')).toBe('Your profile is saved.');
-    expect(element<HTMLButtonElement>('profile-save').disabled).toBe(true);
+    expect(text('profile-view-name')).toBe('John A. Carter');
+    expect(text('profile-view-phone')).toBe('+44 20 7946 0000');
+  });
+
+  it('cancel discards the edit and any error, and saves nothing', () => {
+    openEditor();
+    type('profile-name', 'Somebody Else');
+    element<HTMLButtonElement>('profile-cancel').click();
+    fixture.detectChanges();
+
+    expect(update).not.toHaveBeenCalled();
+    expect(text('profile-view-name')).toBe('John Carter');
+    element<HTMLButtonElement>('profile-edit').click();
+    fixture.detectChanges();
+    expect(element<HTMLInputElement>('profile-name').value).toBe('John Carter');
   });
 
   it('removes the phone when it is cleared', () => {
-    open();
+    openEditor();
     type('profile-phone', '');
     save();
     expect(update).toHaveBeenCalledWith({ name: 'John Carter', phone: '' });
@@ -116,7 +150,7 @@ describe('ProfileComponent', () => {
           }),
       ),
     );
-    open();
+    openEditor();
     type('profile-name', 'John A. Carter');
     save();
     expect(text('profile-save-error')).toBe(ERROR_MESSAGES['VAL-422']);
