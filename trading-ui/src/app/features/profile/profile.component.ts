@@ -30,6 +30,7 @@ export class ProfileComponent implements OnInit {
   readonly saveError = signal<string | null>(null);
   readonly saving = signal(false);
   readonly saved = signal(false);
+  readonly isEditMode = signal(false);
 
   readonly form = inject(NonNullableFormBuilder).group({
     name: ['', [Validators.required, Validators.maxLength(100), notBlank]],
@@ -57,12 +58,17 @@ export class ProfileComponent implements OnInit {
         this.saving.set(false);
         this.show(profile);
         this.saved.set(true);
+        this.isEditMode.set(false);
       },
       error: (error: unknown) => {
         this.saving.set(false);
         this.saveError.set(errorMessage(error));
       },
     });
+  }
+
+  toggleEditMode(): void {
+    this.isEditMode.update(v => !v);
   }
 
   nameError(): string | null {
