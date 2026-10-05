@@ -34,18 +34,27 @@ cp .env.example .env   # fill in POSTGRES_*, JWT_SECRET, FAUXNANCE_API_URL, FAUX
 ```
 
 Brings up the stack, creates the Kafka topics, starts the trading UI on
-http://localhost:4200, then walks the auth service and every trade-api
+http://localhost:4200 and the admin console on http://localhost:4300, then walks the auth service and every trade-api
 endpoint with real tokens from the auth service, and ends with a tour of the
 UI. It works with either `docker compose` or the older `docker-compose`.
-`--no-ui` skips the UI; `./scripts/demo.sh --stop-ui` stops it. The UI needs
+`--no-ui` skips both UIs; `./scripts/demo.sh --stop-ui` stops them. The UIs need
 Node 20.19+, 22.12+ or 24+ on the host.
 
 Without Docker on Windows (Kafka on a Linux machine), see
-`windows/windows-setup.md`; `windows/start-windows.ps1` starts the UI too.
+`windows/windows-setup.md`; `windows/start-windows.ps1` starts both UIs and the two
+generators too (`-MarketSim` for the simulated market).
+
+pricing-generator is the live price feed under both profiles (`market-data`
+ticks, the instrument page's charts). `SPRING_PROFILES_ACTIVE=market-sim` only
+changes how trade-executor settles orders: on an order book at those prices,
+with trades-generator's counter-orders, instead of one real Fauxnance quote per
+order.
 
 Sign in at http://localhost:4200 as `john.carter@example.com` with the
 password `seed-password-change-me`. A user who registers has no account until
 an administrator approves it, so only seeded users can sign in for now.
+Administrators sign in to the console at http://localhost:4300 as
+`michael.brown@example.com` with the same password.
 
 ## Ports
 
@@ -63,6 +72,7 @@ the ones Neueda's contracts and `infra/README.md` use.
 | Trades generator (`market-sim`) | 8083 |
 | Pricing generator (`market-sim`) | 8084 |
 | Trading UI (`ng serve`) | 4200 |
+| Admin console (`ng serve admin`) | 4300 |
 
 Docker publishes these ports on the host, so stop a native Postgres (or any
 other process on one of them) before `docker compose up`.

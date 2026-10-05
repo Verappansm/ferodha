@@ -11,33 +11,43 @@
   display: flex;
   gap: 28px;
   align-items: center;
-  height: 62px;
+  height: 64px;
   padding: 0 24px;
   color: var(--nav-text);
   background: var(--nav-bg);
   border-bottom: 1px solid var(--nav-border);
+  box-shadow: 0 1px 3px rgb(15 28 23 / 8%);
 }
 
 .nav-brand {
   display: flex;
   gap: 10px;
   align-items: center;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.5px;
   color: var(--ink-900);
   text-decoration: none;
   white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.nav-brand:hover {
+  opacity: 0.8;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   font-weight: 800;
+  font-size: 16px;
+  letter-spacing: -0.5px;
   color: #fff;
-  background: var(--brand-600);
+  background: linear-gradient(135deg, var(--brand-600) 0%, var(--brand-700) 100%);
   border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(18 128 92 / 20%);
 }
 
 nav {
@@ -55,13 +65,17 @@ nav {
 
 .nav-links a {
   display: block;
-  padding: 20px 12px 18px;
+  padding: 21px 14px 19px;
   font-size: 14px;
   font-weight: 500;
+  letter-spacing: -0.2px;
   color: var(--nav-text);
   text-decoration: none;
   white-space: nowrap;
   border-bottom: 2px solid transparent;
+  transition:
+    color 0.2s ease,
+    border-bottom-color 0.2s ease;
 }
 
 .nav-links a:hover {
@@ -79,23 +93,66 @@ nav {
   align-items: center;
 }
 
+.profile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: var(--nav-text);
+  background: transparent;
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    all 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.profile-icon:hover {
+  color: var(--ink-900);
+  background: var(--ink-100);
+  border-color: var(--ink-400);
+}
+
+.profile-icon:active {
+  background: var(--ink-200);
+}
+
+.profile-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+}
+
 .main-content {
   flex: 1;
 }
 
 .sign-out {
-  height: 36px;
+  height: 40px;
   padding: 0 14px;
   font: inherit;
   font-size: 14px;
   font-weight: 600;
+  letter-spacing: -0.2px;
   color: var(--ink-900);
   background: transparent;
   border: 1px solid var(--ink-300);
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .sign-out:hover {
   background: var(--ink-100);
+  border-color: var(--ink-500);
+}
+
+.sign-out:active {
+  background: var(--ink-200);
 }

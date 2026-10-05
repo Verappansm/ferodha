@@ -3,7 +3,6 @@ package com.trade.pricing.generator.pricing;
 import com.trade.pricing.generator.fauxnance.FauxnanceQuoteClient;
 import com.trade.pricing.generator.fauxnance.Quote;
 import com.trade.pricing.generator.mapper.PollableSymbolMapper;
-import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -15,7 +14,6 @@ import java.util.Map;
 // exactly the way MarketDataPoller batches its own real polling - up to 25
 // symbols per call, one quota unit regardless of count.
 @Component
-@Profile("market-sim")
 public class QuoteRefreshScheduler {
 
     private static final int BATCH_SIZE = 25;

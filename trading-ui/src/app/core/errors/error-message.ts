@@ -1,8 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorResponse as AuthErrorResponse } from '../../api/generated/auth/model/error-response';
+import { ErrorResponse as PortfolioErrorResponse } from '../../api/generated/portfolio/model/error-response';
+import { ErrorResponse as ProfileErrorResponse } from '../../api/generated/profile/model/error-response';
 import { ErrorResponse as TradeErrorResponse } from '../../api/generated/trade/model/error-response';
 
-export type ErrorCode = AuthErrorResponse.ErrorCodeEnum | TradeErrorResponse.ErrorCodeEnum;
+export type ErrorCode =
+  | AuthErrorResponse.ErrorCodeEnum
+  | TradeErrorResponse.ErrorCodeEnum
+  | PortfolioErrorResponse.ErrorCodeEnum
+  | ProfileErrorResponse.ErrorCodeEnum;
 
 // One sentence per code. Typed as a full Record over `ErrorCode`, so a code must have a corresponding message.
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
@@ -19,6 +25,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   // or an order that is no longer cancellable.
   'ORD-409':
     'This order cannot go ahead. If you are selling, check you hold enough units. If you were cancelling, the order may already be filled or cancelled, so refresh your orders.',
+  'MKT-503':
+    'Prices are unavailable right now, so your holdings cannot be valued. Trading is not affected. Try again in a few minutes.',
 };
 
 export const UNREACHABLE =

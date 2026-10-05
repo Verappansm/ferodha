@@ -1,7 +1,8 @@
 .auth-page {
   display: grid;
   grid-template-columns: minmax(380px, 5fr) 7fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   background: var(--page);
 }
 
@@ -12,7 +13,8 @@
   flex-direction: column;
   gap: 36px;
   padding: 44px 52px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   color: #c6e6d7;
   background:
     radial-gradient(circle at 15% 0%, rgb(60 194 143 / 22%), transparent 50%),
@@ -137,19 +139,22 @@
 .form-panel {
   display: flex;
   flex-direction: column;
-  padding: 20px 24px 48px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 24px;
 }
 
 .form-panel-top {
   display: flex;
   justify-content: flex-end;
+  margin-bottom: 12px;
 }
 
 .card {
   width: 100%;
   max-width: 440px;
   margin: auto;
-  padding: 32px;
+  padding: 28px;
   background: var(--surface);
   border: 1px solid var(--ink-200);
   border-radius: var(--radius-lg);
@@ -160,7 +165,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   padding: 4px;
   background: var(--ink-100);
   border-radius: var(--radius);
@@ -189,11 +194,15 @@
 @media (width <= 900px) {
   .auth-page {
     grid-template-columns: 1fr;
+    height: 100vh;
   }
 
   .brand-panel {
-    gap: 16px;
-    padding: 22px 24px;
+    display: none;
+  }
+
+  .form-panel {
+    height: 100%;
   }
 
   .pitch,

@@ -8,13 +8,13 @@
 # rejected paths, with real tokens from the auth service and real Kafka
 # verification.
 #
-# It also starts the trading UI (Angular, `ng serve`) on the host and finishes
-# with a guided tour of it in the browser.
+# It also starts the trading UI and the admin console (Angular, `ng serve`)
+# on the host and finishes with a guided tour of the trading UI.
 #
-#   ./scripts/demo.sh                    # start (or reuse) the stack and the UI, run the demo
+#   ./scripts/demo.sh                    # start (or reuse) the stack and the UIs, run the demo
 #   ./scripts/demo.sh --fresh            # wipe the database volume first
-#   ./scripts/demo.sh --no-ui            # backend only, do not start the UI
-#   ./scripts/demo.sh --stop-ui          # stop a UI this script started, then exit
+#   ./scripts/demo.sh --no-ui            # backend only, do not start either UI
+#   ./scripts/demo.sh --stop-ui          # stop the UIs this script started, then exit
 #   NONINTERACTIVE=1 ./scripts/demo.sh   # no pauses
 #
 # Requires on the host: docker with either `docker compose` or
@@ -31,17 +31,35 @@ EXECUTOR_BASE="http://localhost:8082"
 AUTH_BASE="http://localhost:3000"
 KAFKA_UI="http://localhost:8091"
 UI_BASE="http://localhost:4200"
+ADMIN_BASE="http://localhost:4300"
 
-# The UI's process id and log, so a later run (or --stop-ui) can find it.
+# Each UI's process id and log, so a later run (or --stop-ui) can find it.
 RUN_DIR="$REPO_ROOT/.run"
 UI_PID_FILE="$RUN_DIR/trading-ui.pid"
 UI_LOG="$RUN_DIR/trading-ui.log"
+ADMIN_PID_FILE="$RUN_DIR/admin-ui.pid"
+ADMIN_LOG="$RUN_DIR/admin-ui.log"
 
 # The seeded holder of account 1 (database/seeds/001_seed_data.sql). A user
 # registered through the auth service has no trading account yet, so the
 # trading sections run as this one.
 SEED_EMAIL="${SEED_EMAIL:-john.carter@example.com}"
 SEED_PASSWORD="${SEED_PASSWORD:-seed-password-change-me}"
+
+# B23: the trading UI and the admin console send this digest in place of the
+# password, and the auth service bcrypts whatever arrives, so a script has to
+# send the same: sha256("ferodha-v1:" + lower-case email + ":" + password).
+password_digest() {
+    local input
+    input="ferodha-v1:$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]'):$2"
+    if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s' "$input" | sha256sum | cut -d' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then
+        printf '%s' "$input" | shasum -a 256 | cut -d' ' -f1
+    else
+        printf '%s' "$input" | openssl dgst -sha256 -r | cut -d' ' -f1
+    fi
+}
 ACCOUNT_ID=1
 
 FRESH=0
@@ -129,12 +147,12 @@ login_seed_user() {
     local response
     response=$(curl -s -X POST "$AUTH_BASE/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"$SEED_EMAIL\",\"password\":\"$SEED_PASSWORD\"}")
+        -d "{\"username\":\"$SEED_EMAIL\",\"password\":\"$(password_digest "$SEED_EMAIL" "$SEED_PASSWORD")\"}")
     JWT_TOKEN=$(echo "$response" | jq -r '.accessToken // empty' 2>/dev/null)
     if [[ -z "$JWT_TOKEN" ]]; then
         echo -e "${RED}✗ Could not log in as $SEED_EMAIL: $response${NC}"
-        echo "  A database seeded before the seed password existed needs a reset:"
-        echo "  run ./scripts/demo.sh --fresh"
+        echo "  A database from before the seed password (or before trade-api's Liquibase 012"
+        echo "  re-hashed it for browser-side digests) needs a reset: run ./scripts/demo.sh --fresh"
         exit 1
     fi
 }
@@ -207,12 +225,13 @@ setup_stack() {
 
 
 # ============================================================================
-# UI: the Angular trading UI, served by `ng serve` on the host
+# UIs: the trading UI and the admin console, both projects of the trading-ui
+# Angular workspace, served by `ng serve` on the host
 # ============================================================================
 
-# True when something already answers on the UI port.
-ui_is_up() {
-    curl -s -o /dev/null "$UI_BASE"
+# True when something already answers at the given base URL.
+is_up() {
+    curl -s -o /dev/null "$1"
 }
 
 # Node major.minor must satisfy Angular 21: 20.19+, 22.12+ or 24+.
@@ -227,12 +246,8 @@ node_version_ok() {
 }
 
 start_ui() {
-    print_header "SETUP: Starting the trading UI"
+    print_header "SETUP: Starting the trading UI and the admin console"
 
-    if ui_is_up; then
-        echo -e "${GREEN}✓ Something already serves $UI_BASE - reusing it${NC}"
-        return 0
-    fi
     if ! node_version_ok; then
         echo -e "${YELLOW}⚠ Node 20.19+, 22.12+ or 24+ is needed for the UI (found: $(node -v 2>/dev/null || echo none)).${NC}"
         echo -e "${YELLOW}  Skipping the UI; the backend demo still runs. Install Node and re-run.${NC}"
@@ -246,39 +261,60 @@ start_ui() {
         (cd "$REPO_ROOT/trading-ui" && npm ci) || { echo -e "${RED}✗ npm ci failed${NC}"; START_UI=0; return 0; }
     fi
 
-    print_subheader "ng serve on $UI_BASE (log: $UI_LOG)"
-    (cd "$REPO_ROOT/trading-ui" && nohup npx ng serve --port 4200 > "$UI_LOG" 2>&1 & echo $! > "$UI_PID_FILE")
+    # Both servers start at once; each compiles on its own.
+    serve_ui "trading UI" trading-ui 4200 "$UI_BASE" "$UI_PID_FILE" "$UI_LOG"
+    serve_ui "admin console" admin 4300 "$ADMIN_BASE" "$ADMIN_PID_FILE" "$ADMIN_LOG"
 
+    wait_for_ui "trading UI" "$UI_BASE" "$UI_LOG" || START_UI=0
+    wait_for_ui "admin console" "$ADMIN_BASE" "$ADMIN_LOG"
+}
+
+# serve_ui <label> <angular project> <port> <base url> <pid file> <log>
+serve_ui() {
+    if is_up "$4"; then
+        echo -e "${GREEN}✓ Something already serves $4 - reusing it for the $1${NC}"
+        return 0
+    fi
+    print_subheader "ng serve $2 on $4 (log: $6)"
+    (cd "$REPO_ROOT/trading-ui" && nohup npx ng serve "$2" --port "$3" > "$6" 2>&1 & echo $! > "$5")
+}
+
+# wait_for_ui <label> <base url> <log>
+wait_for_ui() {
     local _
     for _ in $(seq 1 90); do
-        if ui_is_up; then
-            echo -e "${GREEN}✓ trading UI is UP at $UI_BASE${NC}"
+        if is_up "$2"; then
+            echo -e "${GREEN}✓ $1 is UP at $2${NC}"
             return 0
         fi
         sleep 2
     done
-    echo -e "${RED}✗ The UI did not come up in 3 minutes - see $UI_LOG${NC}"
-    START_UI=0
+    echo -e "${RED}✗ The $1 did not come up in 3 minutes - see $3${NC}"
+    return 1
 }
 
 stop_ui() {
-    if [[ ! -f "$UI_PID_FILE" ]]; then
-        echo "No UI started by this script (no $UI_PID_FILE)."
-        return 0
-    fi
-    local pid
-    pid="$(cat "$UI_PID_FILE")"
-    # ng serve runs under npx: stop the children first, then the parent.
-    pkill -P "$pid" 2>/dev/null
-    kill "$pid" 2>/dev/null
-    rm -f "$UI_PID_FILE"
-    echo -e "${GREEN}✓ trading UI stopped${NC}"
+    local label pid_file pid
+    for label in "trading UI:$UI_PID_FILE" "admin console:$ADMIN_PID_FILE"; do
+        pid_file="${label#*:}"
+        if [[ ! -f "$pid_file" ]]; then
+            echo "No ${label%%:*} started by this script (no $pid_file)."
+            continue
+        fi
+        pid="$(cat "$pid_file")"
+        # ng serve runs under npx: stop the children first, then the parent.
+        pkill -P "$pid" 2>/dev/null
+        kill "$pid" 2>/dev/null
+        rm -f "$pid_file"
+        echo -e "${GREEN}✓ ${label%%:*} stopped${NC}"
+    done
 }
 
 ui_tour() {
     if [[ "$START_UI" != "1" ]]; then
-        echo "The UI was not started (--no-ui, or Node missing). Start it with:"
-        echo "  cd trading-ui && npm ci && npm start"
+        echo "The UIs were not started (--no-ui, or Node missing). Start them with:"
+        echo "  cd trading-ui && npm ci && npm start           # trading UI on 4200"
+        echo "  cd trading-ui && npm run start:admin           # admin console on 4300"
         return 0
     fi
     echo "Open $UI_BASE in a browser and try:"
@@ -299,7 +335,10 @@ ui_tour() {
     echo "Other seeded logins (same password): emily.stone@example.com (account 2),"
     echo "e2e.trader@example.com (account 3, used by the Playwright journeys)."
     echo ""
-    echo "Stop the UI later with: ./scripts/demo.sh --stop-ui"
+    echo "Administrators: $ADMIN_BASE as michael.brown@example.com (same password) -"
+    echo "account requests, users, accounts, instruments, all orders, health and audit."
+    echo ""
+    echo "Stop both UIs later with: ./scripts/demo.sh --stop-ui"
 }
 
 # ============================================================================
@@ -326,6 +365,7 @@ EOF
 
     echo -e "${YELLOW}Configuration:${NC}"
     echo "  Trading UI:   $UI_BASE$([[ "$START_UI" == "1" ]] || echo '  (not started)')"
+    echo "  Admin UI:     $ADMIN_BASE$([[ "$START_UI" == "1" ]] || echo '  (not started)')"
     echo "  Trade API:    $API_BASE"
     echo "  Auth service: $AUTH_BASE  (OpenAPI: $AUTH_BASE/docs)"
     echo "  Account ID:   $ACCOUNT_ID ($SEED_EMAIL)"
@@ -390,11 +430,11 @@ auth_demo() {
     email="demo.$(date +%s).$RANDOM@example.com"
     password="demo-password-123"
     CURL_CMD="curl -s -X POST $AUTH_BASE/auth/register -H 'Content-Type: application/json' \
-  -d '{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}'"
+  -d '{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"<sha256 digest of the password>\"}'"
     print_curl "$CURL_CMD"
     response=$(curl -s -w $'\n%{http_code}' -X POST "$AUTH_BASE/auth/register" \
         -H "Content-Type: application/json" \
-        -d "{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$password\"}")
+        -d "{\"name\":\"Demo User\",\"username\":\"$email\",\"password\":\"$(password_digest "$email" "$password")\"}")
     code="${response##*$'\n'}"
     print_response "${response%$'\n'*}"
     if [[ "$code" == "201" ]]; then
@@ -408,7 +448,7 @@ auth_demo() {
     print_subheader "1.2 That user logs in before an account is opened for them"
     code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$AUTH_BASE/auth/login" \
         -H "Content-Type: application/json" \
-        -d "{\"username\":\"$email\",\"password\":\"$password\"}")
+        -d "{\"username\":\"$email\",\"password\":\"$(password_digest "$email" "$password")\"}")
     if [[ "$code" == "401" ]]; then
         echo -e "${GREEN}✓ 401 - no trading account yet, so no token to issue${NC}"
     else
@@ -419,7 +459,7 @@ auth_demo() {
 
     print_subheader "1.3 Log in as the holder of account $ACCOUNT_ID"
     CURL_CMD="curl -s -X POST $AUTH_BASE/auth/login -H 'Content-Type: application/json' \
-  -d '{\"username\":\"$SEED_EMAIL\",\"password\":\"<seed password>\"}'"
+  -d '{\"username\":\"$SEED_EMAIL\",\"password\":\"<sha256 digest of the seed password>\"}'"
     print_curl "$CURL_CMD"
     login_seed_user
     echo -e "${GREEN}✓ Got an access token (${#JWT_TOKEN} chars). Its claims:${NC}"

@@ -1,0 +1,177 @@
+.instrument {
+  padding: 28px 24px;
+}
+
+.crumbs {
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.crumbs a {
+  color: var(--brand-600);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.head h2 {
+  margin: 0;
+}
+
+.ticker,
+.meta,
+.muted {
+  color: var(--ink-500);
+}
+
+.meta {
+  margin: 4px 0 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button,
+.ranges button {
+  height: 36px;
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.buy {
+  color: #fff;
+  background: var(--positive);
+  border: 0;
+}
+
+.sell {
+  color: #fff;
+  background: var(--negative);
+  border: 0;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.price {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.pairs {
+  margin: 0;
+}
+
+.pairs div {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.pairs dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stale {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-radius: var(--radius-sm);
+}
+
+.error,
+.loss {
+  color: var(--negative);
+}
+
+.gain {
+  color: var(--positive);
+}
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ranges button {
+  height: 30px;
+  padding: 0 10px;
+  color: var(--ink-700);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+}
+
+.ranges button[aria-pressed='true'] {
+  color: #fff;
+  background: var(--brand-600);
+  border-color: var(--brand-600);
+}
+
+.chart {
+  position: relative;
+  height: 320px;
+}
+
+.table-scroll {
+  max-height: 320px;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th,
+td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

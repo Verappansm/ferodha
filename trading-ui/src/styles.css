@@ -49,9 +49,8 @@
   --focus-ring: 0 0 0 3px rgb(23 160 114 / 30%);
 
   --font-sans:
-    'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+    'Segoe UI', 'Roboto', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Menlo', 'Monaco', 'Courier New', monospace;
 
   color-scheme: light;
 }
@@ -159,10 +158,12 @@ body {
   transition: background-color 0.2s ease;
   font-family: var(--font-sans);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
+  letter-spacing: -0.3px;
   color: var(--ink-900);
   background: var(--page);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -185,7 +186,9 @@ a {
 .field-label {
   font-size: 13px;
   font-weight: 600;
-  color: var(--ink-700);
+  letter-spacing: 0.3px;
+  color: var(--ink-900);
+  text-transform: uppercase;
 }
 
 .input {
@@ -193,13 +196,16 @@ a {
   height: 44px;
   padding: 0 14px;
   font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--ink-900);
   background: var(--surface);
   border: 1px solid var(--ink-300);
   border-radius: var(--radius-sm);
   transition:
     border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .input::placeholder {
@@ -253,12 +259,15 @@ a {
   padding: 0 18px;
   font: inherit;
   font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.2px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition:
     background-color 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn:disabled {
@@ -269,10 +278,12 @@ a {
 .btn-primary {
   color: #fff;
   background: var(--brand-600);
+  box-shadow: 0 2px 8px rgb(18 128 92 / 15%);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--brand-700);
+  box-shadow: 0 4px 12px rgb(18 128 92 / 20%);
 }
 
 .btn-secondary {
@@ -283,6 +294,7 @@ a {
 
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--ink-500);
+  background: var(--ink-100);
 }
 
 .btn-block {
@@ -302,20 +314,26 @@ a {
 
 /* ---- Sign-in and create-account forms (inside app-auth-layout) ----------- */
 
+.form-header {
+  margin-bottom: 16px;
+}
+
 .form-header h1 {
   margin: 0 0 4px;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.25;
+  font-weight: 600;
 }
 
 .form-header p {
-  margin: 0 0 24px;
+  margin: 0;
+  font-size: 14px;
   color: var(--ink-500);
 }
 
 .form {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .password-wrap {
@@ -347,7 +365,12 @@ a {
 }
 
 .footnote {
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.4;
   text-align: center;
+  color: var(--ink-500);
 }
 
 .strength {

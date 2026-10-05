@@ -31,6 +31,7 @@ import { InstrumentPage } from './generated/trade/model/instrument-page';
 import { InstrumentType } from './generated/trade/model/instrument-type';
 import { OrderPage } from './generated/trade/model/order-page';
 import { SystemHealth } from './generated/trade/model/system-health';
+import { passwordDigest } from '../core/auth/password-digest';
 import { provideApi as provideTradeClient } from './generated/trade/provide-api';
 
 export type {
@@ -93,8 +94,9 @@ export class AdminApi {
   private readonly system = inject(AdminSystemService);
 
   // ---- Sign-in ----
+  /** The password never leaves the browser: only its digest does (B23). */
   login(email: string, password: string): Observable<AdminTokenResponse> {
-    return this.auth.adminLogin({ username: email, password });
+    return this.auth.adminLogin({ username: email, password: passwordDigest(email, password) });
   }
   profile(): Observable<AdminProfile> {
     return this.auth.getAdminProfile();

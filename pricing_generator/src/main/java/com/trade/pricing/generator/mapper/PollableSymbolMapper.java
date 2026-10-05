@@ -7,9 +7,9 @@ import java.util.List;
 @Mapper
 public interface PollableSymbolMapper {
 
-    // Symbols someone holds (a non-zero net position) or is watching -
-    // identical query to trade_executor's own PollableSymbolMapper, copied
-    // rather than shared per this repo's established convention between
-    // independently-deployed services.
+    // Every tradable instrument, plus anything still held (a non-zero net
+    // position) or watched after it was delisted - so every instrument page
+    // has a live price and a chart. Quota: one batched /quotes call per 25
+    // symbols per refresh, and one /candles call per symbol per day.
     List<String> findPollableSymbols();
 }

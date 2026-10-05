@@ -53,4 +53,38 @@ public class FauxnanceCandleClient {
             return Optional.empty();
         }
     }
+
+    /**
+     * Fetch 1 year of historical daily candles for a symbol.
+     * Used by CandlePersistenceScheduler to populate market_candles table.
+     * Returns all candles returned by endpoint, or empty list if fetch fails.
+     *
+     * Endpoint: GET /candles/{symbol}?from=&to=&interval=1d (the last 366 days)
+     * Header: X-Api-Key (configured globally in FauxnanceClientConfig)
+     */
+    public List<FauxnanceCandle> fetchCandlesByRange(String symbol) {
+        LocalDate to = LocalDate.now();
+        LocalDate from = to.minusDays(366);
+        try {
+            FauxnanceCandlesEnvelope envelope = restClient.get()
+                    .uri("/candles/{symbol}?from={from}&to={to}&interval=1d", symbol, from, to)
+                    .retrieve()
+                    .body(FauxnanceCandlesEnvelope.class);
+
+            if (envelope == null || envelope.data() == null) {
+                log.warn("No candle envelope returned for {}", symbol);
+                return List.of();
+            }
+            List<FauxnanceCandle> candles = envelope.data().candles();
+            if (candles == null) {
+                log.warn("No candles in envelope for {}", symbol);
+                return List.of();
+            }
+            log.info("Fetched {} candles for {}", candles.size(), symbol);
+            return candles;
+        } catch (RestClientException e) {
+            log.warn("Candle fetch failed for {}: {}", symbol, e.getMessage());
+            return List.of();
+        }
+    }
 }

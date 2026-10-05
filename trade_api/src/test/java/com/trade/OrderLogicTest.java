@@ -3,6 +3,7 @@ package com.trade;
 import com.trade.domain.Account;
 import com.trade.domain.IdempotencyKeyStore;
 import com.trade.domain.Instrument;
+import com.trade.domain.InstrumentRepository;
 import com.trade.domain.Order;
 import com.trade.domain.OrderLogic;
 import com.trade.domain.Position;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,7 +53,24 @@ class OrderLogicTest {
     void setUp() {
         orderLogic = new OrderLogic(
                 accountId -> Optional.ofNullable(accountsById.get(accountId)),
-                symbol -> Optional.ofNullable(instrumentsBySymbol.get(symbol)),
+                new InstrumentRepository() {
+                    @Override
+                    public Optional<Instrument> findBySymbol(String symbol) {
+                        return Optional.ofNullable(instrumentsBySymbol.get(symbol));
+                    }
+
+                    @Override
+                    public List<Instrument> findAllTradable(int limit, long offset) {
+                        // Not used in these tests
+                        return List.of();
+                    }
+
+                    @Override
+                    public long countTradable() {
+                        // Not used in these tests
+                        return 0;
+                    }
+                },
                 (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
                 new IdempotencyKeyStore() {
                     @Override
@@ -69,7 +88,7 @@ class OrderLogicTest {
         // A tradable instrument, present for every test unless one of them
         // deliberately removes or delists it.
         instrumentsBySymbol.put(SYMBOL,
-                new Instrument(SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD"));
+                new Instrument(SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
     }
 
     // ---------------- Rule 1: account must exist ----------------

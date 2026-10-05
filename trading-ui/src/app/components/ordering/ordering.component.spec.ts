@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
 import { OrderingComponent } from './ordering.component';
 import { Session } from '../../core/session/session';
 import { TradeApi, OrderResponse, OrderStatus, OrderSide } from '../../api/trade-api';
@@ -17,7 +18,13 @@ describe('OrderingComponent', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
-        { provide: TradeApi, useValue: { placeOrder } },
+        { provide: TradeApi, useValue: { placeOrder, quote: vi.fn().mockReturnValue(of(null)) } },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            queryParams: of({}),
+          },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(OrderingComponent);
@@ -409,5 +416,120 @@ describe('OrderingComponent', () => {
     expect(byTestId('order-result-message')?.textContent).toContain(
       'Order accepted and queued for execution',
     );
+  });
+});
+
+describe('OrderingComponent price suggestion', () => {
+  const QUOTE = {
+    symbol: 'AAPL',
+    currency: 'USD',
+    bid: 230.1,
+    ask: 230.3,
+    mid: 230.2,
+    asOf: '2026-10-05T12:00:00Z',
+    stale: false,
+  };
+  let quote: ReturnType<typeof vi.fn>;
+
+  async function open(
+    params: Record<string, string>,
+    quoted: object = QUOTE,
+  ): Promise<ComponentFixture<OrderingComponent>> {
+    quote = vi.fn().mockReturnValue(of(quoted));
+    await TestBed.configureTestingModule({
+      imports: [OrderingComponent],
+      providers: [
+        { provide: Session, useValue: { accountId: signal(3) } },
+        { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
+        { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(OrderingComponent);
+    fixture.detectChanges();
+    await vi.advanceTimersByTimeAsync(400); // the symbol's quote lookup is debounced
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function text(fixture: ComponentFixture<OrderingComponent>, id: string): string {
+    const el = (fixture.nativeElement as HTMLElement).querySelector(`[data-testid="${id}"]`);
+    return el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+  }
+
+  function priceInput(fixture: ComponentFixture<OrderingComponent>): HTMLInputElement {
+    return (fixture.nativeElement as HTMLElement).querySelector('[data-testid="order-price"]')!;
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('takes symbol, side and price from the link, and shows the current price below', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'BUY', price: '230.35' });
+    expect(fixture.componentInstance.form.getRawValue()).toMatchObject({
+      symbol: 'AAPL',
+      side: 'BUY',
+      price: 230.35,
+    });
+    expect(quote).toHaveBeenCalledWith('AAPL');
+    expect(text(fixture, 'order-current-price')).toContain('Current price 230.20 USD');
+    expect(text(fixture, 'order-current-price')).toContain('bid 230.10 / ask 230.30');
+    expect(text(fixture, 'order-suggested-price')).toContain(
+      'Suggested limit 230.35 (+0.02% past the ask)',
+    );
+  });
+
+  it('suggests a price from the quote when the link carries none (the market list)', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'SELL' });
+    expect(fixture.componentInstance.form.controls.price.value).toBe(230.05);
+    expect(text(fixture, 'order-suggested-price')).toContain('(−0.02% past the bid)');
+  });
+
+  it('moves the suggestion when the side changes, until the customer types a price', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'BUY' });
+    const form = fixture.componentInstance.form;
+    form.controls.side.setValue('SELL');
+    expect(form.controls.price.value).toBe(230.05);
+
+    const input = priceInput(fixture);
+    input.value = '229';
+    input.dispatchEvent(new Event('input'));
+    form.controls.side.setValue('BUY');
+    expect(form.controls.price.value).toBe(229);
+
+    fixture.detectChanges();
+    (
+      fixture.nativeElement.querySelector(
+        '[data-testid="order-use-suggested"]',
+      ) as HTMLButtonElement
+    ).click();
+    expect(form.controls.price.value).toBe(230.35);
+  });
+
+  it('labels a stale quote with when it was last priced', async () => {
+    const fixture = await open(
+      { symbol: 'AAPL' },
+      { ...QUOTE, stale: true, asOf: '2026-10-05T09:30:00Z' },
+    );
+    expect(text(fixture, 'order-quote-stale')).toMatch(/^stale, last priced /);
+  });
+
+  it('says when the symbol has no price yet, and suggests nothing', async () => {
+    const fixture = await open(
+      { symbol: 'AAPL' },
+      { ...QUOTE, bid: null, ask: null, mid: null, stale: true },
+    );
+    expect(text(fixture, 'order-current-price')).toBe('No live price for AAPL yet.');
+    expect(fixture.componentInstance.form.controls.price.value).toBeNull();
+  });
+
+  it('reads no quote for a symbol that is not valid yet', async () => {
+    const fixture = await open({});
+    const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[data-testid="order-symbol"]',
+    )!;
+    input.value = 'not a symbol!';
+    input.dispatchEvent(new Event('input'));
+    await vi.advanceTimersByTimeAsync(400);
+    expect(quote).not.toHaveBeenCalled();
   });
 });

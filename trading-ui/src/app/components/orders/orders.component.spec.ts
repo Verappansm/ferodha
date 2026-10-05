@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
-import { MAX_POLLS, OrdersComponent, POLL_INTERVAL_MS } from './orders.component';
+import { CANCEL_TOO_LATE, MAX_POLLS, OrdersComponent, POLL_INTERVAL_MS } from './orders.component';
 import { Session } from '../../core/session/session';
 import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
@@ -31,17 +31,19 @@ describe('OrdersComponent', () => {
   let fixture: ComponentFixture<OrdersComponent>;
   let orderHistory: ReturnType<typeof vi.fn>;
   let placeOrder: ReturnType<typeof vi.fn>;
+  let cancelOrder: ReturnType<typeof vi.fn>;
   let accountId: ReturnType<typeof signal<number | null>>;
 
   beforeEach(async () => {
     orderHistory = vi.fn().mockReturnValue(of([]));
     placeOrder = vi.fn();
+    cancelOrder = vi.fn();
     accountId = signal<number | null>(3);
     await TestBed.configureTestingModule({
       imports: [OrdersComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
-        { provide: TradeApi, useValue: { orderHistory, placeOrder } },
+        { provide: TradeApi, useValue: { orderHistory, placeOrder, cancelOrder } },
       ],
     }).compileComponents();
     vi.useFakeTimers();
@@ -277,5 +279,127 @@ describe('OrdersComponent', () => {
 
     expect(orderHistory).not.toHaveBeenCalled();
     expect(byTestId('orders-error')?.textContent).toContain('Sign in to see your orders');
+  });
+
+  describe('open orders and cancellation (LEAP-018)', () => {
+    function click(id: string): void {
+      byTestId(id)!.click();
+      fixture.detectChanges();
+    }
+
+    it('lists open orders apart from finished ones, each with a cancel control', async () => {
+      orderHistory.mockReturnValue(
+        of([
+          order('ORD-open', OrderStatus.NEW, '2026-09-30T09:00:00Z'),
+          order('ORD-done', OrderStatus.FILLED, '2026-09-29T09:00:00Z'),
+        ]),
+      );
+      await open();
+
+      const openTable = byTestId('open-orders-table')!;
+      const history = byTestId('orders-table')!;
+      expect(openTable.textContent).toContain('ORD-open');
+      expect(openTable.textContent).not.toContain('ORD-done');
+      expect(history.textContent).toContain('ORD-done');
+      expect(allByTestId('cancel-order')).toHaveLength(1);
+    });
+
+    it('cancels once, only after the confirmation, and shows CANCELLED after the re-read', async () => {
+      orderHistory.mockReturnValue(of([order('ORD-abc', OrderStatus.NEW, '2026-09-30T09:00:00Z')]));
+      cancelOrder.mockReturnValue(of({ orderId: 'ORD-abc', status: OrderStatus.CANCELLED }));
+      await open();
+
+      click('cancel-order');
+      expect(cancelOrder).not.toHaveBeenCalled();
+      // The question is its own full-width row under the order: the table never widens.
+      const confirmRow = byTestId('cancel-confirm')!;
+      expect(confirmRow.tagName).toBe('TR');
+      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('9');
+      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00?');
+
+      orderHistory.mockReturnValue(
+        of([order('ORD-abc', OrderStatus.CANCELLED, '2026-09-30T09:00:00Z')]),
+      );
+      click('cancel-yes');
+      await settle();
+
+      expect(cancelOrder).toHaveBeenCalledTimes(1);
+      expect(cancelOrder).toHaveBeenCalledWith('ORD-abc');
+      expect(byTestId('cancel-outcome')?.textContent).toContain('Order ORD-abc is cancelled.');
+      expect(byTestId('open-orders-table')).toBeNull();
+      expect(byTestId('orders-table')?.textContent).toContain('CANCELLED');
+    });
+
+    it('keeping the order sends nothing', async () => {
+      orderHistory.mockReturnValue(of([order('ORD-abc', OrderStatus.NEW, '2026-09-30T09:00:00Z')]));
+      await open();
+
+      click('cancel-order');
+      click('cancel-keep');
+
+      expect(cancelOrder).not.toHaveBeenCalled();
+      expect(byTestId('cancel-confirm')).toBeNull();
+    });
+
+    it('cancelling an order that has just filled shows the ORD-409 sentence', async () => {
+      orderHistory.mockReturnValue(of([order('ORD-abc', OrderStatus.NEW, '2026-09-30T09:00:00Z')]));
+      cancelOrder.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              error: { errorCode: 'ORD-409', message: 'Order cannot be cancelled' },
+            }),
+        ),
+      );
+      await open();
+
+      orderHistory.mockReturnValue(
+        of([order('ORD-abc', OrderStatus.FILLED, '2026-09-30T09:00:00Z')]),
+      );
+      click('cancel-order');
+      click('cancel-yes');
+      await settle();
+
+      expect(byTestId('cancel-outcome')?.textContent?.trim()).toBe(CANCEL_TOO_LATE);
+      expect(byTestId('orders-table')?.textContent).toContain('FILLED');
+    });
+
+    it('a status filter lists only that status, through the route parameter', async () => {
+      await open();
+      orderHistory.mockClear();
+      orderHistory.mockReturnValue(
+        of([order('ORD-x', OrderStatus.REJECTED, '2026-09-30T09:00:00Z')]),
+      );
+
+      fixture.componentInstance.statusFilter = OrderStatus.REJECTED;
+      fixture.componentInstance.applyFilters();
+      await settle();
+
+      expect(orderHistory).toHaveBeenCalledWith(3, { status: OrderStatus.REJECTED });
+      expect(allByTestId('order-row')).toHaveLength(1);
+      expect(byTestId('filter-clear')).not.toBeNull();
+    });
+
+    it('a date range covers whole local days, and from after to is refused', async () => {
+      await open();
+      orderHistory.mockClear();
+
+      fixture.componentInstance.fromDate = '2026-09-01';
+      fixture.componentInstance.toDate = '2026-09-30';
+      fixture.componentInstance.applyFilters();
+      await settle();
+      expect(orderHistory).toHaveBeenCalledWith(3, {
+        from: new Date('2026-09-01T00:00:00').toISOString(),
+        to: new Date('2026-09-30T23:59:59.999').toISOString(),
+      });
+
+      orderHistory.mockClear();
+      fixture.componentInstance.fromDate = '2026-10-05';
+      fixture.componentInstance.applyFilters();
+      await settle();
+      expect(orderHistory).not.toHaveBeenCalled();
+      expect(byTestId('orders-error')?.textContent).toContain('on or before');
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import {
   AbstractControl,
   NonNullableFormBuilder,
@@ -8,9 +9,19 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
-import { firstValueFrom } from 'rxjs';
+import {
+  catchError,
+  debounceTime,
+  distinctUntilChanged,
+  firstValueFrom,
+  map,
+  of,
+  switchMap,
+} from 'rxjs';
 import { Session } from '../../core/session/session';
-import { TradeApi, OrderSide, OrderResponse } from '../../api/trade-api';
+import { TradeApi, OrderSide, OrderResponse, InstrumentQuote } from '../../api/trade-api';
+import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { errorMessage } from '../../core/errors/error-message';
 
 /** The contract's PlaceOrderRequest.symbol limit. */
@@ -67,13 +78,14 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-ordering',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, DatePipe, DecimalPipe],
   templateUrl: './ordering.component.html',
   styleUrls: ['./ordering.component.css'],
 })
 export class OrderingComponent {
   private readonly session = inject(Session);
   private readonly tradeApi = inject(TradeApi);
+  private readonly route = inject(ActivatedRoute);
 
   readonly form = inject(NonNullableFormBuilder).group({
     symbol: [
@@ -94,6 +106,13 @@ export class OrderingComponent {
   readonly errorMessage = signal('');
   readonly orderResult = signal<OrderResponse | null>(null);
 
+  /** The latest quote for the symbol on the ticket, shown under the price. */
+  readonly quote = signal<InstrumentQuote | null>(null);
+  /** The limit price the current quote and side suggest. */
+  readonly suggestedPrice = computed(() => suggestedLimitPrice(this.quote(), this.side()));
+  readonly bufferPercent = LIMIT_BUFFER * 100;
+  private readonly side = signal<OrderSide>('BUY');
+
   // Read-only account from session
   readonly account = computed(() => this.session.accountId());
 
@@ -111,6 +130,62 @@ export class OrderingComponent {
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.pendingKey = null;
     });
+
+    this.form.controls.side.valueChanges.pipe(takeUntilDestroyed()).subscribe((side) => {
+      this.side.set(side);
+      this.fillSuggestedPrice();
+    });
+
+    // The quote for whatever symbol is on the ticket, re-read when it changes.
+    this.form.controls.symbol.valueChanges
+      .pipe(
+        map((symbol) => symbol.trim().toUpperCase()),
+        debounceTime(300),
+        distinctUntilChanged(),
+        switchMap((symbol) =>
+          this.form.controls.symbol.valid
+            ? this.tradeApi.quote(symbol).pipe(catchError(() => of(null)))
+            : of(null),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((quote) => {
+        this.quote.set(quote);
+        this.fillSuggestedPrice();
+      });
+
+    // Buy/sell shortcuts pre-fill the ticket: symbol, side and, from the
+    // instrument page, a suggested price. Nothing is sent until Place Order.
+    this.route.queryParams.pipe(takeUntilDestroyed()).subscribe((params) => {
+      if (params['side'] === 'BUY' || params['side'] === 'SELL') {
+        this.form.controls.side.setValue(params['side']);
+      }
+      if (params['symbol']) {
+        this.form.controls.symbol.setValue(params['symbol']);
+      }
+      const price = Number(params['price']);
+      if (params['price'] && Number.isFinite(price) && price > 0) {
+        this.form.controls.price.setValue(Math.round(price * 100) / 100);
+      }
+    });
+  }
+
+  /**
+   * Fills the price with the suggestion, unless the customer has typed a
+   * price of their own (a dirty control): their number always wins.
+   */
+  private fillSuggestedPrice(): void {
+    const suggested = this.suggestedPrice();
+    if (suggested !== null && !this.form.controls.price.dirty) {
+      this.form.controls.price.setValue(suggested);
+    }
+  }
+
+  useSuggestedPrice(): void {
+    const suggested = this.suggestedPrice();
+    if (suggested === null) return;
+    this.form.controls.price.setValue(suggested);
+    this.form.controls.price.markAsPristine();
   }
 
   quantityError(): string | null {
@@ -182,6 +257,7 @@ export class OrderingComponent {
       );
       // Reset form after successful submission (this also drops the key).
       this.form.reset({ side: 'BUY' as OrderSide });
+      this.quote.set(null);
       this.pendingKey = null;
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 0) {

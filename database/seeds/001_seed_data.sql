@@ -2,7 +2,9 @@
 -- ============================================================
 -- Every seeded user's password is `seed-password-change-me` (bcrypt, cost 12),
 -- so the seeded account holders can log in through the auth service in
--- development. Never reuse these rows outside a local database.
+-- development. Never reuse these rows outside a local database. The UIs send
+-- a digest of the password rather than the password (B23), so trade-api's
+-- Liquibase 012 re-hashes these rows as bcrypt of that digest.
 
 INSERT INTO Users
     (user_id, name, email, phone_number, password_hash, status, role_id)

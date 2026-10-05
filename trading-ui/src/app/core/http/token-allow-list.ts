@@ -28,7 +28,7 @@ export function tokenAllowList(urls: {
     { origin: new URL(urls.tradeApiUrl).origin, paths: ['/api/v1/'] },
     // Only /auth/me is protected on the Auth service. /auth/login,
     // /auth/register and /auth/refresh are `security: []` and take no header.
-    { origin: new URL(urls.authApiUrl).origin, paths: ['/auth/me'] },
+    { origin: new URL(urls.authApiUrl).origin, paths: ['/auth/me', '/profile'] },
   ];
 }
 

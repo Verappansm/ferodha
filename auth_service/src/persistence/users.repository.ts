@@ -17,11 +17,13 @@ export type UserStatus = 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
  */
 export interface AuthUser {
   id: string;
+  name: string;
   email: string;
   passwordHash: string;
   status: UserStatus;
   roles: Role[];
   createdAt: Date;
+  phone: string | undefined;
 }
 
 /** Raised when the email's UNIQUE constraint fires - the contract's AUTH-409. */
@@ -34,7 +36,9 @@ export class UsernameTakenError extends Error {
 
 interface AuthUserRow {
   user_id: string;
+  name: string;
   email: string;
+  phone_number: string | null;
   password_hash: string;
   status: UserStatus | null;
   role_name: string;
@@ -54,7 +58,9 @@ function toContractRole(roleName: string): Role {
 function toAuthUser(row: AuthUserRow): AuthUser {
   return {
     id: row.user_id,
+    name: row.name,
     email: row.email,
+    phone: row.phone_number ?? undefined,
     passwordHash: row.password_hash,
     // The column is nullable in the Sprint 3 schema; a NULL has never been
     // activated, which is what PENDING means.
@@ -65,7 +71,7 @@ function toAuthUser(row: AuthUserRow): AuthUser {
 }
 
 const SELECT_USER = `
-  SELECT u.user_id, u.email, u.password_hash, u.status, r.role_name, u.created_at
+  SELECT u.user_id, u.name, u.email, u.phone_number, u.password_hash, u.status, r.role_name, u.created_at
     FROM Users u
     JOIN Roles r ON r.role_id = u.role_id`;
 
@@ -95,7 +101,7 @@ export class UsersRepository {
         `INSERT INTO Users (name, email, password_hash, status, role_id)
          VALUES ($1, $2, $3, 'ACTIVE',
                  (SELECT role_id FROM Roles WHERE role_name = 'client'))
-         RETURNING user_id, email, password_hash, status,
+         RETURNING user_id, name, email, phone_number, password_hash, status,
                    'client' AS role_name, created_at`,
         [input.name, input.email, input.passwordHash],
       );
@@ -136,5 +142,28 @@ export class UsersRepository {
       [id],
     );
     return result.rows[0] ? toAuthUser(result.rows[0]) : null;
+  }
+
+  /**
+   * The profile page's edit (LEAP-020): the name and phone only. An
+   * undefined field is left unchanged; a null phone clears it.
+   */
+  async updateProfile(
+    id: string,
+    changes: { name?: string; phone?: string | null },
+  ): Promise<AuthUser | null> {
+    await this.pool.query(
+      `UPDATE Users
+          SET name = COALESCE($2::varchar, name),
+              phone_number = CASE WHEN $3::boolean THEN $4::varchar ELSE phone_number END
+        WHERE user_id = $1`,
+      [
+        id,
+        changes.name ?? null,
+        changes.phone !== undefined,
+        changes.phone ?? null,
+      ],
+    );
+    return this.findById(id);
   }
 }

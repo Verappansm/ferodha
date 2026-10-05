@@ -9,9 +9,12 @@ import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
+import com.trade.exception.InvalidDateRangeException;
 import com.trade.exception.InvalidOrderException;
+import com.trade.exception.InvalidParameterException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
+import com.trade.exception.PricingUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -48,9 +51,12 @@ public class GlobalExceptionHandler {
             Map.entry(InsufficientHoldingsException.class, HttpStatus.CONFLICT),
             Map.entry(DuplicateOrderException.class, HttpStatus.CONFLICT),
             Map.entry(InvalidOrderException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(InvalidDateRangeException.class, HttpStatus.UNPROCESSABLE_ENTITY),
+            Map.entry(InvalidParameterException.class, HttpStatus.UNPROCESSABLE_ENTITY),
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
-            Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT)
+            Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
+            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE)
     );
 
     @ExceptionHandler(DomainException.class)
@@ -104,9 +110,12 @@ public class GlobalExceptionHandler {
             case InsufficientHoldingsException e -> "requested=" + e.getRequested() + " held=" + e.getHeld();
             case DuplicateOrderException e -> "idempotencyKey=" + e.getIdempotencyKey();
             case InvalidOrderException e -> "field=" + e.getField();
+            case InvalidDateRangeException e -> "from=" + e.getFrom() + " to=" + e.getTo();
+            case InvalidParameterException e -> "parameter=" + e.getParameter();
             case OrderNotFoundException e -> "orderId=" + e.getOrderId();
             case OrderNotCancellableException e -> "orderId=" + e.getOrderId() + " status=" + e.getCurrentStatus();
             case ConcurrentUpdateException e -> "accountId=" + e.getAccountId();
+            case PricingUnavailableException e -> "accountId=" + e.getAccountId() + " unpriced=" + e.getUnpricedSymbols();
             default -> "";
         };
     }

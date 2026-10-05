@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { AuthApi, TokenResponse } from './auth-api';
+import { passwordDigest } from '../core/auth/password-digest';
 import { provideApiClients } from './provide-api-clients';
 
 const AUTH = 'http://auth.test';
@@ -39,10 +40,12 @@ describe('AuthApi', () => {
 
     const request = http.expectOne(`${AUTH}/auth/login`);
     expect(request.request.method).toBe('POST');
+    // The password is never sent: only its digest (B23).
     expect(request.request.body).toEqual({
       username: 'john.carter@example.com',
-      password: 'pw',
+      password: passwordDigest('john.carter@example.com', 'pw'),
     });
+    expect(JSON.stringify(request.request.body)).not.toContain('"pw"');
     request.flush(tokens);
 
     expect(await response).toEqual(tokens);
@@ -68,6 +71,18 @@ describe('AuthApi', () => {
 
     const request = http.expectOne(`${AUTH}/auth/me`);
     expect(request.request.headers.has('Authorization')).toBe(false);
+    request.flush({});
+  });
+
+  it('registers with the password digest, never the password (B23)', () => {
+    api.register('Priya Menon', 'priya@example.com', 'correct horse battery').subscribe();
+
+    const request = http.expectOne(`${AUTH}/auth/register`);
+    expect(request.request.body).toEqual({
+      name: 'Priya Menon',
+      username: 'priya@example.com',
+      password: passwordDigest('priya@example.com', 'correct horse battery'),
+    });
     request.flush({});
   });
 });

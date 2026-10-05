@@ -8,6 +8,7 @@ import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
@@ -28,12 +29,16 @@ import java.util.Map;
 // The poll schedule has nothing to do with order placement - this class
 // never touches Orders, Accounts, or the orders/trade-events topics.
 //
-// @Profile("!market-sim"): under the simulated-market profile,
-// trades_generator is the one process that holds FAUXNANCE_API_KEY and
-// calls Fauxnance - two independent pollers spending the same quota is
-// exactly the failure mode this repo's own poller design warned about.
+// Off unless executor.market-data.poller-enabled=true. pricing_generator is
+// the platform's live price feed under every profile and publishes the
+// same market-data messages; two publishers would interleave real and
+// simulated prices on one topic and spend the Fauxnance quota twice. Kept
+// for a deployment without pricing_generator. Never under market-sim.
+// (Order fills are not affected: under the default profile the executor
+// still prices each fill with its own Fauxnance quote.)
 @Component
 @Profile("!market-sim")
+@ConditionalOnProperty(name = "executor.market-data.poller-enabled", havingValue = "true")
 public class MarketDataPoller {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataPoller.class);

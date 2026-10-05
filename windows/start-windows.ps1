@@ -1,20 +1,26 @@
 <#
 .SYNOPSIS
-  "windows" profile: runs Postgres-backed trade-api, trade-executor and
-  auth-service natively on Windows, against a Kafka broker running in Docker
-  on a Linux host (windows/kafka-linux.sh). Main (default) profile only:
-  trades-generator and market-sim are not part of this setup.
+  "windows" profile: runs Postgres-backed trade-api, trade-executor,
+  auth-service, pricing-generator and trades-generator natively on Windows,
+  against a Kafka broker running in Docker on a Linux host
+  (windows/kafka-linux.sh). pricing-generator is the live price feed under
+  both profiles (market-data ticks, the instrument charts). The profiles
+  differ in how trade-executor settles: by default each order fills or is
+  rejected at one real Fauxnance quote; -MarketSim matches orders on an
+  order book at pricing-generator's prices, with trades-generator's
+  counter-orders - exactly as SPRING_PROFILES_ACTIVE=market-sim under Docker.
 
 .DESCRIPTION
   1. Loads windows/.env.windows
   2. Preflight: java/mvn/node/npm/psql present, Kafka reachable over the LAN,
      Postgres reachable
   3. Creates the database if missing; applies the Sprint 3 schema + seed once
-  4. Builds the two Spring jars and the NestJS service, and installs the
-     trading UI's packages (skip with -SkipBuild)
+  4. Builds the four Spring jars and the NestJS service, and installs the
+     UI packages (skip with -SkipBuild)
   5. Starts them in dependency order, waits for each health endpoint, and
      checks that trade-executor actually joined its Kafka consumer group
-  6. Starts the trading UI (Angular, ng serve) on port 4200 (skip with -SkipUi)
+  6. Starts the trading UI on port 4200 and the admin console on port 4300
+     (Angular, ng serve; skip both with -SkipUi)
 
   Logs:  windows/.run/logs/<service>.log (+ .err.log)
   Stop:  windows/stop-windows.ps1
@@ -23,10 +29,12 @@
   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1
   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipBuild
   powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -SkipUi
+  powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -MarketSim
 #>
 param(
     [switch]$SkipBuild,
-    [switch]$SkipUi
+    [switch]$SkipUi,
+    [switch]$MarketSim
 )
 
 $ErrorActionPreference = 'Stop'
@@ -78,12 +86,15 @@ $KafkaBootstrap = Get-Setting 'KAFKA_BOOTSTRAP_SERVERS' ''
 $PgHost = Get-Setting 'POSTGRES_HOST' 'localhost'
 $PgPort = Get-Setting 'POSTGRES_PORT' '5432'
 $UiPort = '4200'
+$AdminUiPort = '4300'
 $PgDb = Get-Setting 'POSTGRES_DB' 'tradedb'
 $PgUser = Get-Setting 'POSTGRES_USER' 'postgres'
 $JwtSecret = Get-Setting 'JWT_SECRET' ''
 $TradeApiPort = Get-Setting 'TRADE_API_PORT' '8080'
 $ExecutorPort = Get-Setting 'TRADE_EXECUTOR_PORT' '8082'
 $AuthPort = Get-Setting 'AUTH_SERVICE_PORT' '3000'
+$TradesGeneratorPort = Get-Setting 'TRADES_GENERATOR_PORT' '8083'
+$PricingGeneratorPort = Get-Setting 'PRICING_GENERATOR_PORT' '8084'
 
 if ($KafkaBootstrap -eq '') { Fail 'KAFKA_BOOTSTRAP_SERVERS is not set in windows\.env.windows.' }
 if ($KafkaBootstrap -match '^(localhost|127\.0\.0\.1):') {
@@ -103,9 +114,11 @@ $env:POSTGRES_DB = $PgDb
 $env:POSTGRES_USER = $PgUser
 $env:PGPASSWORD = $env:POSTGRES_PASSWORD
 $env:PGOPTIONS = '-c client_min_messages=warning'
-# Main profile only - market-sim needs trades-generator, which this setup
-# doesn't run.
-$env:SPRING_PROFILES_ACTIVE = 'windows'
+# market-sim reaches every Spring service at once, as under Docker: the
+# executor settles on its order book at pricing-generator's prices instead of
+# one Fauxnance quote per order, and trades-generator starts placing
+# synthetic counter-orders. pricing-generator ticks under both.
+$env:SPRING_PROFILES_ACTIVE = if ($MarketSim) { 'windows,market-sim' } else { 'windows' }
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -154,7 +167,8 @@ function Invoke-Psql([string]$Database, [string[]]$PsqlArgs) {
     return (($output | Out-String).Trim())
 }
 
-function Wait-Http([string]$Name, [string]$Url, [string]$Pattern, [string]$LogName, [int]$TimeoutSec = 180) {
+function Wait-Http([string]$Name, [string]$Url, [string]$Pattern, [string]$LogName, [int]$TimeoutSec = 180,
+                   [string]$Accept = 'application/json') {
     $start = Get-Date
     $deadline = $start.AddSeconds($TimeoutSec)
     $nextNote = 10
@@ -165,8 +179,10 @@ function Wait-Http([string]$Name, [string]$Url, [string]$Pattern, [string]$LogNa
             # application/vnd.spring-boot.actuator.v3+json, which Windows
             # PowerShell 5.1 treats as binary: .Content comes back as a
             # byte[] and would never match the pattern. Decode it anyway in
-            # case some endpoint still sends a non-text type.
-            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3 -Headers @{ Accept = 'application/json' }
+            # case some endpoint still sends a non-text type. The Angular
+            # dev servers are the exception: they answer a JSON Accept with
+            # 404 and serve index.html only to text/html.
+            $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3 -Headers @{ Accept = $Accept }
             $body = $response.Content
             if ($body -is [byte[]]) { $body = [System.Text.Encoding]::UTF8.GetString($body) }
             if ($body -match $Pattern) {
@@ -248,7 +264,10 @@ function Get-BootJar([string]$ServiceDir) {
 Write-Stage 'Preflight'
 
 if (Test-Path $PidFile) {
-    $stillRunning = @(Get-Content $PidFile -Raw | ConvertFrom-Json) |
+    # Assigned first: in Windows PowerShell 5.1, @(... | ConvertFrom-Json)
+    # wraps the whole array as one element instead of listing the services.
+    $recorded = Get-Content $PidFile -Raw | ConvertFrom-Json
+    $stillRunning = @($recorded) |
         Where-Object { Get-Process -Id $_.pid -ErrorAction SilentlyContinue }
     if ($stillRunning) { Fail 'Services from a previous run are still running. Run windows\stop-windows.ps1 first.' }
 }
@@ -260,8 +279,8 @@ $script:Psql = Find-Psql
 if (-not $script:Psql) { Fail 'psql.exe not found. Add PostgreSQL\<version>\bin to PATH or set PSQL_BIN_DIR.' }
 Write-Pass "tools found (psql: $script:Psql)"
 
-$PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort)
-if (-not $SkipUi) { $PortsToCheck += $UiPort }
+$PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort, $TradesGeneratorPort, $PricingGeneratorPort)
+if (-not $SkipUi) { $PortsToCheck += @($UiPort, $AdminUiPort) }
 foreach ($port in $PortsToCheck) {
     if (Test-Tcp 'localhost' ([int]$port) 500) { Fail "Port $port is already in use on this machine." }
 }
@@ -277,6 +296,19 @@ foreach ($entry in $KafkaBootstrap.Split(',')) {
 }
 Write-Pass "Kafka reachable at $KafkaBootstrap"
 
+# stop-windows.ps1 stops the local PostgreSQL service, so start it again.
+if ($PgHost -in 'localhost', '127.0.0.1', '::1') {
+    foreach ($service in @(Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Where-Object { $_.Status -ne 'Running' })) {
+        try {
+            Start-Service -Name $service.Name -ErrorAction Stop
+            Write-Pass "started PostgreSQL service $($service.Name)"
+        } catch {
+            Fail "PostgreSQL service $($service.Name) is stopped and could not be started: run this window as Administrator, or start it in services.msc."
+        }
+    }
+    $pgDeadline = (Get-Date).AddSeconds(30)
+    while (-not (Test-Tcp $PgHost ([int]$PgPort) 1000) -and (Get-Date) -lt $pgDeadline) { Start-Sleep -Seconds 1 }
+}
 if (-not (Test-Tcp $PgHost ([int]$PgPort) 3000)) { Fail "Cannot reach Postgres at ${PgHost}:${PgPort}. Is the PostgreSQL service running?" }
 $null = Invoke-Psql 'postgres' @('-c', 'SELECT 1')
 Write-Pass "Postgres reachable at ${PgHost}:${PgPort} as $PgUser"
@@ -307,7 +339,7 @@ if ($hasSchema -ne 't') {
 # ---------------------------------------------------------------------------
 # Stage: Build
 # ---------------------------------------------------------------------------
-$SpringServices = @('trade_api', 'trade_executor')
+$SpringServices = @('trade_api', 'trade_executor', 'pricing_generator', 'trades_generator')
 if ($SkipBuild) {
     Write-Stage 'Build (skipped)'
 } else {
@@ -315,8 +347,10 @@ if ($SkipBuild) {
     foreach ($svc in $SpringServices) {
         Push-Location (Join-Path $RepoDir $svc)
         try {
-            # maven.test.skip: don't even compile the tests - only the jar is needed.
-            & mvn -q -B '-Dmaven.test.skip=true' package
+            # clean: a file deleted from src (a mapper, a class) must not survive in
+            # target/ and be packed into the jar. maven.test.skip: don't even
+            # compile the tests - only the jar is needed.
+            & mvn -q -B '-Dmaven.test.skip=true' clean package
             if ($LASTEXITCODE -ne 0) { Fail "mvn package failed in $svc" }
         } finally { Pop-Location }
         Write-Pass "$svc built"
@@ -335,7 +369,7 @@ if ($SkipBuild) {
             & npm ci --no-audit --no-fund
             if ($LASTEXITCODE -ne 0) { Fail 'npm ci failed in trading-ui' }
         } finally { Pop-Location }
-        Write-Pass 'trading-ui packages installed'
+        Write-Pass 'trading-ui and admin console packages installed'
     }
 }
 
@@ -353,29 +387,54 @@ Start-AppProcess 'trade-api' (Join-Path $RepoDir 'trade_api') 'java' `
     @{ SERVER_PORT = $TradeApiPort }
 Wait-Http 'trade-api' "http://localhost:$TradeApiPort/actuator/health" '"status":"UP"' 'trade-api' 240
 
+# pricing-generator's Fauxnance client is built under every profile, and an
+# unset URL would stop it booting. Blank in .env.windows means "no key": the
+# same unreachable placeholder trade-executor's windows profile uses, so only
+# market-sim's quote refresh would ever notice.
+$PricingEnv = @{ SERVER_PORT = $PricingGeneratorPort }
+if ((Get-Setting 'FAUXNANCE_API_URL' '') -eq '') { $PricingEnv['FAUXNANCE_API_URL'] = 'http://127.0.0.1:9' }
+if ((Get-Setting 'FAUXNANCE_API_KEY' '') -eq '') { $PricingEnv['FAUXNANCE_API_KEY'] = 'unset' }
+Start-AppProcess 'pricing-generator' (Join-Path $RepoDir 'pricing_generator') 'java' `
+    @('-jar', (Get-BootJar (Join-Path $RepoDir 'pricing_generator'))) `
+    $PricingEnv
+
+# Under market-sim the executor takes its quotes from pricing-generator (the
+# same wiring as TRADES_GENERATOR_URL in docker-compose.yml).
 Start-AppProcess 'trade-executor' (Join-Path $RepoDir 'trade_executor') 'java' `
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'trade_executor'))) `
-    @{ SERVER_PORT = $ExecutorPort }
+    @{ SERVER_PORT = $ExecutorPort; TRADES_GENERATOR_URL = "http://localhost:$PricingGeneratorPort" }
 
 Start-AppProcess 'auth-service' (Join-Path $RepoDir 'auth_service') 'node' `
     @('dist/main.js') `
     @{ PORT = $AuthPort; NODE_ENV = 'development' }
 
+Wait-Http 'pricing-generator' "http://localhost:$PricingGeneratorPort/actuator/health" '"status":"UP"' 'pricing-generator'
 Wait-Http 'trade-executor' "http://localhost:$ExecutorPort/actuator/health" '"status":"UP"' 'trade-executor'
 Wait-Http 'auth-service' "http://localhost:$AuthPort/health" '"status":"ok"' 'auth-service' 60
 
-# The trading UI, last: it only needs the two APIs above to be answering.
-# Started through node directly (not npm/npx) so the recorded PID is the
-# server itself and stop-windows.ps1 can stop it.
+# trades-generator reads prices from pricing-generator, so it starts after it.
+Start-AppProcess 'trades-generator' (Join-Path $RepoDir 'trades_generator') 'java' `
+    @('-jar', (Get-BootJar (Join-Path $RepoDir 'trades_generator'))) `
+    @{ SERVER_PORT = $TradesGeneratorPort; PRICING_GENERATOR_URL = "http://localhost:$PricingGeneratorPort" }
+Wait-Http 'trades-generator' "http://localhost:$TradesGeneratorPort/actuator/health" '"status":"UP"' 'trades-generator'
+
+# The two UIs, last: they only need the APIs above to be answering. Started
+# through node directly (not npm/npx) so the recorded PID is the server
+# itself and stop-windows.ps1 can stop it. Both are projects of the one
+# trading-ui workspace and share its node_modules.
 if (-not $SkipUi) {
     $UiDir = Join-Path $RepoDir 'trading-ui'
     if (-not (Test-Path (Join-Path $UiDir 'node_modules\@angular\cli\bin\ng.js'))) {
         Fail 'trading-ui has no node_modules - run without -SkipBuild once, or npm ci in trading-ui.'
     }
     Start-AppProcess 'trading-ui' $UiDir 'node' `
-        @('node_modules/@angular/cli/bin/ng.js', 'serve', '--port', $UiPort) `
+        @('node_modules/@angular/cli/bin/ng.js', 'serve', 'trading-ui', '--port', $UiPort) `
         @{ NG_CLI_ANALYTICS = 'false' }
-    Wait-Http 'trading-ui' "http://localhost:$UiPort/" 'app-root' 'trading-ui' 240
+    Start-AppProcess 'admin-ui' $UiDir 'node' `
+        @('node_modules/@angular/cli/bin/ng.js', 'serve', 'admin', '--port', $AdminUiPort) `
+        @{ NG_CLI_ANALYTICS = 'false' }
+    Wait-Http 'trading-ui' "http://localhost:$UiPort/" 'app-root' 'trading-ui' 240 'text/html'
+    Wait-Http 'admin-ui' "http://localhost:$AdminUiPort/" 'adm-root' 'admin-ui' 240 'text/html'
 }
 
 # ---------------------------------------------------------------------------
@@ -405,10 +464,18 @@ Write-Host ''
 Write-Host '== ALL SERVICES RUNNING ==' -ForegroundColor Green
 if (-not $SkipUi) {
     Write-Host "  trading-ui        http://localhost:$UiPort   (sign in: john.carter@example.com / seed-password-change-me)"
+    Write-Host "  admin console     http://localhost:$AdminUiPort   (sign in: michael.brown@example.com / seed-password-change-me)"
 }
 Write-Host "  trade-api         http://localhost:$TradeApiPort"
 Write-Host "  trade-executor    http://localhost:$ExecutorPort/actuator/health"
 Write-Host "  auth-service      http://localhost:$AuthPort"
+Write-Host "  pricing-generator http://localhost:$PricingGeneratorPort/actuator/health"
+Write-Host "  trades-generator  http://localhost:$TradesGeneratorPort/actuator/health"
+if ($MarketSim) {
+    Write-Host "  profile           $env:SPRING_PROFILES_ACTIVE   (simulated market)"
+} else {
+    Write-Host "  profile           $env:SPRING_PROFILES_ACTIVE   (fills at a real Fauxnance quote - add -MarketSim for the order book)"
+}
 Write-Host "  kafka             $KafkaBootstrap (Linux)"
 Write-Host "  kafka-ui          $(Get-Setting 'KAFKA_UI_URL' '<KAFKA_UI_URL not set>')"
 Write-Host "  logs              $LogDir"

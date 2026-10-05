@@ -8,6 +8,8 @@ public record InstrumentRow(
         String displayName,
         String assetClass,
         String quoteCurrency,
-        Boolean tradable
+        Boolean tradable,
+        String exchange,
+        String sector
 ) {
 }

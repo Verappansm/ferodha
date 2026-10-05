@@ -177,7 +177,7 @@ class OrderServiceTest {
 
     private void givenTradableInstrument() {
         when(instrumentMapper.findBySymbol("AAPL")).thenReturn(Optional.of(
-                new InstrumentRow(INSTRUMENT_UUID, "AAPL", "Apple Inc.", "EQUITY", "USD", true)));
+                new InstrumentRow(INSTRUMENT_UUID, "AAPL", "Apple Inc.", "EQUITY", "USD", true, "NASDAQ", "Technology")));
     }
 
     private PlaceOrderRequestDto validRequest() {

@@ -138,3 +138,24 @@ small {
   font-size: 0.82rem;
   color: var(--ink-500);
 }
+
+.current-price {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.current-price .stale {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.link-button {
+  padding: 0;
+  font: inherit;
+  color: var(--brand-600);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}

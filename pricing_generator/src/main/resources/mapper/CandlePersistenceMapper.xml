@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.trade.pricing.generator.mapper.CandlePersistenceMapper">
+
+    <insert id="upsertCandle">
+        SELECT upsert_candle(
+            #{symbol,jdbcType=VARCHAR},
+            #{interval,jdbcType=VARCHAR},
+            #{open,jdbcType=NUMERIC},
+            #{high,jdbcType=NUMERIC},
+            #{low,jdbcType=NUMERIC},
+            #{close,jdbcType=NUMERIC},
+            #{volume,jdbcType=BIGINT},
+            #{candleTime,jdbcType=DATE},
+            #{synthetic,jdbcType=BOOLEAN}
+        )
+    </insert>
+
+    <delete id="deleteOldCandles">
+        DELETE FROM market_candles
+        WHERE symbol = #{symbol,jdbcType=VARCHAR}
+          AND interval = #{interval,jdbcType=VARCHAR}
+          AND candle_time &lt; #{beforeDate,jdbcType=DATE}
+    </delete>
+
+</mapper>
