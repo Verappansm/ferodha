@@ -1,0 +1,43 @@
+meta {
+  name: register username is not an email
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/register
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "name": "Bruno Tester",
+    "username": "priya.menon",
+    "password": "{{passwordDigest}}"
+  }
+}
+
+script:post-response {
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 422
+  res.body.errorCode: eq VAL-422
+}
+
+script:pre-request {
+  // B23: the browsers send sha256("ferodha-v1:" + lower-case email + ":"
+  // + password) in place of the password, so this request does too.
+  const CryptoJS = require("crypto-js");
+  const digestEmail = String("priya.menon").trim().toLowerCase();
+  bru.setVar("passwordDigest", CryptoJS.SHA256(`ferodha-v1:${digestEmail}:${"correct horse battery staple"}`).toString());
+}

@@ -1,0 +1,42 @@
+.watchlist-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.coming-soon-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 400px;
+  padding: 48px 32px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.banner-icon {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 24px;
+  color: var(--brand-600);
+}
+
+.coming-soon-banner h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.coming-soon-banner p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-500);
+  line-height: 1.6;
+}

@@ -1,0 +1,161 @@
+.ordering-container {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 28px 20px;
+}
+
+h2 {
+  margin: 0 0 24px;
+  font-size: 1.5rem;
+}
+
+.order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+.form-control {
+  height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--brand-500);
+  box-shadow: var(--focus-ring);
+}
+
+.form-control[readonly] {
+  color: var(--ink-500);
+  background: var(--ink-100);
+  cursor: not-allowed;
+}
+
+.error-message {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--negative);
+}
+
+.btn {
+  height: 46px;
+  padding: 0 20px;
+  font: inherit;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.btn-primary {
+  color: #fff;
+  background: var(--brand-600);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-700);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.alert {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  font-weight: 500;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+
+.alert-success {
+  color: var(--positive);
+  background: var(--positive-bg);
+}
+
+.alert-error {
+  color: var(--negative);
+  background: var(--negative-bg);
+}
+
+.order-result {
+  margin-top: 20px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+}
+
+.order-result h3 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+dt {
+  font-weight: 600;
+  color: var(--ink-700);
+}
+
+dd {
+  margin: 0;
+  color: var(--ink-900);
+  word-break: break-word;
+}
+
+small {
+  font-size: 0.82rem;
+  color: var(--ink-500);
+}
+
+.current-price {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.current-price .stale {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.link-button {
+  padding: 0;
+  font: inherit;
+  color: var(--brand-600);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -1,0 +1,266 @@
+{
+  "version": "1.0",
+  "description": "Security patterns to scan for in production bundles",
+  "lastUpdated": "2026-10-02",
+  "categories": {
+    "dangerousPatterns": {
+      "description": "Patterns that MUST NOT appear in production bundle",
+      "severity": "critical",
+      "patterns": [
+        {
+          "id": "api-key-fauxnance",
+          "pattern": "FAUXNANCE_API_KEY",
+          "type": "literal",
+          "description": "Fauxnance API Key environment variable",
+          "impact": "Exposes market data API credentials",
+          "shouldFind": false
+        },
+        {
+          "id": "api-url-fauxnance",
+          "pattern": "FAUXNANCE_API_URL",
+          "type": "literal",
+          "description": "Fauxnance API URL environment variable",
+          "impact": "Reveals external API endpoint",
+          "shouldFind": false
+        },
+        {
+          "id": "jwt-secret-upper",
+          "pattern": "JWT_SECRET",
+          "type": "literal",
+          "description": "JWT signing secret (uppercase)",
+          "impact": "Exposes token signing key",
+          "shouldFind": false
+        },
+        {
+          "id": "jwt-secret-lower",
+          "pattern": "jwt_secret",
+          "type": "literal",
+          "description": "JWT signing secret (lowercase)",
+          "impact": "Exposes token signing key",
+          "shouldFind": false
+        },
+        {
+          "id": "signing-secret-regex",
+          "pattern": "signing.*secret",
+          "type": "regex",
+          "description": "Signing secret pattern (regex)",
+          "impact": "Generic pattern for signing keys",
+          "shouldFind": false
+        }
+      ]
+    },
+    "apiEndpoints": {
+      "description": "API endpoints that should or should not appear",
+      "severity": "high",
+      "authorized": [
+        {
+          "id": "auth-api",
+          "endpoint": "localhost:3000",
+          "service": "Auth Service",
+          "shouldFind": true,
+          "description": "User authentication, registration, profile"
+        },
+        {
+          "id": "trade-api",
+          "endpoint": "localhost:8080",
+          "service": "Trade API",
+          "shouldFind": true,
+          "description": "Account data, orders, positions, balance"
+        }
+      ],
+      "unauthorized": [
+        {
+          "id": "external-https",
+          "pattern": "https://",
+          "type": "literal",
+          "description": "External HTTPS endpoints",
+          "shouldFind": false,
+          "note": "May appear in comments or links - verify context"
+        },
+        {
+          "id": "fauxnance-domain",
+          "pattern": ".fauxnance.",
+          "type": "literal",
+          "description": "Fauxnance domain reference",
+          "shouldFind": false
+        },
+        {
+          "id": "market-data-service",
+          "pattern": "market-data",
+          "type": "literal",
+          "description": "Market data service endpoint",
+          "shouldFind": false
+        },
+        {
+          "id": "external-pricing",
+          "pattern": "pricing-api",
+          "type": "literal",
+          "description": "External pricing service",
+          "shouldFind": false
+        }
+      ]
+    },
+    "safePatterns": {
+      "description": "Patterns that are OK to appear in bundle",
+      "severity": "info",
+      "patterns": [
+        {
+          "id": "openapi-apiclient",
+          "pattern": "apiKey",
+          "type": "literal",
+          "description": "OpenAPI client configuration property",
+          "context": "Auto-generated code only",
+          "shouldFind": true,
+          "riskLevel": "none"
+        },
+        {
+          "id": "symbol-scheme-ns",
+          "pattern": ".NS",
+          "type": "literal",
+          "description": "NSE symbol suffix",
+          "context": "Data format descriptor",
+          "shouldFind": true,
+          "riskLevel": "none"
+        },
+        {
+          "id": "symbol-scheme-bo",
+          "pattern": ".BO",
+          "type": "literal",
+          "description": "BSE symbol suffix",
+          "context": "Data format descriptor",
+          "shouldFind": true,
+          "riskLevel": "none"
+        },
+        {
+          "id": "symbol-scheme-fx",
+          "pattern": "FX:",
+          "type": "literal",
+          "description": "Currency pair prefix",
+          "context": "Data format descriptor",
+          "shouldFind": true,
+          "riskLevel": "none"
+        },
+        {
+          "id": "symbol-scheme-crypto",
+          "pattern": "X:",
+          "type": "literal",
+          "description": "Cryptocurrency prefix",
+          "context": "Data format descriptor",
+          "shouldFind": true,
+          "riskLevel": "none"
+        }
+      ]
+    },
+    "sourceCodeVulnerabilities": {
+      "description": "Patterns in source code that indicate security issues",
+      "severity": "critical",
+      "patterns": [
+        {
+          "id": "direct-fauxnance-call",
+          "pattern": "fetch.*fauxnance",
+          "type": "regex",
+          "location": "src/**/*.ts",
+          "description": "Direct call to Fauxnance API from frontend",
+          "shouldFind": false,
+          "fixAction": "Route through backend service instead"
+        },
+        {
+          "id": "hardcoded-api-key",
+          "pattern": "const.*api.*key.*=.*['\\\"]",
+          "type": "regex",
+          "location": "src/**/*.ts",
+          "description": "Hardcoded API key in source",
+          "shouldFind": false,
+          "fixAction": "Use environment variables instead"
+        },
+        {
+          "id": "hardcoded-secret",
+          "pattern": "const.*secret.*=.*['\\\"]",
+          "type": "regex",
+          "location": "src/**/*.ts",
+          "description": "Hardcoded secret in source",
+          "shouldFind": false,
+          "fixAction": "Use environment variables instead"
+        }
+      ]
+    },
+    "buildConfigurationIssues": {
+      "description": "Build configuration security concerns",
+      "severity": "high",
+      "checks": [
+        {
+          "id": "source-maps-deployed",
+          "filePattern": "dist/**/*.js.map",
+          "description": "Source map files deployed to production",
+          "shouldFind": false,
+          "impact": "Exposes source code to end users",
+          "fixAction": "Delete all .map files from dist folder"
+        },
+        {
+          "id": "secrets-in-html",
+          "filePattern": "dist/**/index.html",
+          "pattern": "api[_-]key|secret|password",
+          "type": "regex",
+          "description": "Secrets exposed in HTML",
+          "shouldFind": false,
+          "fixAction": "Remove from environment.ts file"
+        },
+        {
+          "id": "secrets-in-environment",
+          "filePattern": "src/environments/environment.ts",
+          "pattern": "api[_-]key|secret|password",
+          "type": "regex",
+          "description": "Hardcoded secrets in environment file",
+          "shouldFind": false,
+          "fixAction": "Use environment variables at runtime"
+        }
+      ]
+    }
+  },
+  "compliance": {
+    "acceptanceCriteria": [
+      {
+        "id": "ac-1",
+        "title": "No Secrets in Bundle",
+        "requirement": "The production build contains no API key, no signing secret and no market-data host",
+        "testPatterns": [
+          "api-key-fauxnance",
+          "api-url-fauxnance",
+          "jwt-secret-upper",
+          "jwt-secret-lower",
+          "market-data-service"
+        ],
+        "passCriteria": "All patterns NOT found"
+      },
+      {
+        "id": "ac-2",
+        "title": "No Direct Fauxnance Calls",
+        "requirement": "The application never calls the Fauxnance API; prices reach the browser through a service of yours that holds the key server-side",
+        "testPatterns": [
+          "direct-fauxnance-call",
+          "fauxnance-domain"
+        ],
+        "passCriteria": "No direct Fauxnance API calls detected"
+      }
+    ]
+  },
+  "recommendations": {
+    "immediate": [
+      "Run security checklist on every production build",
+      "Integrate into CI/CD pipeline",
+      "Fail build if CRITICAL patterns found"
+    ],
+    "shortTerm": [
+      "Implement automated secret scanning",
+      "Add bundle analysis step to build",
+      "Create deployment security gate"
+    ],
+    "longTerm": [
+      "Quarterly security audits",
+      "Monitor bundle composition",
+      "Regular penetration testing",
+      "Security training for team"
+    ]
+  },
+  "notes": "This configuration file documents all patterns searched during security audits. Maintain and update as new threats are identified."
+}

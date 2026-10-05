@@ -1,0 +1,76 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: trade-api
+
+  datasource:
+    # Every value that differs between a laptop and a container comes from
+    # the environment - nothing here is a real host, credential or secret.
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+
+  # Kafka configuration for ORDER_PLACED publishing
+  kafka:
+    producer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    # market-data quotes for the portfolio routes (see MarketDataListener)
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# JWT_SECRET is read from the environment at runtime and appears in no
+# committed file - see com.trade.security.JwtService, which fails fast at
+# startup if this resolves to nothing.
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: auth-service
+
+  # Where the operations console's health page probes (LEAP-023). Service
+  # names inside Docker; the defaults suit the Windows profile.
+  admin:
+    health:
+      auth-url: ${AUTH_HEALTH_URL:http://localhost:3000/health}
+      executor-url: ${EXECUTOR_HEALTH_URL:http://localhost:8082/actuator/health}
+
+# Portfolio pricing (contracts/portfolio-api.yaml). A quote older than
+# stale-after-seconds is still shown, flagged stale. The group id is unique
+# per start so the listener always re-reads the retained quotes.
+portfolio:
+  quotes:
+    stale-after-seconds: ${PORTFOLIO_STALE_AFTER_SECONDS:300}
+    group-id: trade-api-quotes-${random.uuid}
+    listen: ${PORTFOLIO_QUOTES_LISTEN:true}
+
+logging:
+  level:
+    com.trade: INFO
+
+# /actuator/health only - not the full actuator surface. Its DataSource and
+# Liquibase indicators are what let the container's HEALTHCHECK (and
+# docker-compose's healthcheck for depends_on) mean "the database is
+# actually reachable and migrated", not just "the JVM started".
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

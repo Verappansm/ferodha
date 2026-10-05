@@ -1,0 +1,152 @@
+<app-auth-layout active="register">
+  @if (submittedEmail(); as email) {
+    <section class="submitted" data-testid="register-success" aria-live="polite">
+      <div class="submitted-icon" aria-hidden="true">✓</div>
+      <h1>Application received</h1>
+      <p>
+        We have registered <strong>{{ email }}</strong> and sent your account request to our
+        operations team.
+      </p>
+      <ol class="steps">
+        <li class="done"><span>1</span> Registration complete</li>
+        <li class="current"><span>2</span> Account under review by an administrator</li>
+        <li><span>3</span> Sign in and start trading once approved</li>
+      </ol>
+      <a class="btn btn-primary btn-block" routerLink="/login" data-testid="register-to-signin"
+        >Back to sign in</a
+      >
+    </section>
+  } @else {
+    <header class="form-header">
+      <h1>Open an account</h1>
+      <p>Register, and an administrator will review your account request.</p>
+    </header>
+
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label class="field-label" for="name">Full name</label>
+        <input
+          id="name"
+          class="input"
+          formControlName="name"
+          autocomplete="name"
+          data-testid="register-name"
+          [attr.aria-invalid]="showError('name')"
+          aria-describedby="name-error"
+        />
+        @if (showError('name')) {
+          <p id="name-error" class="field-error" data-testid="register-name-error">
+            Enter your full name.
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="email">Email address</label>
+        <input
+          id="email"
+          class="input"
+          type="email"
+          formControlName="email"
+          autocomplete="email"
+          placeholder="name@example.com"
+          data-testid="register-email"
+          [attr.aria-invalid]="showError('email')"
+          aria-describedby="email-error"
+        />
+        @if (showError('email')) {
+          <p id="email-error" class="field-error" data-testid="register-email-error">
+            @if (form.controls.email.hasError('required')) {
+              Enter your email address.
+            } @else {
+              Enter a valid email address of at most 64 characters.
+            }
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="password">Password</label>
+        <div class="password-wrap">
+          <input
+            id="password"
+            class="input"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            autocomplete="new-password"
+            data-testid="register-password"
+            [attr.aria-invalid]="showError('password')"
+            aria-describedby="password-hint password-error"
+          />
+          <button
+            type="button"
+            class="reveal"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-pressed]="showPassword()"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+          >
+            {{ showPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        <div class="strength" [attr.data-level]="strength()" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <p id="password-hint" class="field-hint">
+          At least {{ passwordMin }} characters. A long passphrase is stronger than symbols.
+          @if (strengthLabel()) {
+            <strong>{{ strengthLabel() }}.</strong>
+          }
+        </p>
+        @if (showError('password')) {
+          <p id="password-error" class="field-error" data-testid="register-password-error">
+            @if (form.controls.password.hasError('required')) {
+              Choose a password.
+            } @else {
+              Use between {{ passwordMin }} and 128 characters.
+            }
+          </p>
+        }
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="confirmPassword">Confirm password</label>
+        <input
+          id="confirmPassword"
+          class="input"
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+          data-testid="register-confirm"
+          [attr.aria-invalid]="showError('confirmPassword') || showMismatch()"
+          aria-describedby="confirm-error"
+        />
+        @if (showError('confirmPassword') || showMismatch()) {
+          <p id="confirm-error" class="field-error" data-testid="register-confirm-error">
+            @if (form.controls.confirmPassword.hasError('required')) {
+              Enter the password again.
+            } @else {
+              The two passwords do not match.
+            }
+          </p>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="form-error" role="alert" data-testid="register-error">{{ error() }}</p>
+      }
+
+      <button
+        type="submit"
+        class="btn btn-primary btn-block"
+        data-testid="register-submit"
+        [disabled]="isSubmitting()"
+      >
+        {{ isSubmitting() ? 'Submitting…' : 'Request account' }}
+      </button>
+
+      <p class="field-hint footnote">
+        Your account opens after an administrator approves it; you cannot sign in before then.
+      </p>
+    </form>
+  }
+</app-auth-layout>

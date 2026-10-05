@@ -1,0 +1,37 @@
+# https://pre-commit.com - run `pip install pre-commit && pre-commit install`
+# once per clone so these run automatically on `git commit`. See
+# story_docs/extension-stories.md (LEAP-001) for why these hooks specifically.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # The generated API clients are machine output and never edited by
+      # hand, not even for whitespace; the next generation would revert it.
+      - id: trailing-whitespace
+        exclude: ^trading-ui/(src|projects/admin/src)/app/api/generated/
+      - id: end-of-file-fixer
+        exclude: ^trading-ui/(src|projects/admin/src)/app/api/generated/
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-yaml
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1-1
+    hooks:
+      - id: shellcheck
+
+  # auth_service: ESLint with the project's own type-aware config, which also
+  # runs Prettier (eslint-plugin-prettier), on the staged files only. Uses the
+  # service's own node_modules, so run `npm ci` in auth_service once first.
+  - repo: local
+    hooks:
+      - id: auth-service-eslint
+        name: auth_service eslint + prettier
+        language: system
+        files: ^auth_service/(src|test)/.*\.ts$
+        entry: bash -c 'cd auth_service && npx --no-install eslint --max-warnings=0 "${@#auth_service/}"' --

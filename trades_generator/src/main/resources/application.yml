@@ -1,0 +1,58 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: trades-generator
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# orders already exists - see kafka_pipeline/create_topics.sh.
+# This service only ever places synthetic orders; live pricing ticks come
+# from the pricing service over HTTP (see GeneratorQuoteClient).
+kafka:
+  topics:
+    orders: ${KAFKA_TOPIC_ORDERS:orders}
+
+# Pricing-service quote endpoint (see pricing-generator's QuoteController).
+# Same env convention as trade_executor's trades-generator.base-url.
+pricing-generator:
+  base-url: ${PRICING_GENERATOR_URL:http://pricing-generator:8084}
+
+generator:
+  # market-sim only (see OrderGenerator) - synthetic counterparty orders
+  # placed through the seeded market-maker account.
+  orders:
+    interval-seconds: ${GENERATOR_ORDERS_INTERVAL_SECONDS:10}
+    probability: ${GENERATOR_ORDERS_PROBABILITY:0.3}
+    min-quantity: ${GENERATOR_ORDERS_MIN_QUANTITY:1}
+    max-quantity: ${GENERATOR_ORDERS_MAX_QUANTITY:20}
+
+logging:
+  level:
+    com.trade.generator: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

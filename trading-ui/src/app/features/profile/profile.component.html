@@ -1,0 +1,129 @@
+<section class="profile">
+  <h2>Profile</h2>
+
+  @if (loadError()) {
+    <p class="error" role="alert" data-testid="profile-load-error">{{ loadError() }}</p>
+  } @else if (profile(); as p) {
+    <dl class="details" data-testid="profile-details">
+      <div>
+        <dt>Email</dt>
+        <dd data-testid="profile-email">{{ p.email }}</dd>
+      </div>
+      <div>
+        <dt>Role</dt>
+        <dd>{{ p.role === 'ADMIN' ? 'Administrator' : 'Customer' }}</dd>
+      </div>
+      <div>
+        <dt>Trading account</dt>
+        <dd data-testid="profile-account">
+          {{ p.accountId != null ? 'Account ' + p.accountId : 'No trading account yet' }}
+        </dd>
+      </div>
+      <div>
+        <dt>Joined</dt>
+        <dd>{{ p.joiningDate | date: 'longDate' }}</dd>
+      </div>
+    </dl>
+
+    <!-- Immutable display of name and phone when not in edit mode -->
+    @if (!isEditMode()) {
+      <div class="profile-display">
+        <div class="profile-card">
+          <h3>Your Information</h3>
+          @if (saved()) {
+            <p class="saved" role="status" data-testid="profile-saved">Your profile is saved.</p>
+          }
+          <div class="info-item">
+            <label>Name</label>
+            <p class="info-value" data-testid="profile-view-name">{{ p.name }}</p>
+          </div>
+          <div class="info-item">
+            <label>Phone</label>
+            <p class="info-value" data-testid="profile-view-phone">
+              {{ p.phone || 'Not provided' }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-testid="profile-edit"
+            (click)="startEdit()"
+          >
+            Edit Information
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Edit form when in edit mode -->
+    @if (isEditMode()) {
+      <form class="form" [formGroup]="form" (ngSubmit)="save()" novalidate>
+        <div class="form-title">Edit Information</div>
+
+        <div class="field">
+          <label class="field-label" for="profile-name">Name</label>
+          <input
+            id="profile-name"
+            class="input"
+            formControlName="name"
+            autocomplete="name"
+            data-testid="profile-name"
+            [attr.aria-invalid]="nameError() ? true : null"
+            aria-describedby="profile-name-error"
+          />
+          @if (nameError(); as message) {
+            <p id="profile-name-error" class="field-error" data-testid="profile-name-error">
+              {{ message }}
+            </p>
+          }
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="profile-phone">Phone</label>
+          <input
+            id="profile-phone"
+            class="input"
+            type="tel"
+            formControlName="phone"
+            autocomplete="tel"
+            data-testid="profile-phone"
+            [attr.aria-invalid]="phoneError() ? true : null"
+            aria-describedby="profile-phone-hint profile-phone-error"
+          />
+          <p id="profile-phone-hint" class="field-hint">Optional. Leave empty to remove it.</p>
+          @if (phoneError(); as message) {
+            <p id="profile-phone-error" class="field-error" data-testid="profile-phone-error">
+              {{ message }}
+            </p>
+          }
+        </div>
+
+        @if (saveError()) {
+          <p class="form-error" role="alert" data-testid="profile-save-error">{{ saveError() }}</p>
+        }
+
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            data-testid="profile-save"
+            [disabled]="saving() || form.pristine"
+          >
+            {{ saving() ? 'Saving…' : 'Save changes' }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-testid="profile-cancel"
+            (click)="cancelEdit()"
+            [disabled]="saving()"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    }
+  } @else {
+    <p class="muted">Loading your profile…</p>
+  }
+</section>

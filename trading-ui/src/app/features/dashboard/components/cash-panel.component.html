@@ -1,0 +1,30 @@
+<section class="panel" data-testid="cash-panel" aria-labelledby="cash-title">
+  <header class="panel-header">
+    <h3 id="cash-title">Available cash</h3>
+    <a class="panel-link" routerLink="/bank">Bank</a>
+  </header>
+
+  @if (state().loading) {
+    <div class="skeleton" aria-hidden="true"></div>
+    <div class="skeleton" aria-hidden="true"></div>
+    <span class="visually-hidden">Loading cash</span>
+  } @else if (state().error) {
+    <div class="panel-error" role="alert">
+      <p data-testid="cash-error">{{ state().error }}</p>
+      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
+    </div>
+  } @else if (state().data; as balance) {
+    <p class="figure" data-testid="cash-amount">
+      {{ balance.cashBalance | number: '1.2-2'
+      }}<span class="currency">{{ balance.currency }}</span>
+    </p>
+    @if (balance.cashBalance === 0) {
+      <p class="muted" data-testid="cash-empty">
+        No cash yet. <a class="panel-link" routerLink="/bank">Deposit from your bank</a> to start
+        trading.
+      </p>
+    } @else {
+      <p class="muted">Ready to trade</p>
+    }
+  }
+</section>

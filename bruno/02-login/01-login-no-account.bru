@@ -1,0 +1,44 @@
+meta {
+  name: login before an account is opened
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/login
+  body: json
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "username": "{{testEmail}}",
+    "password": "{{passwordDigest}}"
+  }
+}
+
+script:post-response {
+  // Right password, but no trading account yet: the same 401 as any other
+  // failure, since a token must carry a real accountId.
+  const b = res.getBody();
+  const keys = Object.keys(b).sort().join(",");
+  if (keys !== "errorCode,message") {
+    throw new Error("failure body must be exactly the envelope, got: " + keys);
+  }
+}
+
+assert {
+  res.status: eq 401
+  res.body.errorCode: eq AUTH-401
+}
+
+script:pre-request {
+  // B23: the browsers send sha256("ferodha-v1:" + lower-case email + ":"
+  // + password) in place of the password, so this request does too.
+  const CryptoJS = require("crypto-js");
+  const digestEmail = String(bru.getVar("testEmail")).trim().toLowerCase();
+  bru.setVar("passwordDigest", CryptoJS.SHA256(`ferodha-v1:${digestEmail}:${"correct horse battery staple"}`).toString());
+}

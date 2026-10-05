@@ -1,0 +1,54 @@
+sequenceDiagram
+    autonumber
+    participant Caller as Caller (Sprint 6 controller / a replay)
+    participant Logic as OrderLogic
+    participant Accounts as AccountRepository
+    participant Instruments as InstrumentRepository
+    participant Positions as PositionRepository
+    participant Keys as IdempotencyKeyStore
+
+    Caller->>Logic: evaluate(order)
+
+    Logic->>Accounts: findById(order.accountId)
+    Accounts-->>Logic: Optional<Account>
+    break Rule 1 fails: no account with that id
+        Logic-->>Caller: throw AccountNotFoundException (ACC-404)
+    end
+
+    break Rule 2 fails: account is SUSPENDED or CLOSED
+        Logic-->>Caller: throw AccountNotActiveException (ACC-403)
+    end
+
+    Logic->>Instruments: findBySymbol(order.symbol)
+    Instruments-->>Logic: Optional<Instrument>
+    break Rule 3 fails: symbol unknown, or delisted
+        Logic-->>Caller: throw InstrumentNotFoundException (INS-404)
+    end
+
+    break Rule 4 fails: quantity is zero or negative
+        Logic-->>Caller: throw InvalidOrderException (VAL-422, field=quantity)
+    end
+
+    break Rule 5 fails: price is zero or negative
+        Logic-->>Caller: throw InvalidOrderException (VAL-422, field=price)
+    end
+
+    opt order.side == BUY
+        break Rule 6 fails: quantity * price exceeds the cash balance
+            Logic-->>Caller: throw InsufficientFundsException (ORD-400)
+        end
+    end
+
+    opt order.side == SELL
+        Logic->>Positions: find(order.accountId, order.symbol)
+        Positions-->>Logic: Optional<Position>
+        break Rule 7 fails: quantity exceeds what is held
+            Logic-->>Caller: throw InsufficientHoldingsException (ORD-409)
+        end
+    end
+
+    Logic->>Keys: isUsed(order.idempotencyKey)
+    Keys-->>Logic: boolean
+    break Rule 8 fails: idempotency key was already used
+        Logic-->>Caller: throw DuplicateOrderException (ORD-409)
+    end

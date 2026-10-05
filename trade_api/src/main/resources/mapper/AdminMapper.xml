@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+    The operations console's statements (design/admin-trade-api.yaml). UUIDs
+    and enums are read as text and written with an explicit cast, so no type
+    handler is needed; every value is a bound parameter. A primitive record
+    component is declared with MyBatis's underscore alias (_long, _int,
+    _boolean): plain `long` means java.lang.Long, which matches no constructor.
+-->
+<mapper namespace="com.trade.admin.mapper.AdminMapper">
+
+    <!-- ===================== Overview ===================== -->
+
+    <resultMap id="summary" type="com.trade.admin.dto.AdminDtos$AdminSummaryDto">
+        <constructor>
+            <arg column="pending_requests" javaType="_long"/>
+            <arg column="active_users" javaType="_long"/>
+            <arg column="suspended_users" javaType="_long"/>
+            <arg column="active_accounts" javaType="_long"/>
+            <arg column="orders_today" javaType="_long"/>
+            <arg column="orders_working" javaType="_long"/>
+            <arg column="tradable_instruments" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="summary" resultMap="summary">
+        SELECT (SELECT count(*) FROM account_requests WHERE status = 'PENDING')         AS pending_requests,
+               (SELECT count(*) FROM Users WHERE status = 'ACTIVE')                     AS active_users,
+               (SELECT count(*) FROM Users WHERE status = 'SUSPENDED')                  AS suspended_users,
+               (SELECT count(*) FROM Accounts WHERE status = 'ACTIVE')                  AS active_accounts,
+               (SELECT count(*) FROM Orders WHERE placed_at &gt;= date_trunc('day', now())) AS orders_today,
+               (SELECT count(*) FROM Orders WHERE status IN ('NEW', 'PARTIALLY_FILLED')) AS orders_working,
+               (SELECT count(*) FROM Instruments WHERE tradable)                        AS tradable_instruments
+    </select>
+
+    <select id="ping" resultType="int">
+        SELECT 1
+    </select>
+
+    <!-- ===================== Account requests ===================== -->
+
+    <resultMap id="accountRequest" type="com.trade.admin.dto.AdminDtos$AccountRequestDto">
+        <constructor>
+            <arg column="request_id" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.lang.String"/>
+            <arg column="applicant_name" javaType="java.lang.String"/>
+            <arg column="applicant_email" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="requested_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="reason" javaType="java.lang.String"/>
+            <arg column="decided_by_name" javaType="java.lang.String"/>
+            <arg column="decided_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="opened_account_id" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="accountRequestColumns">
+        r.request_id::text AS request_id,
+        r.user_id::text    AS user_id,
+        u.name             AS applicant_name,
+        u.email            AS applicant_email,
+        r.currency,
+        r.status::text     AS status,
+        r.requested_at,
+        r.reason,
+        d.name             AS decided_by_name,
+        r.decided_at,
+        r.opened_account_id
+    </sql>
+
+    <select id="listAccountRequests" resultMap="accountRequest">
+        SELECT <include refid="accountRequestColumns"/>
+        FROM account_requests r
+                 JOIN Users u ON u.user_id = r.user_id
+                 LEFT JOIN Users d ON d.user_id = r.decided_by
+        <where>
+            <if test="status != null">r.status = #{status}::account_request_status_enum</if>
+        </where>
+        ORDER BY r.requested_at
+    </select>
+
+    <select id="findAccountRequest" resultMap="accountRequest">
+        SELECT <include refid="accountRequestColumns"/>
+        FROM account_requests r
+                 JOIN Users u ON u.user_id = r.user_id
+                 LEFT JOIN Users d ON d.user_id = r.decided_by
+        WHERE r.request_id = #{id}::uuid
+    </select>
+
+    <select id="lockAccountRequest" resultMap="accountRequest">
+        SELECT <include refid="accountRequestColumns"/>
+        FROM account_requests r
+                 JOIN Users u ON u.user_id = r.user_id
+                 LEFT JOIN Users d ON d.user_id = r.decided_by
+        WHERE r.request_id = #{id}::uuid
+        FOR UPDATE OF r
+    </select>
+
+    <resultMap id="bankAccount" type="com.trade.admin.mapper.BankAccountRow">
+        <constructor>
+            <arg column="bank_account_number" javaType="java.lang.String"/>
+            <arg column="email" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findBankAccount" resultMap="bankAccount">
+        SELECT bank_account_number, email
+        FROM Third_Party_Bank
+        WHERE bank_account_number = #{number}
+    </select>
+
+    <!-- The simulated bank holds no PIN for an account an operator verified by hand. -->
+    <insert id="insertBankAccount">
+        INSERT INTO Third_Party_Bank (bank_account_number, email, pin_hash, balance)
+        VALUES (#{number}, #{email}, 'not-set', 0)
+    </insert>
+
+    <!--
+        business_ref is derived from the numeric key, as Liquibase 001 does for
+        existing rows, so the key is drawn from the sequence first.
+    -->
+    <select id="insertAccount" resultType="long" flushCache="true" useCache="false">
+        WITH next AS (SELECT nextval(pg_get_serial_sequence('accounts', 'id')) AS id)
+        INSERT INTO Accounts (id, user_id, bank_account_number, currency, cash_balance, business_ref)
+        SELECT next.id, #{userId}::uuid, #{bankAccountNumber}, #{currency}, 0,
+               'ACC-' || LPAD(next.id::text, 6, '0')
+        FROM next
+        RETURNING id
+    </select>
+
+    <update id="approveAccountRequest">
+        UPDATE account_requests
+        SET status              = 'APPROVED',
+            decided_by          = #{adminId}::uuid,
+            decided_at          = now(),
+            bank_account_number = #{bankAccountNumber},
+            currency            = #{currency},
+            opened_account_id   = #{accountId}
+        WHERE request_id = #{id}::uuid
+          AND status = 'PENDING'
+    </update>
+
+    <update id="rejectAccountRequest">
+        UPDATE account_requests
+        SET status     = 'REJECTED',
+            decided_by = #{adminId}::uuid,
+            decided_at = now(),
+            reason     = #{reason}
+        WHERE request_id = #{id}::uuid
+          AND status = 'PENDING'
+    </update>
+
+    <!-- ===================== Accounts ===================== -->
+
+    <resultMap id="adminAccount" type="com.trade.admin.dto.AdminDtos$AdminAccountDto">
+        <constructor>
+            <arg column="account_id" javaType="_long"/>
+            <arg column="business_ref" javaType="java.lang.String"/>
+            <arg column="owner_name" javaType="java.lang.String"/>
+            <arg column="owner_email" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="cash_balance" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="working_orders" javaType="_int"/>
+            <arg column="created_on" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="accountSelect">
+        SELECT a.id           AS account_id,
+               a.business_ref,
+               u.name         AS owner_name,
+               u.email        AS owner_email,
+               a.currency,
+               a.cash_balance,
+               a.status::text AS status,
+               (SELECT count(*)::int
+                FROM Orders o
+                WHERE o.account_id = a.account_id
+                  AND o.status IN ('NEW', 'PARTIALLY_FILLED')) AS working_orders,
+               a.created_at   AS created_on
+        FROM Accounts a
+                 JOIN Users u ON u.user_id = a.user_id
+    </sql>
+
+    <sql id="accountFilter">
+        <where>
+            <if test="q != null">
+                (u.name ILIKE '%' || #{q} || '%'
+                    OR u.email ILIKE '%' || #{q} || '%'
+                    OR a.business_ref ILIKE '%' || #{q} || '%')
+            </if>
+            <if test="status != null">AND a.status = #{status}::account_status_enum</if>
+        </where>
+    </sql>
+
+    <select id="listAccounts" resultMap="adminAccount">
+        <include refid="accountSelect"/>
+        <include refid="accountFilter"/>
+        ORDER BY a.id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countAccounts" resultType="long">
+        SELECT count(*)
+        FROM Accounts a
+                 JOIN Users u ON u.user_id = a.user_id
+        <include refid="accountFilter"/>
+    </select>
+
+    <select id="findAccount" resultMap="adminAccount">
+        <include refid="accountSelect"/>
+        WHERE a.id = #{id}
+    </select>
+
+    <!-- The version bump makes any in-flight optimistic write on this account retry. -->
+    <update id="updateAccountStatus">
+        UPDATE Accounts a
+        SET status       = #{to}::account_status_enum,
+            version      = version + 1,
+            last_updated = now()
+        WHERE a.id = #{id}
+          AND a.status::text IN
+            <foreach collection="from" item="s" open="(" separator="," close=")">#{s}</foreach>
+        <if test="requireNoWorkingOrders">
+          AND NOT EXISTS (SELECT 1
+                          FROM Orders o
+                          WHERE o.account_id = a.account_id
+                            AND o.status IN ('NEW', 'PARTIALLY_FILLED'))
+        </if>
+    </update>
+
+    <!-- ===================== Instruments ===================== -->
+
+    <resultMap id="adminInstrument" type="com.trade.admin.dto.AdminDtos$AdminInstrumentDto">
+        <constructor>
+            <arg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="exchange" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="type" javaType="java.lang.String"/>
+            <arg column="sector" javaType="java.lang.String"/>
+            <arg column="tradable" javaType="_boolean"/>
+            <arg column="changed_by_name" javaType="java.lang.String"/>
+            <arg column="changed_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="instrumentSelect">
+        SELECT i.instrument_id::text AS instrument_id,
+               i.ticker              AS symbol,
+               i.name,
+               i.exchange,
+               i.currency,
+               i.type::text          AS type,
+               i.sector,
+               i.tradable,
+               c.name                AS changed_by_name,
+               i.tradable_changed_at AS changed_at
+        FROM Instruments i
+                 LEFT JOIN Users c ON c.user_id = i.tradable_changed_by
+    </sql>
+
+    <sql id="instrumentFilter">
+        <where>
+            <if test="q != null">(i.ticker ILIKE '%' || #{q} || '%' OR i.name ILIKE '%' || #{q} || '%')</if>
+            <if test="exchange != null">AND upper(i.exchange) = upper(#{exchange})</if>
+            <if test="type != null">AND i.type = #{type}::instrument_type_enum</if>
+            <if test="tradable != null">AND i.tradable = #{tradable}</if>
+        </where>
+    </sql>
+
+    <select id="listInstruments" resultMap="adminInstrument">
+        <include refid="instrumentSelect"/>
+        <include refid="instrumentFilter"/>
+        ORDER BY i.ticker
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countInstruments" resultType="long">
+        SELECT count(*) FROM Instruments i
+        <include refid="instrumentFilter"/>
+    </select>
+
+    <select id="findInstrument" resultMap="adminInstrument">
+        <include refid="instrumentSelect"/>
+        WHERE i.instrument_id = #{id}::uuid
+    </select>
+
+    <update id="setTradable">
+        UPDATE Instruments
+        SET tradable            = #{tradable},
+            tradable_changed_by = #{adminId}::uuid,
+            tradable_changed_at = now()
+        WHERE instrument_id = #{id}::uuid
+          AND tradable = NOT #{tradable}
+    </update>
+
+    <!-- ===================== Orders ===================== -->
+
+    <resultMap id="adminOrder" type="com.trade.admin.dto.AdminDtos$AdminOrderDto">
+        <constructor>
+            <arg column="order_id" javaType="java.lang.String"/>
+            <arg column="account_id" javaType="_long"/>
+            <arg column="owner_email" javaType="java.lang.String"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="_long"/>
+            <arg column="filled_quantity" javaType="java.lang.Long"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="executed_price" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="source" javaType="java.lang.String"/>
+            <arg column="created_on" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="orderFrom">
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Users u ON u.user_id = a.user_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        <where>
+            <if test="accountId != null">a.id = #{accountId}</if>
+            <if test="symbol != null">AND i.ticker = #{symbol}</if>
+            <if test="status != null">AND o.status = #{status}::order_status_enum</if>
+            <if test="from != null">AND o.placed_at &gt;= #{from}</if>
+            <if test="to != null">AND o.placed_at &lt;= #{to}</if>
+        </where>
+    </sql>
+
+    <select id="listOrders" resultMap="adminOrder">
+        SELECT 'ORD-' || o.order_id::text   AS order_id,
+               a.id                         AS account_id,
+               u.email                      AS owner_email,
+               i.ticker                     AS symbol,
+               o.side::text                 AS side,
+               o.quantity::bigint           AS quantity,
+               o.filled_quantity::bigint    AS filled_quantity,
+               o.limit_price                AS price,
+               o.executed_price,
+               o.status::text               AS status,
+               o.source,
+               o.placed_at                  AS created_on
+        <include refid="orderFrom"/>
+        ORDER BY o.placed_at DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countOrders" resultType="long">
+        SELECT count(*)
+        <include refid="orderFrom"/>
+    </select>
+
+    <!-- ===================== Audit ===================== -->
+
+    <insert id="insertAudit">
+        INSERT INTO admin_audit (actor_id, action, target_type, target_id, reason)
+        VALUES (#{adminId}::uuid, #{action}, #{targetType}, #{targetId}, #{reason})
+    </insert>
+
+    <resultMap id="auditEntry" type="com.trade.admin.dto.AdminDtos$AuditEntryDto">
+        <constructor>
+            <arg column="id" javaType="_long"/>
+            <arg column="actor_name" javaType="java.lang.String"/>
+            <arg column="action" javaType="java.lang.String"/>
+            <arg column="target_type" javaType="java.lang.String"/>
+            <arg column="target_id" javaType="java.lang.String"/>
+            <arg column="reason" javaType="java.lang.String"/>
+            <arg column="at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="listAudit" resultMap="auditEntry">
+        SELECT au.id, u.name AS actor_name, au.action, au.target_type, au.target_id, au.reason, au.at
+        FROM admin_audit au
+                 JOIN Users u ON u.user_id = au.actor_id
+        ORDER BY au.at DESC, au.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countAudit" resultType="long">
+        SELECT count(*) FROM admin_audit
+    </select>
+
+</mapper>

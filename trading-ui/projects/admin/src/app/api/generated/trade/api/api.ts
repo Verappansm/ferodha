@@ -1,0 +1,13 @@
+export * from './admin-account-requests.service';
+import { AdminAccountRequestsService } from './admin-account-requests.service';
+export * from './admin-accounts.service';
+import { AdminAccountsService } from './admin-accounts.service';
+export * from './admin-instruments.service';
+import { AdminInstrumentsService } from './admin-instruments.service';
+export * from './admin-orders.service';
+import { AdminOrdersService } from './admin-orders.service';
+export * from './admin-overview.service';
+import { AdminOverviewService } from './admin-overview.service';
+export * from './admin-system.service';
+import { AdminSystemService } from './admin-system.service';
+export const APIS = [AdminAccountRequestsService, AdminAccountsService, AdminInstrumentsService, AdminOrdersService, AdminOverviewService, AdminSystemService];

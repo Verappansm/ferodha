@@ -1,0 +1,97 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: trade-executor
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: trade-executor
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      acks: all
+      enable-idempotence: true
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+# orders/trade-events/market-data/orders.DLT already exist - see
+# kafka_pipeline/create_topics.sh and create_dlt_topics.sh.
+kafka:
+  topics:
+    orders: ${KAFKA_TOPIC_ORDERS:orders}
+    trade-events: ${KAFKA_TOPIC_TRADE_EVENTS:trade-events}
+    orders-dlt: ${KAFKA_TOPIC_ORDERS_DLT:orders.DLT}
+    market-data: ${KAFKA_TOPIC_MARKET_DATA:market-data}
+
+# FAUXNANCE_API_URL/FAUXNANCE_API_KEY are read from the environment only -
+# never given a real value in any committed file, same convention as
+# trade_api's JWT_SECRET.
+fauxnance:
+  base-url: ${FAUXNANCE_API_URL}
+  api-key: ${FAUXNANCE_API_KEY}
+
+# Only consulted under the market-sim profile - see TradesGeneratorQuoteSource.
+trades-generator:
+  base-url: ${TRADES_GENERATOR_URL:http://trades-generator:8083}
+
+executor:
+  # Off by default (the spec-exact story this repo was built against: a
+  # single quote-vs-limit fill-or-reject, no partial fills). Turned on by
+  # application-market-sim.yml, layered in automatically when
+  # SPRING_PROFILES_ACTIVE=market-sim - see OrderExecutionService/
+  # OrderBookMatcher.
+  matching:
+    enabled: ${EXECUTOR_MATCHING_ENABLED:false}
+  fee:
+    rate: ${EXECUTOR_FEE_RATE:0.001}
+  quote:
+    retry:
+      max-attempts: ${EXECUTOR_QUOTE_RETRY_MAX_ATTEMPTS:3}
+      backoff-ms: ${EXECUTOR_QUOTE_RETRY_BACKOFF_MS:300}
+  balance-lock:
+    max-attempts: ${EXECUTOR_BALANCE_LOCK_MAX_ATTEMPTS:3}
+  publish:
+    timeout-ms: ${EXECUTOR_PUBLISH_TIMEOUT_MS:5000}
+  market-data:
+    # The poller is off: pricing_generator publishes market-data under every
+    # profile (see MarketDataPoller). Fills still use their own quote.
+    poller-enabled: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:false}
+    # Same env var the sprint brief names for the poller specifically -
+    # not reused from anything order-placement related.
+    poll-interval-seconds: ${POLL_INTERVAL_SECONDS:60}
+    daily-quota: ${EXECUTOR_MARKET_DATA_DAILY_QUOTA:2000}
+    batch-size: ${EXECUTOR_MARKET_DATA_BATCH_SIZE:25}
+  # Only active under market-sim (see OrderExpiryScheduler) - the
+  # quote-based path always resolves an order the moment it's first seen,
+  # so nothing rests long enough under the default profile to need this.
+  expiry:
+    ttl-minutes: ${EXECUTOR_EXPIRY_TTL_MINUTES:30}
+    interval-seconds: ${EXECUTOR_EXPIRY_INTERVAL_SECONDS:60}
+
+logging:
+  level:
+    com.trade.executor: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.OrderMapper">
+
+    <resultMap id="orderRow" type="com.trade.executor.mapper.OrderRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="account_id" javaType="long"/>
+            <arg column="instrument_id" javaType="java.util.UUID" typeHandler="com.trade.executor.mapper.UuidTypeHandler"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="quantity" javaType="int"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="filled_quantity" javaType="int"/>
+            <arg column="placed_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="orderRowColumns">
+        o.order_id,
+        a.id AS account_id,
+        o.instrument_id,
+        i.ticker AS symbol,
+        o.side,
+        o.quantity,
+        o.limit_price AS price,
+        o.status,
+        o.filled_quantity,
+        o.placed_at
+    </sql>
+
+    <select id="findById" resultMap="orderRow">
+        SELECT
+        <include refid="orderRowColumns"/>
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.order_id = #{orderId}
+    </select>
+
+    <select id="findRestingOpposite" resultMap="orderRow">
+        SELECT
+        <include refid="orderRowColumns"/>
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.instrument_id = #{instrumentId}
+          AND o.side = #{side}::order_side_enum
+          AND o.status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND o.order_id != #{excludeOrderId}
+          <choose>
+              <when test="side == 'SELL'">
+                  <!-- Matching a BUY: resting asks (SELL) at or below the incoming bid, cheapest first. -->
+                  AND o.limit_price &lt;= #{crossPrice}
+                  ORDER BY o.limit_price ASC, o.placed_at ASC
+              </when>
+              <otherwise>
+                  <!-- Matching a SELL: resting bids (BUY) at or above the incoming ask, richest first. -->
+                  AND o.limit_price &gt;= #{crossPrice}
+                  ORDER BY o.limit_price DESC, o.placed_at ASC
+              </otherwise>
+          </choose>
+    </select>
+
+    <update id="matchIncomingOrderIfNew">
+        UPDATE Orders
+        SET filled_quantity = filled_quantity + #{matchedQuantity},
+            status = #{newStatus}::order_status_enum,
+            executed_price = #{executedPrice},
+            fee_amount = #{feeAmount},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <!-- fee_amount accumulates, unlike the incoming order's flat set above -
+         a resting order can be matched more than once across its lifetime,
+         each match adding its own fee on top of whatever it already paid.
+         The status check (on top of the filled_quantity guard) is what
+         stops this from re-filling an order the TTL sweep (expireStaleResting)
+         cancelled out from under a match already in flight - filled_quantity
+         alone wouldn't change on a cancel, so without this the guard would
+         wrongly still pass. -->
+    <update id="matchRestingOrderIfUnchanged">
+        UPDATE Orders
+        SET filled_quantity = filled_quantity + #{matchedQuantity},
+            status = #{newStatus}::order_status_enum,
+            executed_price = #{executedPrice},
+            fee_amount = COALESCE(fee_amount, 0) + #{feeAmount},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND filled_quantity = #{previousFilledQuantity}
+          AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+    </update>
+
+    <update id="fillOrderIfNew">
+        UPDATE Orders
+        SET status = 'FILLED'::order_status_enum,
+            executed_price = #{executedPrice},
+            fee_amount = #{feeAmount},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <update id="rejectOrderIfNew">
+        UPDATE Orders
+        SET status = 'REJECTED'::order_status_enum,
+            rejection_reason = #{rejectionReason},
+            executed_on = now()
+        WHERE order_id = #{orderId}
+          AND status = 'NEW'::order_status_enum
+    </update>
+
+    <insert id="insertTrade">
+        INSERT INTO Trades (order_id, execution_price, execution_quantity)
+        VALUES (#{orderId}, #{executionPrice}, #{executionQuantity})
+    </insert>
+
+    <update id="expireStaleResting">
+        UPDATE Orders
+        SET status = 'CANCELLED'::order_status_enum
+        WHERE status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND placed_at &lt; #{cutoff}
+    </update>
+
+</mapper>

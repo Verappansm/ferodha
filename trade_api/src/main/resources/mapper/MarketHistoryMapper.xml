@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.MarketHistoryMapper">
+
+    <resultMap id="priceBarRow" type="com.trade.mapper.PriceBarRow">
+        <constructor>
+            <arg column="time" javaType="java.time.OffsetDateTime"/>
+            <arg column="open" javaType="java.math.BigDecimal"/>
+            <arg column="high" javaType="java.math.BigDecimal"/>
+            <arg column="low" javaType="java.math.BigDecimal"/>
+            <arg column="close" javaType="java.math.BigDecimal"/>
+            <arg column="volume" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="priceRangeRow" type="com.trade.mapper.PriceRangeRow">
+        <constructor>
+            <arg column="low" javaType="java.math.BigDecimal"/>
+            <arg column="high" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findMinuteBars" resultMap="priceBarRow">
+        SELECT bar_start AS time, open, high, low, close, NULL::bigint AS volume
+        FROM market_bars
+        WHERE symbol = #{symbol} AND bar_start &gt;= #{from}
+        ORDER BY bar_start
+    </select>
+
+    <!-- A trading day is reported at the start of that day, UTC. -->
+    <select id="findDailyCandles" resultMap="priceBarRow">
+        SELECT candle_time::timestamp AT TIME ZONE 'UTC' AS time, open, high, low, close, volume
+        FROM market_candles
+        WHERE symbol = #{symbol} AND interval = '1d' AND candle_time &gt;= #{from}
+        ORDER BY candle_time
+    </select>
+
+    <select id="findLatestMinuteBar" resultMap="priceBarRow">
+        SELECT bar_start AS time, open, high, low, close, NULL::bigint AS volume
+        FROM market_bars
+        WHERE symbol = #{symbol}
+        ORDER BY bar_start DESC
+        LIMIT 1
+    </select>
+
+    <select id="findMinuteRange" resultMap="priceRangeRow">
+        SELECT MIN(low) AS low, MAX(high) AS high
+        FROM market_bars
+        WHERE symbol = #{symbol} AND bar_start &gt;= #{from}
+    </select>
+
+    <select id="findDailyRange" resultMap="priceRangeRow">
+        SELECT MIN(low) AS low, MAX(high) AS high
+        FROM market_candles
+        WHERE symbol = #{symbol} AND interval = '1d' AND candle_time &gt;= #{from}
+    </select>
+
+    <select id="findCloseBefore" resultType="java.math.BigDecimal">
+        SELECT close
+        FROM market_candles
+        WHERE symbol = #{symbol} AND interval = '1d' AND candle_time &lt; #{day}
+        ORDER BY candle_time DESC
+        LIMIT 1
+    </select>
+
+</mapper>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.PollableSymbolMapper">
+
+    <select id="findPollableSymbols" resultType="string">
+        SELECT DISTINCT i.ticker
+        FROM Instruments i
+        WHERE i.instrument_id IN (
+            SELECT o.instrument_id
+            FROM Trades t
+                     JOIN Orders o ON o.order_id = t.order_id
+            GROUP BY o.instrument_id
+            HAVING SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END) &lt;&gt; 0
+        )
+           OR i.instrument_id IN (SELECT instrument_id FROM Watchlist_Items)
+        ORDER BY i.ticker
+    </select>
+
+</mapper>

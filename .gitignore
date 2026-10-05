@@ -1,0 +1,51 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+windows/.env.windows
+
+# Build output
+target/
+*.jar
+dist/
+node_modules/
+coverage/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+
+# Generated DuckDB warehouse files. Regenerate them with each pipeline's own
+# load commands (analytics_etl/README.md, fact_trades_etl/README.md); never
+# commit a populated database.
+*.duckdb
+
+# Runtime state of the windows profile (windows/windows-setup.md)
+windows/.run/
+/.run/
+
+# Logs
+*.log
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Personal working notes, kept out of the repository
+storeis.txt
+handoff.md
+logic.md
+explain.md
+RUN.md
+DOCKER.md
+frontend.md
+/temp/
+/temp.zip

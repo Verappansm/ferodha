@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.executor.mapper.PositionMapper">
+
+    <!--
+        Net held quantity, derived from Trades the same way trade_api's
+        PositionMapper.xml's positionAggregate fragment does (a BUY fill
+        adds, a SELL fill subtracts) - just keyed on instrument_id here
+        instead of joining back through the ticker string.
+    -->
+    <select id="findHeldQuantity" resultType="long">
+        SELECT CAST(COALESCE(
+                       SUM(CASE WHEN o.side = 'BUY' THEN t.execution_quantity ELSE -t.execution_quantity END),
+                       0) AS BIGINT)
+        FROM Trades t
+                 JOIN Orders o ON o.order_id = t.order_id
+        WHERE o.account_id = #{accountUuid}
+          AND o.instrument_id = #{instrumentId}
+    </select>
+
+</mapper>

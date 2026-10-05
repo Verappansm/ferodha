@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "etl"
+version = "0.1.0"
+description = "Sprint 7 incremental load into FACT_TRADES"
+requires-python = ">=3.12"
+dependencies = [
+    "duckdb>=1.0",
+    "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+etl = "etl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+etl = ["migrations/*.sql"]

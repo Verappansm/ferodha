@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.AccountMapper">
+
+    <resultMap id="accountRow" type="com.trade.mapper.AccountRow">
+        <constructor>
+            <idArg column="id" javaType="long"/>
+            <arg column="account_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="business_ref" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="holder_name" javaType="java.lang.String"/>
+            <arg column="cash_balance" javaType="java.math.BigDecimal"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="version" javaType="int"/>
+            <arg column="last_updated" javaType="java.time.OffsetDateTime"/>
+            <arg column="currency" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+        Users.name is aliased to holder_name here purely so the result map
+        above can bind it by name - no business logic lives in this file.
+    -->
+    <select id="findById" resultMap="accountRow">
+        SELECT a.id,
+               a.account_id,
+               a.business_ref,
+               a.user_id,
+               u.name AS holder_name,
+               a.cash_balance,
+               a.status,
+               a.version,
+               a.last_updated,
+               a.currency
+        FROM Accounts a
+                 JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{id}
+    </select>
+
+    <update id="updateBalanceWithVersion">
+        UPDATE Accounts
+        SET cash_balance = #{newBalance},
+            version       = version + 1,
+            last_updated  = now()
+        WHERE id = #{id}
+          AND version = #{expectedVersion}
+    </update>
+
+</mapper>

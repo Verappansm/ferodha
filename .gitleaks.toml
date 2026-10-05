@@ -1,0 +1,26 @@
+title = "chennai-capstone-SE4-team2 gitleaks config"
+
+[extend]
+useDefault = true
+
+# Known non-secret placeholder/test values. trade_api still mints its own JWT test
+# tokens for its unit tests (see trade_api's JwtTestFixture and
+# contracts/auth-api.yaml), and docker-compose.yml ships a documented
+# dev-only default for JWT_SECRET. Both are intentionally public strings,
+# not leaked credentials.
+[allowlist]
+description = "Known non-secret placeholder/test values"
+regexes = [
+  '''dev-only-jwt-signing-secret-please-change-later''',
+  '''sprint-06-test-signing-secret-please-rotate''',
+  '''a-completely-different-secret-value''',
+  # auth_service unit tests sign and verify with these; never used outside Jest.
+  '''test-secret-key-that-is-at-least-32-chars-long''',
+  '''unit-test-secret-at-least-32-characters''',
+  # Liquibase changeset ids: "--changeset trade-api:001-orders-published-at"
+  # reads as an api key whose value is "001-orders-published-at".
+  '''^[0-9]{3}-[a-z0-9-]+$''',
+]
+paths = [
+  '''trade_api/src/test/java/com/trade/testsupport/JwtTestFixture\.java''',
+]

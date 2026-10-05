@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        database/migrations/001_initial_schema.sql (Sprint 3) is applied by
+        ./database/apply.sh and is not repeated here. This service versions
+        only the additive changes Sprint 6 needs on top of that schema, so
+        that a fresh Postgres already carrying the Sprint 3 schema comes up
+        to date the moment this service starts - no manual step, no second
+        apply script to remember.
+    -->
+    <include file="db/changelog/001-account-status-and-locking.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/002-order-status-alignment.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/003-instrument-tradable-flag.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/004-executor-settlement-columns.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/005-partial-fill-columns.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/006-market-maker-account.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/007-order-published-at.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/008-account-requests.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/009-admin-console.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/010-market-candles-schema.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/011-market-bars.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/012-client-digest-seed-passwords.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
+
+</databaseChangeLog>
