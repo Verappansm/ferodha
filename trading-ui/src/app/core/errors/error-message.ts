@@ -15,12 +15,13 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   'AUTH-401': 'Your session has ended. Sign in again to continue.',
   'AUTH-409':
     'An account with that email address already exists. Sign in or register with a different email address.',
+  'AUTH-428': 'An administrator has asked you to choose a new password before you sign in.',
   'VAL-422': 'Some of the details entered are not valid. Check them and try again.',
   'ACC-404':
     'Trading account not found. Sign out and sign in again, and contact support if it continues.',
   'ACC-403': 'Your account cannot trade right now. It may be suspended or closed. Contact support.',
   'INS-404': 'Instrument is not available to trade. Check the symbol and try again.',
-  'ORD-400': 'Insufficient balance to place order.',
+  'ORD-400': 'Insufficient balance to place order: your cash must cover the order and its fee.',
   // One code, three causes: too few units to sell, a reused idempotency key,
   // or an order that is no longer cancellable.
   'ORD-409':

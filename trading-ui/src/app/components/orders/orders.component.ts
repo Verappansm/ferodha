@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { OrderFilter, OrderHistoryEntry, OrderStatus, TradeApi } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
+import { rejectionLabel, rejectionText } from '../../core/format/rejection-reason';
 import { Session } from '../../core/session/session';
 import {
   OrderStatusBadgeComponent,
@@ -48,6 +49,8 @@ export class OrdersComponent {
   private readonly pollsLeft = signal(MAX_POLLS);
 
   readonly statusFilters = STATUS_FILTERS;
+  readonly rejectionLabel = rejectionLabel;
+  readonly rejectionText = rejectionText;
   /** The filter fields as typed; applied to the history only on Apply. */
   statusFilter: OrderStatus | '' = '';
   fromDate = '';

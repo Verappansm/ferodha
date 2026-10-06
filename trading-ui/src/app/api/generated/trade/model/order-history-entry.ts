@@ -28,6 +28,10 @@ export interface OrderHistoryEntry {
     status: OrderStatus;
     idempotencyKey?: string;
     createdOn: string;
+    /**
+     * Why the Trade Executor rejected the order. Null unless the order is REJECTED. One of INSTRUMENT_NOT_TRADABLE, ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, INSUFFICIENT_HOLDINGS, NOT_MARKETABLE, PRICE_UNAVAILABLE. 
+     */
+    rejectionReason?: string | null;
 }
 export namespace OrderHistoryEntry {
 }

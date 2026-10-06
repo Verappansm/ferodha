@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Params, Router } from '@angular/router';
@@ -30,6 +30,7 @@ import {
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { errorMessage } from '../../core/errors/error-message';
+import { rejectionText } from '../../core/format/rejection-reason';
 
 /** The contract's PlaceOrderRequest.symbol limit. */
 export const SYMBOL_MAX_LENGTH = 20;
@@ -56,6 +57,13 @@ const RETRY_MESSAGES = {
   'ORD-409':
     'This order was already placed by your earlier attempt. Check the Orders page for its status instead of placing it again.',
 };
+
+/**
+ * After placement the ticket re-reads order history on this interval, at
+ * most FOLLOW_MAX_READS times, until the executor has finished the order.
+ */
+export const FOLLOW_INTERVAL_MS = 2000;
+export const FOLLOW_MAX_READS = 8;
 
 const OUTCOME_UNKNOWN =
   'We could not confirm whether your order was placed. Check the Orders page, or press Confirm again: retrying this same order can never place it twice.';
@@ -120,6 +128,10 @@ export class OrderingComponent {
   readonly successMessage = signal('');
   readonly errorMessage = signal('');
   readonly orderResult = signal<OrderResponse | null>(null);
+  /** The placed order's status as the executor left it, and why if rejected. */
+  readonly liveStatus = signal<string | null>(null);
+  readonly rejectReason = signal<string | null>(null);
+  private followTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** The latest quote for the symbol on the ticket, shown under the price. */
   readonly quote = signal<InstrumentQuote | null>(null);
@@ -157,6 +169,8 @@ export class OrderingComponent {
   private pendingKey: string | null = null;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.followTimer));
+
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
       this.pendingKey = null;
     });
@@ -270,6 +284,36 @@ export class OrderingComponent {
     this.form.controls.price.markAsPristine();
   }
 
+  /**
+   * Re-reads order history until the placed order leaves NEW, so the ticket
+   * shows FILLED or REJECTED (with the reason) instead of the status it had
+   * when it was accepted.
+   */
+  private follow(accountId: number, orderId: string, readsLeft: number): void {
+    if (readsLeft === 0) return;
+    this.followTimer = setTimeout(async () => {
+      try {
+        const history = await firstValueFrom(this.tradeApi.orderHistory(accountId));
+        const order = history.find((o) => o.orderId === orderId);
+        if (this.orderResult()?.orderId !== orderId) return;
+        if (order && order.status !== 'NEW' && (order.status as string) !== 'PARTIALLY_FILLED') {
+          this.liveStatus.set(order.status);
+          this.rejectReason.set(rejectionText(order.rejectionReason));
+          this.successMessage.set('');
+          if (order.status === 'REJECTED') {
+            this.errorMessage.set(`Order ${orderId} was rejected.`);
+          } else {
+            this.successMessage.set(`Order ${orderId} is ${order.status.toLowerCase()}.`);
+          }
+          return;
+        }
+      } catch {
+        // A failed read just waits for the next one.
+      }
+      this.follow(accountId, orderId, readsLeft - 1);
+    }, FOLLOW_INTERVAL_MS);
+  }
+
   quantityError(): string | null {
     const control = this.form.controls.quantity;
     if (control.hasError('required')) return 'Enter a quantity';
@@ -359,6 +403,9 @@ export class OrderingComponent {
     this.successMessage.set('');
     this.errorMessage.set('');
     this.orderResult.set(null);
+    this.liveStatus.set(null);
+    this.rejectReason.set(null);
+    clearTimeout(this.followTimer);
 
     if (this.form.invalid || this.step() !== 'review' || this.review() === null) {
       return;
@@ -389,9 +436,11 @@ export class OrderingComponent {
       );
 
       this.orderResult.set(response);
+      this.liveStatus.set(response.status);
       this.successMessage.set(
-        `Order ${response.orderId} placed successfully with status ${response.status}`,
+        `Order ${response.orderId} placed. The trade executor is working on it; its result shows below.`,
       );
+      this.follow(accountId, response.orderId, FOLLOW_MAX_READS);
       // Reset form after successful submission (this also drops the key).
       this.form.reset({ side: 'BUY' as OrderSide });
       this.quote.set(null);

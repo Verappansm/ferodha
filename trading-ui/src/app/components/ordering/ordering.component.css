@@ -111,6 +111,10 @@ label {
   border-radius: var(--radius);
 }
 
+.reject-reason {
+  color: var(--negative);
+}
+
 .order-result h3 {
   margin: 0 0 14px;
   font-size: 1.05rem;

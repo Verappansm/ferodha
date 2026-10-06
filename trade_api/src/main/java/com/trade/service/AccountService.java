@@ -87,7 +87,8 @@ public class AccountService {
                         row.executedPrice(),
                         OrderStatus.valueOf(row.status()),
                         row.idempotencyKey(),
-                        row.createdOn()))
+                        row.createdOn(),
+                        row.rejectionReason()))
                 .toList();
     }
 

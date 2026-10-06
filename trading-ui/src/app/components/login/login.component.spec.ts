@@ -2,6 +2,8 @@ import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Session } from '../../core/session/session';
+import { AuthApi } from '../../api/auth-api';
+import { of } from 'rxjs';
 import { Component, input } from '@angular/core';
 import { LoginComponent } from './login.component';
 import { AuthLayoutComponent } from '../auth-layout/auth-layout.component';
@@ -16,16 +18,19 @@ describe('LoginComponent', () => {
   let fixture: ComponentFixture<LoginComponent>;
   let signIn: ReturnType<typeof vi.fn>;
   let navigateByUrl: ReturnType<typeof vi.fn>;
+  let changePassword: ReturnType<typeof vi.fn>;
   let queryParamMap: Map<string, string>;
 
   beforeEach(async () => {
     signIn = vi.fn().mockResolvedValue(undefined);
     navigateByUrl = vi.fn().mockResolvedValue(true);
+    changePassword = vi.fn().mockReturnValue(of(undefined));
     queryParamMap = new Map();
     await TestBed.configureTestingModule({
       imports: [LoginComponent],
       providers: [
         { provide: Session, useValue: { signIn } },
+        { provide: AuthApi, useValue: { changePassword } },
         { provide: Router, useValue: { navigateByUrl } },
         {
           provide: ActivatedRoute,
@@ -105,6 +110,52 @@ describe('LoginComponent', () => {
     expect(navigateByUrl).not.toHaveBeenCalled();
     // The rejected password is not left in the field.
     expect(byTestId<HTMLInputElement>('login-password')!.value).toBe('');
+  });
+
+  it('a forced reset asks for a new password, changes it, then signs in with it', async () => {
+    signIn.mockRejectedValueOnce(
+      new HttpErrorResponse({
+        status: 428,
+        error: { errorCode: 'AUTH-428', message: 'Password change required' },
+      }),
+    );
+    type('login-username', 'john.carter@example.com');
+    type('login-password', 'seed-password-change-me');
+    await submit();
+
+    expect(byTestId('login-change-required')).toBeTruthy();
+    expect(byTestId('login-error')).toBeNull();
+
+    type('login-new-password', 'a-brand-new-password');
+    type('login-confirm-password', 'a-brand-new-password');
+    byTestId<HTMLButtonElement>('login-change-submit')!.click();
+    await fixture.whenStable();
+
+    expect(changePassword).toHaveBeenCalledWith(
+      'john.carter@example.com',
+      'seed-password-change-me',
+      'a-brand-new-password',
+    );
+    expect(signIn).toHaveBeenLastCalledWith('john.carter@example.com', 'a-brand-new-password');
+    expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('a forced reset refuses mismatched new passwords without calling the service', async () => {
+    signIn.mockRejectedValueOnce(
+      new HttpErrorResponse({ status: 428, error: { errorCode: 'AUTH-428', message: 'x' } }),
+    );
+    type('login-username', 'john.carter@example.com');
+    type('login-password', 'seed-password-change-me');
+    await submit();
+
+    type('login-new-password', 'a-brand-new-password');
+    type('login-confirm-password', 'something-else-entirely');
+    byTestId<HTMLButtonElement>('login-change-submit')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(changePassword).not.toHaveBeenCalled();
+    expect(byTestId('login-confirm-password-error')!.textContent).toContain('do not match');
   });
 
   it('empty fields are blocked by validation', async () => {

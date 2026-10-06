@@ -27,6 +27,7 @@
             <arg column="status" javaType="java.lang.String"/>
             <arg column="idempotency_key" javaType="java.lang.String"/>
             <arg column="created_on" javaType="java.time.OffsetDateTime"/>
+            <arg column="rejection_reason" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
@@ -128,7 +129,8 @@
                o.executed_price,
                o.status,
                o.idempotency_key,
-               o.placed_at AS created_on
+               o.placed_at AS created_on,
+               o.rejection_reason
         FROM Orders o
                  JOIN Accounts a ON a.account_id = o.account_id
                  JOIN Instruments i ON i.instrument_id = o.instrument_id

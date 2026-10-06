@@ -4,6 +4,7 @@ api/auth.service.ts
 api/profile.service.ts
 configuration.ts
 encoder.ts
+model/change-password-request.ts
 model/error-response.ts
 model/login-request.ts
 model/models.ts

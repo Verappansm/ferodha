@@ -39,6 +39,7 @@ describe('OpenAPI document', () => {
 
     expect(document.openapi).toMatch(/^3\./);
     expect(Object.keys(document.paths).sort()).toEqual([
+      '/auth/change-password',
       '/auth/login',
       '/auth/me',
       '/auth/refresh',

@@ -37,8 +37,9 @@ below is a decision the team has taken and will defend at review.
 | B21 | Market data routes and tables | `contracts/trade-api.yaml`; LEAP-016 story | No instrument routes; chart history "from `Market_Data`" | `GET /api/v1/instruments`, `/instruments/{symbol}`, `/{symbol}/quote` and `/{symbol}/history` added to `design/trade-api.yaml`. `Market_Data` is dropped (Liquibase 010) for `market_candles` (Fauxnance daily candles) and `market_bars` (1-minute bars from `pricing_generator`'s ticks, Liquibase 011); no news panel |
 | B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
 | B23 | Password on the wire | `contracts/auth-api.yaml` RegisterRequest, LoginRequest; admin login (B18) | `password` is the password itself, 12 to 128 characters | The trading UI and the admin console send `sha256("ferodha-v1:" + lower-case email + ":" + password)`, 64 hex characters, in its place; the auth service bcrypts what arrives, unchanged. The 12-character minimum is enforced in the browser on the typed password. Seed users re-hashed by trade-api Liquibase 012 |
-
 | B24 | Order review and fee rate | `contracts/trade-api.yaml`; Sprint 7 executor | No review route; the executor holds the fee rate and applies it at settlement | `POST /api/v1/orders/review` returns cost, fee and total for a ticket without placing it. The rate lives only in trade_api (`fee.rate`), is written on each order as `Orders.fee_rate` (Liquibase 014), and the executor charges the order's own rate (LEAP-017) |
+| B25 | Rejection reason in order history | `contracts/trade-api.yaml` OrderHistoryEntry | No field says why an order was rejected | Optional `rejectionReason` (the executor's code, null unless `REJECTED`), shown on the Orders page and on the order ticket |
+| B26 | Change password and forced reset | `contracts/auth-api.yaml`; LEAP-010, LEAP-016 stories | `/auth/login` answers only 200 or `AUTH-401` | Right credentials on a user with a forced reset answer `AUTH-428` (HTTP 428) and no tokens; `POST /auth/change-password` (current password as the credential, so no token) sets the new one, clears the flag and revokes every refresh token |
 
 ## Why
 
@@ -212,3 +213,20 @@ seed orders) take the column default 0. The review is worked out at the limit
 price, in the instrument's currency; the executor charges on the executed
 price, converted to the account's currency (fixed 90 INR = 1 USD until
 LEAP-006), so for a BUY the review is an upper bound.
+Placement uses the same rate: rule 6 refuses a BUY whose value plus fee
+exceeds the cash balance, so the executor's INSUFFICIENT_FUNDS is the
+exception, not the common case.
+
+**B25 (rejection reason).** The executor already stores why it rejected an
+order (`Orders.rejection_reason`), but the contract's history entry has no
+field for it, so a rejected sell looked identical whether the price moved, no
+quote could be fetched or the account was suspended. The field is optional and
+additive, so a client built from the contract is unaffected.
+
+**B26 (forced reset).** An admin's forced reset sets `must_change_password`
+and revokes the user's refresh tokens; the story completes it with LEAP-010's
+change-password route. The new code is only sent after the password checked
+out, so it tells someone guessing nothing the shared `AUTH-401` does not.
+The route authenticates with the current password rather than a token because
+a user whose reset was forced cannot hold one. Failures count towards the
+login throttle.

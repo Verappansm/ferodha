@@ -1,5 +1,6 @@
 package com.trade.controller.portfolio;
 
+import com.trade.mapper.UserAccessMapper;
 import com.trade.dto.portfolio.PnlResponseDto;
 import com.trade.dto.portfolio.PricedPositionDto;
 import com.trade.exception.AccountNotActiveException;
@@ -35,6 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(JwtService.class)
 @TestPropertySource(properties = "app.jwt.secret=" + JwtTestFixture.SECRET)
 class PortfolioControllerWebTest {
+
+    // JwtAuthFilter asks Users whether the token's user may still act; the
+    // slice has no database, and an unstubbed mock answers "not blocked".
+    @MockitoBean
+    private UserAccessMapper userAccessMapper;
 
     @Autowired
     private MockMvc mockMvc;

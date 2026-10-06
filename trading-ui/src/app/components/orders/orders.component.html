@@ -174,7 +174,17 @@
                   {{ order.executedPrice != null ? (order.executedPrice | number: '1.2-2') : '—' }}
                 </td>
                 <td class="num">{{ value(order) | number: '1.2-2' }}</td>
-                <td><app-order-status-badge [status]="order.status" /></td>
+                <td>
+                  <app-order-status-badge [status]="order.status" />
+                  @if (rejectionLabel(order.rejectionReason); as reason) {
+                    <span
+                      class="reject-reason"
+                      data-testid="order-reject-reason"
+                      [title]="rejectionText(order.rejectionReason)"
+                      >{{ reason }}</span
+                    >
+                  }
+                </td>
               </tr>
             }
           </tbody>

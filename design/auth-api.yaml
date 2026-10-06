@@ -124,7 +124,9 @@ paths:
       summary: Log in and receive tokens
       description: |
         Verifies the credentials and issues an access token and a refresh token. Every failure,
-        whatever its cause, returns the same `AUTH-401` body.
+        whatever its cause, returns the same `AUTH-401` body. Right credentials on a user an
+        administrator forced to reset return `AUTH-428` instead, and no tokens, until the password
+        is changed through `/auth/change-password`.
       requestBody:
         required: true
         content:
@@ -143,6 +145,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+        '428':
+          description: The password is right, but it must be changed before a session is issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordChangeRequired:
+                  value:
+                    errorCode: AUTH-428
+                    message: Password change required
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      operationId: changePassword
+      security: []
+      summary: Change the password, proving the current one
+      description: |
+        Replaces the password, clears a forced reset and revokes every refresh token the user holds.
+        A wrong current password, an unknown username and an inactive user all return the same
+        `AUTH-401`. The new password follows the registration length rule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Changed. Sign in with the new password.
         '401':
           $ref: '#/components/responses/Unauthorised'
         '422':
@@ -287,6 +324,24 @@ components:
           maxLength: 128
           writeOnly: true
 
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [username, currentPassword, newPassword]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        currentPassword:
+          type: string
+          maxLength: 128
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+
     RefreshRequest:
       type: object
       additionalProperties: false
@@ -359,12 +414,13 @@ components:
       properties:
         errorCode:
           type: string
-          enum: [AUTH-401, AUTH-409, VAL-422]
+          enum: [AUTH-401, AUTH-409, AUTH-428, VAL-422]
           description: |
             | Code | HTTP | Meaning |
             |---|---|---|
             | `AUTH-401` | 401 | Unauthorised or invalid token |
             | `AUTH-409` | 409 | Username already taken |
+            | `AUTH-428` | 428 | Right password, but an administrator forced a password change |
             | `VAL-422` | 422 | Invalid input |
 
             `AUTH-409` extends the platform error catalogue and is scoped to this service. The

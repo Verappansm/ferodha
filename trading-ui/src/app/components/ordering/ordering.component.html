@@ -215,7 +215,12 @@
         <dd data-testid="order-result-id">{{ result.orderId }}</dd>
 
         <dt>Status</dt>
-        <dd data-testid="order-result-status">{{ result.status }}</dd>
+        <dd data-testid="order-result-status">{{ liveStatus() ?? result.status }}</dd>
+
+        @if (rejectReason(); as reason) {
+          <dt>Reason</dt>
+          <dd class="reject-reason" data-testid="order-result-reason">{{ reason }}</dd>
+        }
 
         <dt>Symbol</dt>
         <dd data-testid="order-result-symbol">{{ result.symbol }}</dd>

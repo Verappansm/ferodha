@@ -1,6 +1,7 @@
 package com.trade.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.trade.mapper.UserAccessMapper;
 import com.trade.testsupport.JwtTestFixture;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 // A missing header, a wrong scheme, an expired token and a forged signature
 // must all answer AUTH-401 with the identical body, before any controller
@@ -24,11 +26,21 @@ import static org.mockito.Mockito.verify;
 class JwtAuthFilterTest {
 
     private final JwtService jwtService = new JwtService(JwtTestFixture.SECRET, "auth-service");
+    private final UserAccessMapper userAccess = mock(UserAccessMapper.class);
     private JwtAuthFilter filter;
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthFilter(jwtService, new ObjectMapper());
+        filter = new JwtAuthFilter(jwtService, userAccess, new ObjectMapper());
+    }
+
+    @Test
+    @DisplayName("A valid token for a user since suspended or forced to reset is refused with AUTH-401")
+    void blockedUserIsRefused() throws Exception {
+        when(userAccess.isCustomerBlocked("11111111-1111-1111-1111-111111111111")).thenReturn(true);
+        MockHttpServletRequest request = protectedRequest();
+        request.addHeader("Authorization", "Bearer " + JwtTestFixture.validToken(1L));
+        assertRefused(request);
     }
 
     @Test
@@ -88,6 +100,15 @@ class JwtAuthFilterTest {
 
         verify(chain, times(1)).doFilter(request, response);
         assertNull(request.getAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE));
+    }
+
+    @Test
+    @DisplayName("An admin token for an operator since suspended is refused with AUTH-401")
+    void blockedAdminIsRefused() throws Exception {
+        when(userAccess.isAdminBlocked(JwtTestFixture.ADMIN_USER_ID)).thenReturn(true);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/admin/overview");
+        request.addHeader("Authorization", "Bearer " + JwtTestFixture.adminToken());
+        assertRefused(request);
     }
 
     private MockHttpServletRequest protectedRequest() {

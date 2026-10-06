@@ -9,8 +9,14 @@ import {
   UsersRepository,
   UsernameTakenError,
 } from '../persistence/users.repository';
-import { registrationConflict, unauthorised } from '../common/error-envelope';
+import {
+  invalidInput,
+  passwordChangeRequired,
+  registrationConflict,
+  unauthorised,
+} from '../common/error-envelope';
 import { AccessTokenClaims } from './access-token-claims';
+import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
 import { RegisterRequestDto } from './dto/register-request.dto';
@@ -121,9 +127,48 @@ export class AuthService {
       throw unauthorised();
     }
 
+    // An admin forced a reset (LEAP-016): no tokens until the password is
+    // changed. Reached only with the right password.
+    if (user.mustChangePassword) {
+      this.logger.warn(`Login held: user ${user.id} must change password`);
+      throw passwordChangeRequired();
+    }
+
     this.logger.log(`Login succeeded: user ${user.id}`);
     // A fresh login starts a new refresh-token chain (its family).
     return this.issueTokenPair(session, randomUUID());
+  }
+
+  /**
+   * POST /auth/change-password (LEAP-010). The current password is checked
+   * exactly as login checks it, so every failure is the same AUTH-401. On
+   * success the new hash replaces the old, a forced reset is cleared, and
+   * every refresh token the user holds is revoked: they sign in again with
+   * the new password.
+   */
+  async changePassword(body: ChangePasswordRequestDto): Promise<void> {
+    const user = await this.users.findByEmail(body.username);
+    const valid = user
+      ? await this.passwords.verify(body.currentPassword, user.passwordHash)
+      : await this.passwords.verifyAgainstDecoy(body.currentPassword);
+    if (!user || !valid || user.status !== 'ACTIVE') {
+      this.logger.warn(
+        user
+          ? `Password change refused for user ${user.id}`
+          : 'Password change refused: unknown username',
+      );
+      throw unauthorised();
+    }
+    if (body.newPassword === body.currentPassword) {
+      throw invalidInput();
+    }
+
+    await this.users.updatePassword(
+      user.id,
+      await this.passwords.hash(body.newPassword),
+    );
+    await this.refreshTokens.revokeAllForUser(user.id);
+    this.logger.log(`Password changed: user ${user.id}`);
   }
 
   /**

@@ -42,6 +42,18 @@ export class AuthApi {
     return this.auth.register(body);
   }
 
+  /**
+   * Changes the password, proving the current one (LEAP-010); this is also
+   * how a forced reset is completed. Both passwords leave as digests (B23).
+   */
+  changePassword(username: string, currentPassword: string, newPassword: string): Observable<void> {
+    return this.auth.changePassword({
+      username,
+      currentPassword: passwordDigest(username, currentPassword),
+      newPassword: passwordDigest(username, newPassword),
+    }) as Observable<void>;
+  }
+
   refresh(refreshToken: string): Observable<TokenResponse> {
     return this.auth.refresh({ refreshToken });
   }

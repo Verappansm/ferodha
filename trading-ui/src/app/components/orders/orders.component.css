@@ -119,6 +119,13 @@ h3 {
   text-align: right;
 }
 
+.reject-reason {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--negative);
+}
+
 .confirm-row td {
   background: var(--warning-bg);
   white-space: normal;

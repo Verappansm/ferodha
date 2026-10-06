@@ -41,6 +41,7 @@ describe('OrderingComponent', () => {
   let navigate: ReturnType<typeof vi.fn>;
   let back: ReturnType<typeof vi.fn>;
   let queryParams: BehaviorSubject<Params>;
+  let orderHistory: ReturnType<typeof vi.fn>;
   const accountId = signal(3);
 
   beforeEach(async () => {
@@ -49,6 +50,7 @@ describe('OrderingComponent', () => {
     navigate = vi.fn().mockResolvedValue(true);
     back = vi.fn();
     queryParams = new BehaviorSubject<Params>({});
+    orderHistory = vi.fn().mockReturnValue(of([]));
     await TestBed.configureTestingModule({
       imports: [OrderingComponent],
       providers: [
@@ -58,6 +60,7 @@ describe('OrderingComponent', () => {
           useValue: {
             placeOrder,
             reviewOrder,
+            orderHistory,
             quote: vi.fn().mockReturnValue(of(null)),
           },
         },
@@ -143,6 +146,60 @@ describe('OrderingComponent', () => {
     expect(byTestId('order-result')).toBeTruthy();
     expect(byTestId('order-result-status')?.textContent).toContain(OrderStatus.NEW);
     expect(byTestId('order-result-id')?.textContent).toContain('ORD-12345');
+  });
+
+  it('follows the placed order and shows a rejection with its reason', async () => {
+    vi.useFakeTimers();
+    try {
+      placeOrder.mockReturnValue(
+        of({
+          orderId: 'ORD-777',
+          status: OrderStatus.NEW,
+          message: 'Order accepted',
+          symbol: 'AAPL',
+          side: OrderSide.SELL,
+          quantity: 5,
+          price: 230.0,
+        }),
+      );
+      orderHistory.mockReturnValue(
+        of([
+          {
+            orderId: 'ORD-777',
+            accountId: 3,
+            symbol: 'AAPL',
+            side: OrderSide.SELL,
+            quantity: 5,
+            price: 230.0,
+            status: OrderStatus.REJECTED,
+            rejectionReason: 'NOT_MARKETABLE',
+            createdOn: '2026-10-06T09:00:00Z',
+          },
+        ]),
+      );
+      fixture.componentInstance.form.setValue({
+        symbol: 'AAPL',
+        side: OrderSide.SELL,
+        quantity: 5,
+        price: 230,
+      });
+      await fixture.componentInstance.startReview();
+      await fixture.componentInstance.submit();
+      fixture.detectChanges();
+      expect(byTestId('order-result-status')?.textContent).toContain('NEW');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      fixture.detectChanges();
+
+      expect(orderHistory).toHaveBeenCalledWith(3);
+      expect(byTestId('order-result-status')?.textContent).toContain('REJECTED');
+      expect(byTestId('order-result-reason')?.textContent).toContain(
+        'market moved past your limit',
+      );
+      expect(byTestId('order-error')?.textContent).toContain('ORD-777 was rejected');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('an invalid quantity is blocked before submission', async () => {

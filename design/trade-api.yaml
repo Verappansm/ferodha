@@ -791,6 +791,13 @@ components:
           type: string
           format: date-time
           example: '2026-09-28T09:14:22Z'
+        rejectionReason:
+          type: [string, 'null']
+          description: |
+            Why the Trade Executor rejected the order. Null unless the order is REJECTED.
+            One of INSTRUMENT_NOT_TRADABLE, ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS,
+            INSUFFICIENT_HOLDINGS, NOT_MARKETABLE, PRICE_UNAVAILABLE.
+          example: NOT_MARKETABLE
 
     AccountResponse:
       type: object

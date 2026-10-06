@@ -24,6 +24,8 @@ export interface AuthUser {
   roles: Role[];
   createdAt: Date;
   phone: string | undefined;
+  /** Set by an admin's forced reset; cleared by a password change. */
+  mustChangePassword?: boolean;
 }
 
 /** Raised when the email's UNIQUE constraint fires - the contract's AUTH-409. */
@@ -43,6 +45,7 @@ interface AuthUserRow {
   status: UserStatus | null;
   role_name: string;
   created_at: Date;
+  must_change_password?: boolean | null;
 }
 
 /**
@@ -67,11 +70,13 @@ function toAuthUser(row: AuthUserRow): AuthUser {
     status: row.status ?? 'PENDING',
     roles: [toContractRole(row.role_name)],
     createdAt: row.created_at,
+    mustChangePassword: row.must_change_password ?? false,
   };
 }
 
 const SELECT_USER = `
-  SELECT u.user_id, u.name, u.email, u.phone_number, u.password_hash, u.status, r.role_name, u.created_at
+  SELECT u.user_id, u.name, u.email, u.phone_number, u.password_hash, u.status, r.role_name, u.created_at,
+         u.must_change_password
     FROM Users u
     JOIN Roles r ON r.role_id = u.role_id`;
 
@@ -142,6 +147,17 @@ export class UsersRepository {
       [id],
     );
     return result.rows[0] ? toAuthUser(result.rows[0]) : null;
+  }
+
+  /** A new password hash; any forced reset is satisfied by it. */
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE Users
+          SET password_hash = $2,
+              must_change_password = false
+        WHERE user_id = $1`,
+      [id, passwordHash],
+    );
   }
 
   /**

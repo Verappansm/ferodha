@@ -2,6 +2,7 @@ package com.trade.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trade.dto.ErrorResponseDto;
+import com.trade.mapper.UserAccessMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,11 +14,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.UUID;
 
 // Answers whether the caller holds a valid token, once, for every route
 // under /api/v1/**, before any controller runs. It does not decide whether
 // the caller may reach a particular account - that is ACC-403, answered in
 // the service layer where the account key is known.
+//
+// A token's signature proves who it was issued to, not that they may still
+// act: a suspension or a forced password reset in the auth service cannot
+// recall a token already issued. So every request also asks Users, by
+// primary key, whether the token's user is still allowed in (UserAccessMapper),
+// and answers the same AUTH-401 if not - effective on the next request rather
+// than when the access token expires.
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
@@ -36,10 +45,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final UserAccessMapper userAccess;
     private final ObjectMapper objectMapper;
 
-    public JwtAuthFilter(JwtService jwtService, ObjectMapper objectMapper) {
+    public JwtAuthFilter(JwtService jwtService, UserAccessMapper userAccess, ObjectMapper objectMapper) {
         this.jwtService = jwtService;
+        this.userAccess = userAccess;
         this.objectMapper = objectMapper;
     }
 
@@ -70,6 +81,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 writeUnauthorised(response);
                 return;
             }
+            if (userAccess.isAdminBlocked(admin.userId().toString())) {
+                writeUnauthorised(response);
+                return;
+            }
             request.setAttribute(ADMIN_PRINCIPAL_ATTRIBUTE, admin);
             filterChain.doFilter(request, response);
             return;
@@ -82,9 +97,22 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             writeUnauthorised(response);
             return;
         }
+        if (!isUuid(principal.subjectUserId()) || userAccess.isCustomerBlocked(principal.subjectUserId())) {
+            writeUnauthorised(response);
+            return;
+        }
 
         request.setAttribute(PRINCIPAL_ATTRIBUTE, principal);
         filterChain.doFilter(request, response);
+    }
+
+    private static boolean isUuid(String value) {
+        try {
+            UUID.fromString(value);
+            return true;
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return false;
+        }
     }
 
     private void writeUnauthorised(HttpServletResponse response) throws IOException {

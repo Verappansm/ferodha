@@ -1,3 +1,4 @@
+export * from './change-password-request';
 export * from './error-response';
 export * from './login-request';
 export * from './refresh-request';

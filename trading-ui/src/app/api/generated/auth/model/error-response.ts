@@ -14,7 +14,7 @@
  */
 export interface ErrorResponse { 
     /**
-     * | Code | HTTP | Meaning | |---|---|---| | `AUTH-401` | 401 | Unauthorised or invalid token | | `AUTH-409` | 409 | Username already taken | | `VAL-422` | 422 | Invalid input |  `AUTH-409` extends the platform error catalogue and is scoped to this service. The catalogue in `trade-api.yaml` has no registration-conflict code because registration is not a trading operation. 
+     * | Code | HTTP | Meaning | |---|---|---| | `AUTH-401` | 401 | Unauthorised or invalid token | | `AUTH-409` | 409 | Username already taken | | `AUTH-428` | 428 | Right password, but an administrator forced a password change | | `VAL-422` | 422 | Invalid input |  `AUTH-409` extends the platform error catalogue and is scoped to this service. The catalogue in `trade-api.yaml` has no registration-conflict code because registration is not a trading operation. 
      */
     errorCode: ErrorResponse.ErrorCodeEnum;
     /**
@@ -26,6 +26,7 @@ export namespace ErrorResponse {
     export const ErrorCodeEnum = {
         AUTH_401: 'AUTH-401',
         AUTH_409: 'AUTH-409',
+        AUTH_428: 'AUTH-428',
         VAL_422: 'VAL-422',
     } as const;
     export type ErrorCodeEnum = typeof ErrorCodeEnum[keyof typeof ErrorCodeEnum];

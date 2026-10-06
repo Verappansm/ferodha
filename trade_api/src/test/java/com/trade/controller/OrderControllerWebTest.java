@@ -1,5 +1,6 @@
 package com.trade.controller;
 
+import com.trade.mapper.UserAccessMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trade.dto.OrderResponseDto;
 import com.trade.dto.OrderReviewResponseDto;
@@ -46,6 +47,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(JwtService.class)
 @TestPropertySource(properties = "app.jwt.secret=" + JwtTestFixture.SECRET)
 class OrderControllerWebTest {
+
+    // JwtAuthFilter asks Users whether the token's user may still act; the
+    // slice has no database, and an unstubbed mock answers "not blocked".
+    @MockitoBean
+    private UserAccessMapper userAccessMapper;
 
     @Autowired
     private MockMvc mockMvc;

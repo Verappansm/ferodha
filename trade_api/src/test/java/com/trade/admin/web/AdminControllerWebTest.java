@@ -1,5 +1,6 @@
 package com.trade.admin.web;
 
+import com.trade.mapper.UserAccessMapper;
 import com.trade.admin.AdminException;
 import com.trade.admin.dto.AdminDtos.AccountRequestDto;
 import com.trade.admin.dto.AdminDtos.AdminSummaryDto;
@@ -37,6 +38,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(JwtService.class)
 @TestPropertySource(properties = "app.jwt.secret=" + JwtTestFixture.SECRET)
 class AdminControllerWebTest {
+
+    // JwtAuthFilter asks Users whether the token's user may still act; the
+    // slice has no database, and an unstubbed mock answers "not blocked".
+    @MockitoBean
+    private UserAccessMapper userAccessMapper;
 
     private static final UUID REQUEST_ID = UUID.fromString("0e7c3b1a-1111-4a4a-8a8a-222222222222");
 

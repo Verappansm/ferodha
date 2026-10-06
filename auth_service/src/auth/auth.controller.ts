@@ -23,6 +23,7 @@ import type { Request } from 'express';
 import { RegisterRequestDto } from './dto/register-request.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
+import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
 import {
   ErrorResponseDto,
   TokenResponseDto,
@@ -85,6 +86,33 @@ export class AuthController {
       return await this.authService.login(body);
     } catch (error) {
       // Only a refused login is a failed guess; a 500 is not the caller's.
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === Number(HttpStatus.UNAUTHORIZED)
+      ) {
+        this.loginAttempts.recordFailure(clientIp(request));
+      }
+      throw error;
+    }
+  }
+
+  @Post('change-password')
+  @UseGuards(LoginThrottleGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    operationId: 'changePassword',
+    summary:
+      'Change the password with the current one. Clears a forced reset and ends every session.',
+  })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async changePassword(
+    @Body() body: ChangePasswordRequestDto,
+    @Req() request: Request,
+  ): Promise<void> {
+    try {
+      await this.authService.changePassword(body);
+    } catch (error) {
+      // A wrong current password is a failed guess, counted like a login.
       if (
         error instanceof HttpException &&
         error.getStatus() === Number(HttpStatus.UNAUTHORIZED)
