@@ -38,6 +38,8 @@ below is a decision the team has taken and will defend at review.
 | B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
 | B23 | Password on the wire | `contracts/auth-api.yaml` RegisterRequest, LoginRequest; admin login (B18) | `password` is the password itself, 12 to 128 characters | The trading UI and the admin console send `sha256("ferodha-v1:" + lower-case email + ":" + password)`, 64 hex characters, in its place; the auth service bcrypts what arrives, unchanged. The 12-character minimum is enforced in the browser on the typed password. Seed users re-hashed by trade-api Liquibase 012 |
 
+| B24 | Order review and fee rate | `contracts/trade-api.yaml`; Sprint 7 executor | No review route; the executor holds the fee rate and applies it at settlement | `POST /api/v1/orders/review` returns cost, fee and total for a ticket without placing it. The rate lives only in trade_api (`fee.rate`), is written on each order as `Orders.fee_rate` (Liquibase 014), and the executor charges the order's own rate (LEAP-017) |
+
 ## Why
 
 **B01 (username is an email).** An email is an identity a person already has,
@@ -193,3 +195,20 @@ changes. Consequences:
 - trade-api Liquibase 012 re-hashes the six seed users for the seed password.
   A user who registered before this change cannot sign in until they register
   again: their plain password was never kept, so it cannot be re-hashed.
+
+**B24 (order review and fee rate).** The order ticket shows cost, fee and
+total before the customer confirms, but the fee was applied only by the
+executor, at settlement, from a rate in its own configuration. A copy of that
+rate in the UI, or in a second service's configuration, could drift from it.
+So the rate has one owner: trade_api's `fee.rate` (env `EXECUTOR_FEE_RATE`,
+default 0.001). The review route works out every figure on the server, and
+placing an order writes the same rate on the order row (`Orders.fee_rate`).
+The executor has no rate of its own; it charges each fill at the order's
+rate, which also keeps a resting order (`market-sim`) and an order the sweeper
+re-sends on the rate the customer reviewed, even if the rate changes later.
+The `ORDER_PLACED` envelope is unchanged, since the executor settles from the
+row. Orders trade_api does not write (`trades_generator`'s market-maker orders,
+seed orders) take the column default 0. The review is worked out at the limit
+price, in the instrument's currency; the executor charges on the executed
+price, converted to the account's currency (fixed 90 INR = 1 USD until
+LEAP-006), so for a BUY the review is an upper bound.

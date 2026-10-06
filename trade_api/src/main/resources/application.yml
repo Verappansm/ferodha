@@ -61,6 +61,13 @@ portfolio:
     group-id: trade-api-quotes-${random.uuid}
     listen: ${PORTFOLIO_QUOTES_LISTEN:true}
 
+# The commission rate (LEAP-017), and its only home. The order review
+# (POST /api/v1/orders/review) uses it, placing an order writes it on the
+# order (Orders.fee_rate), and trade_executor charges each fill at the
+# order's own rate.
+fee:
+  rate: ${EXECUTOR_FEE_RATE:0.001}
+
 logging:
   level:
     com.trade: INFO

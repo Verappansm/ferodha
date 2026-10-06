@@ -21,6 +21,10 @@ import { ErrorResponse } from '../model/error-response';
 // @ts-ignore
 import { OrderResponse } from '../model/order-response';
 // @ts-ignore
+import { OrderReviewRequest } from '../model/order-review-request';
+// @ts-ignore
+import { OrderReviewResponse } from '../model/order-review-response';
+// @ts-ignore
 import { PlaceOrderRequest } from '../model/place-order-request';
 
 // @ts-ignore
@@ -159,6 +163,76 @@ export class OrdersService extends BaseService {
             {
                 context: localVarHttpContext,
                 body: placeOrderRequest,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * Review an order before placing it
+     * The figures the order ticket shows before the customer confirms (LEAP-017): cost at the limit price, the fee at the platform\&#39;s rate (the rate placing the order records on it), the total, and the cash left after a BUY. Creates no order and publishes nothing. The executor may fill at a better price, so for a BUY these figures are an upper bound. 
+     * @endpoint post /api/v1/orders/review
+     * @param orderReviewRequest 
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public reviewOrder(orderReviewRequest: OrderReviewRequest, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<OrderReviewResponse>;
+    public reviewOrder(orderReviewRequest: OrderReviewRequest, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<OrderReviewResponse>>;
+    public reviewOrder(orderReviewRequest: OrderReviewRequest, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<OrderReviewResponse>>;
+    public reviewOrder(orderReviewRequest: OrderReviewRequest, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (orderReviewRequest === null || orderReviewRequest === undefined) {
+            throw new Error('Required parameter orderReviewRequest was null or undefined when calling reviewOrder.');
+        }
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        // to determine the Content-Type header
+        const consumes: string[] = [
+            'application/json'
+        ];
+        const httpContentTypeSelected: string | undefined = this.configuration.selectHeaderContentType(consumes);
+        if (httpContentTypeSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Content-Type', httpContentTypeSelected);
+        }
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/orders/review`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<OrderReviewResponse>('post', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                body: orderReviewRequest,
                 responseType: <any>responseType_,
                 ...(withCredentials ? { withCredentials } : {}),
                 headers: localVarHeaders,

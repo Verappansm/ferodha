@@ -16,6 +16,8 @@ import { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-
 import { InstrumentQuote } from './generated/trade/model/instrument-quote';
 import { PriceHistory } from './generated/trade/model/price-history';
 import { PriceSnapshot } from './generated/trade/model/price-snapshot';
+import { OrderReviewRequest } from './generated/trade/model/order-review-request';
+import { OrderReviewResponse } from './generated/trade/model/order-review-response';
 import { environment } from '../../environments/environment';
 
 export type { AccountResponse } from './generated/trade/model/account-response';
@@ -33,6 +35,8 @@ export { OrderSide } from './generated/trade/model/order-side';
 export { OrderStatus } from './generated/trade/model/order-status';
 export { InstrumentType } from './generated/trade/model/instrument-type';
 export { PriceHistory } from './generated/trade/model/price-history';
+export type { OrderReviewRequest } from './generated/trade/model/order-review-request';
+export type { OrderReviewResponse } from './generated/trade/model/order-review-response';
 
 /** Filters for order history, passed to the route's own query parameters. */
 export interface OrderFilter {
@@ -211,5 +215,13 @@ export class TradeApi {
   /** Reorder items in a watchlist */
   reorderWatchlistItems(watchlistId: string, request: ReorderWatchlistItemsRequest): Observable<void> {
     return this.http.patch<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`, request);
+  }
+
+  /**
+   * The review step's figures (LEAP-017): cost, fee and total for the ticket
+   * as typed, worked out by trade_api. Creates no order.
+   */
+  reviewOrder(order: OrderReviewRequest): Observable<OrderReviewResponse> {
+    return this.orders.reviewOrder(order);
   }
 }

@@ -15,6 +15,8 @@ model/instrument-type.ts
 model/models.ts
 model/order-history-entry.ts
 model/order-response.ts
+model/order-review-request.ts
+model/order-review-response.ts
 model/order-side.ts
 model/order-status.ts
 model/paginated-instruments-response.ts

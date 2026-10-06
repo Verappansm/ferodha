@@ -7,6 +7,8 @@ export * from './instrument-response';
 export * from './instrument-type';
 export * from './order-history-entry';
 export * from './order-response';
+export * from './order-review-request';
+export * from './order-review-response';
 export * from './order-side';
 export * from './order-status';
 export * from './paginated-instruments-response';

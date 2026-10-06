@@ -41,7 +41,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(1);
@@ -64,7 +64,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(0);
@@ -83,9 +83,9 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
-                new BigDecimal("119.50"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("119.50"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
         AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
@@ -120,9 +120,9 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
-                new BigDecimal("119.50"), "PARTIALLY_FILLED", 3, java.time.OffsetDateTime.now());
+                new BigDecimal("119.50"), "PARTIALLY_FILLED", 3, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
         AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
@@ -146,7 +146,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
 
         when(orderMapper.matchIncomingOrderIfNew(ORDER_ID, 6, "PARTIALLY_FILLED", new BigDecimal("119.50"),
                 new BigDecimal("3.00"))).thenReturn(1);

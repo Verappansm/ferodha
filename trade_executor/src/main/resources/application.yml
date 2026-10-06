@@ -60,8 +60,8 @@ executor:
   # OrderBookMatcher.
   matching:
     enabled: ${EXECUTOR_MATCHING_ENABLED:false}
-  fee:
-    rate: ${EXECUTOR_FEE_RATE:0.001}
+  # No fee rate here: each order carries its own (Orders.fee_rate), written
+  # by trade_api from its fee.rate when it accepted the order (LEAP-017).
   quote:
     retry:
       max-attempts: ${EXECUTOR_QUOTE_RETRY_MAX_ATTEMPTS:3}

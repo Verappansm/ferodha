@@ -1,7 +1,8 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Params, Router } from '@angular/router';
+import { Location } from '@angular/common';
 import {
   AbstractControl,
   NonNullableFormBuilder,
@@ -19,7 +20,13 @@ import {
   switchMap,
 } from 'rxjs';
 import { Session } from '../../core/session/session';
-import { TradeApi, OrderSide, OrderResponse, InstrumentQuote } from '../../api/trade-api';
+import {
+  TradeApi,
+  OrderSide,
+  OrderResponse,
+  InstrumentQuote,
+  OrderReviewResponse,
+} from '../../api/trade-api';
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { errorMessage } from '../../core/errors/error-message';
@@ -51,7 +58,13 @@ const RETRY_MESSAGES = {
 };
 
 const OUTCOME_UNKNOWN =
-  'We could not confirm whether your order was placed. Check the Orders page, or press Place Order again: retrying this same order can never place it twice.';
+  'We could not confirm whether your order was placed. Check the Orders page, or press Confirm again: retrying this same order can never place it twice.';
+
+const REVIEW_UNAVAILABLE =
+  'We could not work out what this order will cost. Go back and try again.';
+
+/** The query parameter that gives the review step its own history entry. */
+export const REVIEW_PARAM = 'review';
 
 function quantityValidator(control: AbstractControl): ValidationErrors | null {
   const value: unknown = control.value;
@@ -86,6 +99,8 @@ export class OrderingComponent {
   private readonly session = inject(Session);
   private readonly tradeApi = inject(TradeApi);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
 
   readonly form = inject(NonNullableFormBuilder).group({
     symbol: [
@@ -118,9 +133,24 @@ export class OrderingComponent {
 
   readonly OrderSide = OrderSide; // For template access
 
+  /** Review before submission: nothing reaches the platform until Confirm. */
+  readonly step = signal<'edit' | 'review'>('edit');
+  /**
+   * Every figure the review shows, worked out by trade_api
+   * (POST /api/v1/orders/review): the UI holds no fee rule of its own.
+   */
+  readonly review = signal<OrderReviewResponse | null>(null);
+  readonly isLoadingReview = signal(false);
+  readonly reviewError = signal('');
+
+  /** True while the review step has a history entry of its own to go back from. */
+  private reviewInHistory = false;
+  /** The prefill last applied from the link, so a later URL change does not overwrite typing. */
+  private lastPrefill = '';
+
   /**
    * The idempotency key of the order on the ticket. It is kept until the
-   * platform gives a definite answer, so pressing Place Order again after a
+   * platform gives a definite answer, so pressing Confirm again after a
    * network failure re-sends the same key and can never place a second
    * order. Editing the ticket makes it a different order, with a new key.
    */
@@ -154,20 +184,72 @@ export class OrderingComponent {
         this.fillSuggestedPrice();
       });
 
-    // Buy/sell shortcuts pre-fill the ticket: symbol, side and, from the
-    // instrument page, a suggested price. Nothing is sent until Place Order.
     this.route.queryParams.pipe(takeUntilDestroyed()).subscribe((params) => {
-      if (params['side'] === 'BUY' || params['side'] === 'SELL') {
-        this.form.controls.side.setValue(params['side']);
-      }
-      if (params['symbol']) {
-        this.form.controls.symbol.setValue(params['symbol']);
-      }
-      const price = Number(params['price']);
-      if (params['price'] && Number.isFinite(price) && price > 0) {
-        this.form.controls.price.setValue(Math.round(price * 100) / 100);
-      }
+      this.prefillFrom(params);
+      this.followReviewParam(params);
     });
+  }
+
+  /**
+   * Buy/sell shortcuts pre-fill the ticket: symbol, side and, from the
+   * instrument page, a suggested price. Applied only when those three change,
+   * so adding or removing the review flag never overwrites what was typed.
+   */
+  private prefillFrom(params: Params): void {
+    const key = [params['symbol'], params['side'], params['price']].join('|');
+    if (key === this.lastPrefill) return;
+    this.lastPrefill = key;
+    if (params['side'] === 'BUY' || params['side'] === 'SELL') {
+      this.form.controls.side.setValue(params['side']);
+    }
+    if (params['symbol']) {
+      this.form.controls.symbol.setValue(params['symbol']);
+    }
+    const price = Number(params['price']);
+    if (params['price'] && Number.isFinite(price) && price > 0) {
+      this.form.controls.price.setValue(Math.round(price * 100) / 100);
+    }
+  }
+
+  /**
+   * Keeps the step in line with the URL. The browser's Back from the review
+   * removes the flag, which returns to the ticket with every field kept. A
+   * flag with no review behind it (a reload, or Forward) is dropped, since
+   * the figures were never worked out for this visit.
+   */
+  private followReviewParam(params: Params): void {
+    const flagged = params[REVIEW_PARAM] === '1';
+    if (!flagged && this.step() === 'review' && !this.isSubmitting()) {
+      this.reviewInHistory = false;
+      this.showTicket();
+    } else if (flagged && this.step() === 'edit') {
+      void this.setReviewParam(false);
+    }
+  }
+
+  private setReviewParam(on: boolean): Promise<boolean> {
+    return this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { [REVIEW_PARAM]: on ? '1' : null },
+      queryParamsHandling: 'merge',
+      replaceUrl: !on,
+    });
+  }
+
+  private showTicket(): void {
+    this.step.set('edit');
+    this.reviewError.set('');
+  }
+
+  /** Leaves the review, popping its history entry when it has one. */
+  private leaveReview(): void {
+    this.showTicket();
+    if (this.reviewInHistory) {
+      this.reviewInHistory = false;
+      this.location.back();
+    } else {
+      void this.setReviewParam(false);
+    }
   }
 
   /**
@@ -215,15 +297,70 @@ export class OrderingComponent {
     return null;
   }
 
+  /**
+   * Step one: validate the ticket, then ask trade_api what it will cost. The
+   * figures are worked out fresh on every review, so they are today's.
+   */
+  async startReview(): Promise<void> {
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.orderResult.set(null);
+    this.reviewError.set('');
+
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const accountId = this.account();
+    if (!accountId) {
+      this.errorMessage.set('You must be signed in to place an order');
+      return;
+    }
+
+    const { symbol, side, quantity, price } = this.form.getRawValue();
+    this.review.set(null);
+    this.step.set('review');
+    this.reviewInHistory = true;
+    void this.setReviewParam(true);
+
+    this.isLoadingReview.set(true);
+    try {
+      this.review.set(
+        await firstValueFrom(
+          this.tradeApi.reviewOrder({
+            accountId,
+            symbol: symbol.trim().toUpperCase(),
+            side,
+            quantity: Number(quantity),
+            price: Number(price),
+          }),
+        ),
+      );
+    } catch (error) {
+      this.reviewError.set(
+        error instanceof HttpErrorResponse && error.status === 0
+          ? REVIEW_UNAVAILABLE
+          : errorMessage(error),
+      );
+    } finally {
+      this.isLoadingReview.set(false);
+    }
+  }
+
+  /** Back to the ticket with every field as it was (and the same idempotency key). */
+  back(): void {
+    this.errorMessage.set('');
+    this.leaveReview();
+  }
+
+  /** Step two: place exactly the order that was reviewed. */
   async submit(): Promise<void> {
-    // Clear previous messages
     this.successMessage.set('');
     this.errorMessage.set('');
     this.orderResult.set(null);
 
-    // Validate form
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.form.invalid || this.step() !== 'review' || this.review() === null) {
       return;
     }
 
@@ -259,14 +396,17 @@ export class OrderingComponent {
       this.form.reset({ side: 'BUY' as OrderSide });
       this.quote.set(null);
       this.pendingKey = null;
+      this.leaveReview();
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 0) {
-        // No answer: the order may or may not exist. Keep the key for a retry.
+        // No answer: the order may or may not exist. Stay on the review and
+        // keep the key, so Confirm again re-sends this same order.
         this.errorMessage.set(OUTCOME_UNKNOWN);
       } else {
         // The platform answered, so this order is settled one way or the other.
         this.pendingKey = null;
         this.errorMessage.set(errorMessage(error, isRetry ? RETRY_MESSAGES : PLACE_ORDER_MESSAGES));
+        this.leaveReview();
       }
     } finally {
       this.isSubmitting.set(false);

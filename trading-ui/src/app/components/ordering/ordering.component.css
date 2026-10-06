@@ -150,6 +150,51 @@ small {
   font-weight: 600;
 }
 
+.order-review {
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.order-review h3 {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+}
+
+.order-review dl {
+  grid-template-columns: 140px 1fr;
+}
+
+.order-review .negative {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+.order-review .note {
+  margin: 16px 0;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
+.review-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn:not(.btn-primary) {
+  color: var(--ink-900);
+  background: var(--ink-100);
+  border: 1px solid var(--ink-300);
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .link-button {
   padding: 0;
   font: inherit;

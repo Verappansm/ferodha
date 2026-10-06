@@ -49,11 +49,11 @@
 
     <insert id="insertOrder">
         INSERT INTO Orders (order_id, user_id, account_id, instrument_id, side, order_type,
-                             limit_price, quantity, executed_price, status, idempotency_key)
+                             limit_price, quantity, executed_price, status, idempotency_key, fee_rate)
         VALUES (#{orderId}, #{userId}, #{accountUuid}, #{instrumentId},
                 #{side}::order_side_enum, 'LIMIT'::order_type_enum,
                 #{price}, #{quantity}, #{executedPrice,jdbcType=DECIMAL},
-                #{status}::order_status_enum, #{idempotencyKey})
+                #{status}::order_status_enum, #{idempotencyKey}, #{feeRate})
     </insert>
 
     <insert id="insertTrade">

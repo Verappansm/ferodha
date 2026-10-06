@@ -59,14 +59,15 @@ class OrderBookMatcherTest {
     private final PositionMapper positionMapper = mock(PositionMapper.class);
     private final SettlementService settlementService = mock(SettlementService.class);
     private final CurrencyConverter currencyConverter = new CurrencyConverter();
-    private final FeeCalculator feeCalculator = new FeeCalculator(BigDecimal.ZERO);
+    private final FeeCalculator feeCalculator = new FeeCalculator();
     private final TradeEventPublisher tradeEventPublisher = mock(TradeEventPublisher.class);
     private final OrderBookMatcher matcher = new OrderBookMatcher(
             orderMapper, accountMapper, positionMapper, settlementService, currencyConverter, feeCalculator,
             tradeEventPublisher);
 
     private static OrderRow order(UUID id, long accountId, String side, int quantity, BigDecimal price, int filled) {
-        return new OrderRow(id, accountId, INSTRUMENT_ID, "AAPL", side, quantity, price, "NEW", filled, OffsetDateTime.now());
+        return new OrderRow(id, accountId, INSTRUMENT_ID, "AAPL", side, quantity, price, "NEW", filled, OffsetDateTime.now(),
+                BigDecimal.ZERO);
     }
 
     private static AccountRow account(long id) {

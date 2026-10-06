@@ -26,5 +26,6 @@
     <include file="db/changelog/011-market-bars.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/012-client-digest-seed-passwords.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/014-order-fee-rate.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
