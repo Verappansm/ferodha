@@ -2,6 +2,7 @@ export * from './account-response';
 export * from './account-status';
 export * from './balance-response';
 export * from './error-response';
+export * from './fee-schedule';
 export * from './instrument-quote';
 export * from './instrument-response';
 export * from './instrument-type';

@@ -1,6 +1,7 @@
 api.base.service.ts
 api/accounts.service.ts
 api/api.ts
+api/fees.service.ts
 api/instruments.service.ts
 api/orders.service.ts
 configuration.ts
@@ -9,6 +10,7 @@ model/account-response.ts
 model/account-status.ts
 model/balance-response.ts
 model/error-response.ts
+model/fee-schedule.ts
 model/instrument-quote.ts
 model/instrument-response.ts
 model/instrument-type.ts
