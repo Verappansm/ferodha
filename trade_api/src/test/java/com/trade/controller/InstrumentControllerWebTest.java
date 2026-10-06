@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -45,7 +46,7 @@ class InstrumentControllerWebTest {
     @Test
     void oneInstrumentBySymbol() throws Exception {
         when(marketDataService.getTradableInstrument("AAPL")).thenReturn(
-                new Instrument("AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
+                new Instrument(UUID.randomUUID(), "AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
 
         mockMvc.perform(get("/api/v1/instruments/AAPL").header("Authorization", bearer()))
                 .andExpect(status().isOk())

@@ -5,9 +5,11 @@ import { PortfolioService } from './generated/portfolio/api/portfolio.service';
 import { PnlResponse } from './generated/portfolio/model/pnl-response';
 import { PortfolioSummary } from './generated/portfolio/model/portfolio-summary';
 import { PricedPosition } from './generated/portfolio/model/priced-position';
-import { SymbolPnl } from './generated/portfolio/model/symbol-pnl';
 
-export type { PnlResponse, PortfolioSummary, PricedPosition, SymbolPnl };
+export type { PnlResponse } from './generated/portfolio/model/pnl-response';
+export type { PortfolioSummary } from './generated/portfolio/model/portfolio-summary';
+export type { PricedPosition } from './generated/portfolio/model/priced-position';
+export type { SymbolPnl } from './generated/portfolio/model/symbol-pnl';
 
 /** Bounds for the realised figure of `pnl`, as ISO dates (`2026-10-04`). */
 export interface PnlQuery {

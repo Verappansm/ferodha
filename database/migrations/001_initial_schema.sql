@@ -121,7 +121,8 @@ CREATE TABLE Transactions (
 CREATE TABLE Watchlist (
     watchlist_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    user_id UUID NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE
+    user_id UUID NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    display_order INT NOT NULL DEFAULT 0
 );
 
 -- 11. Watchlist Items Table (checked)
@@ -130,6 +131,7 @@ CREATE TABLE Watchlist_Items (
     watchlist_id UUID NOT NULL REFERENCES Watchlist(watchlist_id) ON DELETE CASCADE,
     instrument_id UUID NOT NULL REFERENCES Instruments(instrument_id) ON DELETE CASCADE,
     added_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    display_order INT NOT NULL DEFAULT 0,
     CONSTRAINT unique_item_per_watchlist UNIQUE (watchlist_id, instrument_id)
 );
 

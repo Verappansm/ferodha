@@ -1,4 +1,5 @@
 import { inject, Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AccountsService } from './generated/trade/api/accounts.service';
 import { OrdersService } from './generated/trade/api/orders.service';
@@ -7,38 +8,90 @@ import { AccountResponse } from './generated/trade/model/account-response';
 import { BalanceResponse } from './generated/trade/model/balance-response';
 import { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
 import { OrderResponse } from './generated/trade/model/order-response';
-import { OrderSide } from './generated/trade/model/order-side';
 import { OrderStatus } from './generated/trade/model/order-status';
 import { PlaceOrderRequest } from './generated/trade/model/place-order-request';
 import { PositionResponse } from './generated/trade/model/position-response';
 import { InstrumentResponse } from './generated/trade/model/instrument-response';
-import { InstrumentType } from './generated/trade/model/instrument-type';
 import { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-instruments-response';
 import { InstrumentQuote } from './generated/trade/model/instrument-quote';
 import { PriceHistory } from './generated/trade/model/price-history';
-import { PricePoint } from './generated/trade/model/price-point';
 import { PriceSnapshot } from './generated/trade/model/price-snapshot';
+import { environment } from '../../environments/environment';
 
-export type {
-  AccountResponse,
-  BalanceResponse,
-  OrderHistoryEntry,
-  OrderResponse,
-  PlaceOrderRequest,
-  PositionResponse,
-  InstrumentResponse,
-  PaginatedInstrumentsResponse,
-  InstrumentQuote,
-  PricePoint,
-  PriceSnapshot,
-};
-export { OrderSide, OrderStatus, InstrumentType, PriceHistory };
+export type { AccountResponse } from './generated/trade/model/account-response';
+export type { BalanceResponse } from './generated/trade/model/balance-response';
+export type { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
+export type { OrderResponse } from './generated/trade/model/order-response';
+export type { PlaceOrderRequest } from './generated/trade/model/place-order-request';
+export type { PositionResponse } from './generated/trade/model/position-response';
+export type { InstrumentResponse } from './generated/trade/model/instrument-response';
+export type { PaginatedInstrumentsResponse } from './generated/trade/model/paginated-instruments-response';
+export type { InstrumentQuote } from './generated/trade/model/instrument-quote';
+export type { PricePoint } from './generated/trade/model/price-point';
+export type { PriceSnapshot } from './generated/trade/model/price-snapshot';
+export { OrderSide } from './generated/trade/model/order-side';
+export { OrderStatus } from './generated/trade/model/order-status';
+export { InstrumentType } from './generated/trade/model/instrument-type';
+export { PriceHistory } from './generated/trade/model/price-history';
 
 /** Filters for order history, passed to the route's own query parameters. */
 export interface OrderFilter {
   status?: OrderStatus;
   from?: string;
   to?: string;
+}
+
+/** Watchlist DTOs (manually defined since OpenAPI spec has issues) */
+export interface WatchlistResponse {
+  watchlistId: string;
+  name: string;
+  displayOrder: number;
+  items: WatchlistItemResponse[];
+}
+
+export interface WatchlistItemResponse {
+  itemId: string;
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  exchange: string;
+  currency: string;
+  sector: string | null;
+  lastPrice: number;
+  dayChange: number;
+  dayChangePercent: number;
+  lastUpdated: string | null;
+  addedAt: string;
+  displayOrder: number;
+  intradayData: IntradayPricePoint[];
+}
+
+export interface IntradayPricePoint {
+  timestamp: string;
+  price: number;
+}
+
+export interface CreateWatchlistRequest {
+  name: string;
+}
+
+export interface AddWatchlistItemRequest {
+  symbol: string;
+  watchlistId: string;
+}
+
+export interface BulkAddWatchlistItemsRequest {
+  symbol: string;
+  watchlistIds: string[];
+}
+
+export interface ReorderWatchlistItemsRequest {
+  itemOrderMap: Record<string, number>;
+}
+
+export interface UpdateWatchlistRequest {
+  name?: string;
+  displayOrder?: number;
 }
 
 /** The chart ranges the Trade REST API serves: minute bars for 1D, daily candles otherwise. */
@@ -53,6 +106,8 @@ export class TradeApi {
   private readonly accounts = inject(AccountsService);
   private readonly orders = inject(OrdersService);
   private readonly instruments = inject(InstrumentsService);
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = environment.tradeApiUrl || 'http://localhost:8080';
 
   account(accountId: number): Observable<AccountResponse> {
     return this.accounts.getAccount(accountId);
@@ -85,8 +140,8 @@ export class TradeApi {
     return this.orders.cancelOrder(orderId.replace(/^ORD-/, ''));
   }
 
-  getInstruments(pageSize?: number, offset?: number): Observable<PaginatedInstrumentsResponse> {
-    return this.instruments.getInstruments(pageSize, offset);
+  getInstruments(pageSize?: number, offset?: number, search?: string): Observable<PaginatedInstrumentsResponse> {
+    return this.instruments.getInstruments(pageSize, offset, search);
   }
 
   instrument(symbol: string): Observable<InstrumentResponse> {
@@ -104,5 +159,57 @@ export class TradeApi {
 
   history(symbol: string, range: ChartRange): Observable<PriceHistory> {
     return this.instruments.getInstrumentHistory(symbol, range);
+  }
+
+  // ===== Watchlist API =====
+
+  /** Get all watchlists for the current user */
+  getWatchlists(): Observable<WatchlistResponse[]> {
+    return this.http.get<WatchlistResponse[]>(`${this.baseUrl}/api/v1/watchlists`);
+  }
+
+  /** Get a specific watchlist with its items */
+  getWatchlist(watchlistId: string): Observable<WatchlistResponse> {
+    return this.http.get<WatchlistResponse>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}`);
+  }
+
+  /** Create a new watchlist */
+  createWatchlist(request: CreateWatchlistRequest): Observable<WatchlistResponse> {
+    return this.http.post<WatchlistResponse>(`${this.baseUrl}/api/v1/watchlists`, request);
+  }
+
+  /** Update a watchlist (name or display order) */
+  updateWatchlist(watchlistId: string, request: UpdateWatchlistRequest): Observable<WatchlistResponse> {
+    return this.http.patch<WatchlistResponse>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}`, request);
+  }
+
+  /** Delete a watchlist */
+  deleteWatchlist(watchlistId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}`);
+  }
+
+  /** Get all items in a watchlist */
+  getWatchlistItems(watchlistId: string): Observable<WatchlistItemResponse[]> {
+    return this.http.get<WatchlistItemResponse[]>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`);
+  }
+
+  /** Add an instrument to a watchlist */
+  addWatchlistItem(watchlistId: string, request: AddWatchlistItemRequest): Observable<WatchlistItemResponse> {
+    return this.http.post<WatchlistItemResponse>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`, request);
+  }
+
+  /** Add an instrument to multiple watchlists at once */
+  addWatchlistItemsBulk(request: BulkAddWatchlistItemsRequest): Observable<WatchlistItemResponse[]> {
+    return this.http.post<WatchlistItemResponse[]>(`${this.baseUrl}/api/v1/watchlists/items/bulk`, request);
+  }
+
+  /** Remove an instrument from a watchlist */
+  removeWatchlistItem(watchlistId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}`);
+  }
+
+  /** Reorder items in a watchlist */
+  reorderWatchlistItems(watchlistId: string, request: ReorderWatchlistItemsRequest): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`, request);
   }
 }

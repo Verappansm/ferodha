@@ -37,6 +37,28 @@ public class InstrumentService {
         return new PaginatedInstrumentsResponseDto(dtos, totalCount, pageSize, offset);
     }
 
+    public PaginatedInstrumentsResponseDto searchInstruments(String query, int pageSize, long offset) throws InvalidParameterException {
+        if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+            throw new InvalidParameterException("pageSize");
+        }
+        if (offset < 0) {
+            throw new InvalidParameterException("offset");
+        }
+        if (query == null || query.isBlank()) {
+            throw new InvalidParameterException("search query cannot be empty");
+        }
+
+        String searchPattern = "%" + query.toUpperCase() + "%";
+        List<Instrument> instruments = instrumentRepository.findTradableBySearch(searchPattern, pageSize, offset);
+        long totalCount = instrumentRepository.countTradableBySearch(searchPattern);
+
+        List<InstrumentResponseDto> dtos = instruments.stream()
+                .map(InstrumentService::toDto)
+                .toList();
+
+        return new PaginatedInstrumentsResponseDto(dtos, totalCount, pageSize, offset);
+    }
+
     public static InstrumentResponseDto toDto(Instrument instrument) {
         return new InstrumentResponseDto(
                 instrument.getSymbol(),

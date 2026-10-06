@@ -37,8 +37,12 @@ public class InstrumentController {
     public PaginatedInstrumentsResponseDto getInstruments(
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(defaultValue = "0") long offset,
+            @RequestParam(required = false) String search,
             @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
+        if (search != null && !search.isBlank()) {
+            return instrumentService.searchInstruments(search.trim(), pageSize, offset);
+        }
         return instrumentService.getInstruments(pageSize, offset);
     }
 

@@ -80,14 +80,14 @@ export class InstrumentDetailsComponent implements OnInit {
     const points = this.points();
     if (!points || points.length === 0) return null;
     const first = points[0].close;
-    const last = points[points.length - 1].close;
+    const last = points.at(-1)?.close;
     return {
       low: Math.min(...points.map((p) => p.low)),
       high: Math.max(...points.map((p) => p.high)),
       first,
       last,
-      change: last - first,
-      changePercent: first === 0 ? null : ((last - first) / first) * 100,
+      change: last ? last - first : 0,
+      changePercent: first === 0 || !last ? null : ((last - first) / first) * 100,
     };
   });
 
@@ -99,12 +99,15 @@ export class InstrumentDetailsComponent implements OnInit {
       this.chart?.destroy();
       this.chart = null;
       if (!canvas || !points || points.length === 0) return;
+      const first = points[0].close;
+      const last = points.at(-1)?.close;
+      const isUp = last ? last >= first : false;
       this.chart = this.drawChart(canvas, {
         labels: points.map((p) => this.label(p.time)),
         closes: points.map((p) => p.close),
         colours: {
-          line: cssVar('--brand-600'),
-          fill: cssVar('--brand-100'),
+          line: isUp ? cssVar('--positive') : cssVar('--negative'),
+          fill: isUp ? cssVar('--positive-bg') : cssVar('--negative-bg'),
           grid: cssVar('--ink-200'),
           text: cssVar('--ink-500'),
         },
@@ -138,7 +141,7 @@ export class InstrumentDetailsComponent implements OnInit {
    */
   trade(side: 'BUY' | 'SELL'): void {
     const price = suggestedLimitPrice(this.quote(), side);
-    this.router.navigate(['/order'], {
+    void this.router.navigate(['/order'], {
       queryParams:
         price === null ? { symbol: this.symbol(), side } : { symbol: this.symbol(), side, price },
     });

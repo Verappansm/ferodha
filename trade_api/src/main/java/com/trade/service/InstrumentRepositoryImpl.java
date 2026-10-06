@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class InstrumentRepositoryImpl implements InstrumentRepository {
@@ -25,6 +26,11 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
     }
 
     @Override
+    public Optional<Instrument> findByInstrumentId(UUID instrumentId) {
+        return instrumentMapper.findByInstrumentId(instrumentId).map(InstrumentRepositoryImpl::toDomain);
+    }
+
+    @Override
     public List<Instrument> findAllTradable(int limit, long offset) {
         return instrumentMapper.findAllTradable(limit, (int) offset)
                 .stream()
@@ -37,8 +43,22 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
         return instrumentMapper.countTradable();
     }
 
+    @Override
+    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
+        return instrumentMapper.findTradableBySearch(searchPattern, limit, (int) offset)
+                .stream()
+                .map(InstrumentRepositoryImpl::toDomain)
+                .toList();
+    }
+
+    @Override
+    public long countTradableBySearch(String searchPattern) {
+        return instrumentMapper.countTradableBySearch(searchPattern);
+    }
+
     private static Instrument toDomain(InstrumentRow row) {
         Instrument instrument = new Instrument(
+                row.instrumentId(),
                 row.symbol(),
                 row.displayName(),
                 InstrumentType.valueOf(row.assetClass()),

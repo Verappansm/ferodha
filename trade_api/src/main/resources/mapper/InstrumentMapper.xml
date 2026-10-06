@@ -21,6 +21,12 @@
         WHERE ticker = #{symbol}
     </select>
 
+    <select id="findByInstrumentId" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        WHERE instrument_id = #{instrumentId}
+    </select>
+
     <select id="findAllTradable" resultMap="instrumentRow">
         SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
         FROM Instruments
@@ -33,6 +39,22 @@
         SELECT COUNT(*)
         FROM Instruments
         WHERE tradable = true
+    </select>
+
+    <select id="findTradableBySearch" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        WHERE tradable = true
+        AND (UPPER(ticker) LIKE #{searchPattern} OR UPPER(name) LIKE #{searchPattern})
+        ORDER BY ticker ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countTradableBySearch" resultType="long">
+        SELECT COUNT(*)
+        FROM Instruments
+        WHERE tradable = true
+        AND (UPPER(ticker) LIKE #{searchPattern} OR UPPER(name) LIKE #{searchPattern})
     </select>
 
 </mapper>

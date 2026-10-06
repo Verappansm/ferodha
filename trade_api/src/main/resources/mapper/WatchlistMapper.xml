@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.WatchlistMapper">
+
+    <resultMap id="watchlistRow" type="com.trade.mapper.WatchlistRow">
+        <constructor>
+            <idArg column="watchlist_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="display_order" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="watchlistRow">
+        SELECT watchlist_id, name, user_id, display_order
+        FROM Watchlist
+        WHERE watchlist_id = #{watchlistId}
+    </select>
+
+    <select id="findByUserId" resultMap="watchlistRow">
+        SELECT watchlist_id, name, user_id, display_order
+        FROM Watchlist
+        WHERE user_id = #{userId}
+        ORDER BY display_order ASC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO Watchlist (watchlist_id, name, user_id, display_order)
+        VALUES (#{watchlistId}, #{name}, #{userId}, #{displayOrder})
+    </insert>
+
+    <delete id="deleteById">
+        DELETE FROM Watchlist
+        WHERE watchlist_id = #{watchlistId}
+    </delete>
+
+    <select id="findByUserIdAndName" resultMap="watchlistRow">
+        SELECT watchlist_id, name, user_id, display_order
+        FROM Watchlist
+        WHERE user_id = #{userId} AND name = #{name}
+    </select>
+
+    <select id="getMaxDisplayOrder" resultType="int">
+        SELECT COALESCE(MAX(display_order), 0)
+        FROM Watchlist
+        WHERE user_id = #{userId}
+    </select>
+
+    <update id="updateDisplayOrder">
+        UPDATE Watchlist
+        SET display_order = #{displayOrder}
+        WHERE watchlist_id = #{watchlistId}
+    </update>
+
+</mapper>

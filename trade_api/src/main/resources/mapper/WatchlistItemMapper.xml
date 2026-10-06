@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.WatchlistItemMapper">
+
+    <resultMap id="watchlistItemRow" type="com.trade.mapper.WatchlistItemRow">
+        <constructor>
+            <idArg column="item_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="watchlist_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="instrument_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="display_order" javaType="java.lang.Integer"/>
+            <arg column="added_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="watchlistItemRow">
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        FROM Watchlist_Items
+        WHERE item_id = #{itemId}
+    </select>
+
+    <select id="findByWatchlistId" resultMap="watchlistItemRow">
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        FROM Watchlist_Items
+        WHERE watchlist_id = #{watchlistId}
+        ORDER BY display_order ASC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at)
+        VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt})
+    </insert>
+
+    <delete id="deleteById">
+        DELETE FROM Watchlist_Items
+        WHERE item_id = #{itemId}
+    </delete>
+
+    <select id="findByWatchlistIdAndInstrumentId" resultMap="watchlistItemRow">
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        FROM Watchlist_Items
+        WHERE watchlist_id = #{watchlistId} AND instrument_id = #{instrumentId}
+    </select>
+
+    <delete id="deleteByWatchlistIdAndInstrumentId">
+        DELETE FROM Watchlist_Items
+        WHERE watchlist_id = #{watchlistId} AND instrument_id = #{instrumentId}
+    </delete>
+
+    <select id="getMaxDisplayOrder" resultType="int">
+        SELECT COALESCE(MAX(display_order), 0)
+        FROM Watchlist_Items
+        WHERE watchlist_id = #{watchlistId}
+    </select>
+
+    <update id="updateDisplayOrder">
+        UPDATE Watchlist_Items
+        SET display_order = #{displayOrder}
+        WHERE item_id = #{itemId}
+    </update>
+
+    <update id="updateDisplayOrders">
+        <foreach collection="itemOrderMap" index="itemId" item="displayOrder" separator=";">
+            UPDATE Watchlist_Items
+            SET display_order = #{displayOrder}
+            WHERE item_id = #{itemId} AND watchlist_id = #{watchlistId}
+        </foreach>
+    </update>
+
+</mapper>

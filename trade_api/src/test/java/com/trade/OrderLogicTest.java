@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,6 +61,12 @@ class OrderLogicTest {
                     }
 
                     @Override
+                    public Optional<Instrument> findByInstrumentId(java.util.UUID instrumentId) {
+                        // Not used in these tests
+                        return Optional.empty();
+                    }
+
+                    @Override
                     public List<Instrument> findAllTradable(int limit, long offset) {
                         // Not used in these tests
                         return List.of();
@@ -67,6 +74,18 @@ class OrderLogicTest {
 
                     @Override
                     public long countTradable() {
+                        // Not used in these tests
+                        return 0;
+                    }
+
+                    @Override
+                    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
+                        // Not used in these tests
+                        return List.of();
+                    }
+
+                    @Override
+                    public long countTradableBySearch(String searchPattern) {
                         // Not used in these tests
                         return 0;
                     }
@@ -88,7 +107,7 @@ class OrderLogicTest {
         // A tradable instrument, present for every test unless one of them
         // deliberately removes or delists it.
         instrumentsBySymbol.put(SYMBOL,
-                new Instrument(SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
+                new Instrument(UUID.randomUUID(), SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
     }
 
     // ---------------- Rule 1: account must exist ----------------
