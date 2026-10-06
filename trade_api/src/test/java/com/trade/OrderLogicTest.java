@@ -52,57 +52,7 @@ class OrderLogicTest {
 
     @BeforeEach
     void setUp() {
-        orderLogic = new OrderLogic(
-                accountId -> Optional.ofNullable(accountsById.get(accountId)),
-                new InstrumentRepository() {
-                    @Override
-                    public Optional<Instrument> findBySymbol(String symbol) {
-                        return Optional.ofNullable(instrumentsBySymbol.get(symbol));
-                    }
-
-                    @Override
-                    public Optional<Instrument> findByInstrumentId(java.util.UUID instrumentId) {
-                        // Not used in these tests
-                        return Optional.empty();
-                    }
-
-                    @Override
-                    public List<Instrument> findAllTradable(int limit, long offset) {
-                        // Not used in these tests
-                        return List.of();
-                    }
-
-                    @Override
-                    public long countTradable() {
-                        // Not used in these tests
-                        return 0;
-                    }
-
-                    @Override
-                    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
-                        // Not used in these tests
-                        return List.of();
-                    }
-
-                    @Override
-                    public long countTradableBySearch(String searchPattern) {
-                        // Not used in these tests
-                        return 0;
-                    }
-                },
-                (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
-                new IdempotencyKeyStore() {
-                    @Override
-                    public boolean isUsed(String key) {
-                        return usedIdempotencyKeys.contains(key);
-                    }
-
-                    @Override
-                    public void markUsed(String key) {
-                        usedIdempotencyKeys.add(key);
-                    }
-                }
-        );
+        orderLogic = orderLogicCharging(BigDecimal.ZERO);
 
         // A tradable instrument, present for every test unless one of them
         // deliberately removes or delists it.
@@ -272,6 +222,18 @@ class OrderLogicTest {
         assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
 
+    @Test
+    @DisplayName("Rule 6: the fee counts towards what a BUY must afford")
+    void buyMustAffordTheFeeToo() {
+        // 10 * 100.00 = 1000.00, plus 0.1% = 1.00 fee: 1001.00 needed.
+        orderLogic = orderLogicCharging(new BigDecimal("0.001"));
+        givenActiveAccount(new BigDecimal("1000.50"));
+        assertThrows(InsufficientFundsException.class, () -> orderLogic.evaluate(validBuyOrder()));
+
+        givenActiveAccount(new BigDecimal("1001.00"));
+        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
+    }
+
     // ---------------- Rule 7: SELL must not exceed holdings ----------------
 
     @Test
@@ -341,6 +303,62 @@ class OrderLogicTest {
     }
 
     // ---------------- test data helpers ----------------
+
+    // The domain rules over the in-memory fakes, charging feeRate on a fill.
+    private OrderLogic orderLogicCharging(BigDecimal feeRate) {
+        return new OrderLogic(
+                accountId -> Optional.ofNullable(accountsById.get(accountId)),
+                new InstrumentRepository() {
+                    @Override
+                    public Optional<Instrument> findBySymbol(String symbol) {
+                        return Optional.ofNullable(instrumentsBySymbol.get(symbol));
+                    }
+
+                    @Override
+                    public Optional<Instrument> findByInstrumentId(java.util.UUID instrumentId) {
+                        // Not used in these tests
+                        return Optional.empty();
+                    }
+
+                    @Override
+                    public List<Instrument> findAllTradable(int limit, long offset) {
+                        // Not used in these tests
+                        return List.of();
+                    }
+
+                    @Override
+                    public long countTradable() {
+                        // Not used in these tests
+                        return 0;
+                    }
+
+                    @Override
+                    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
+                        // Not used in these tests
+                        return List.of();
+                    }
+
+                    @Override
+                    public long countTradableBySearch(String searchPattern) {
+                        // Not used in these tests
+                        return 0;
+                    }
+                },
+                (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
+                new IdempotencyKeyStore() {
+                    @Override
+                    public boolean isUsed(String key) {
+                        return usedIdempotencyKeys.contains(key);
+                    }
+
+                    @Override
+                    public void markUsed(String key) {
+                        usedIdempotencyKeys.add(key);
+                    }
+                },
+                feeRate
+        );
+    }
 
     private Order validBuyOrder() {
         Order order = new Order();

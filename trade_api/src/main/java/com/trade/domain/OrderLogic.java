@@ -21,13 +21,23 @@ public class OrderLogic {
     private final InstrumentRepository instruments;
     private final PositionRepository positions;
     private final IdempotencyKeyStore idempotencyKeys;
+    // The executor's commission (fee = value x rate), so rule 6 refuses at
+    // placement a BUY the executor would only refuse at settlement.
+    private final BigDecimal feeRate;
 
     public OrderLogic(AccountRepository accounts, InstrumentRepository instruments,
                        PositionRepository positions, IdempotencyKeyStore idempotencyKeys) {
+        this(accounts, instruments, positions, idempotencyKeys, BigDecimal.ZERO);
+    }
+
+    public OrderLogic(AccountRepository accounts, InstrumentRepository instruments,
+                       PositionRepository positions, IdempotencyKeyStore idempotencyKeys,
+                       BigDecimal feeRate) {
         this.accounts = accounts;
         this.instruments = instruments;
         this.positions = positions;
         this.idempotencyKeys = idempotencyKeys;
+        this.feeRate = feeRate;
     }
 
     public void evaluate(Order order) throws DomainException {
@@ -56,9 +66,11 @@ public class OrderLogic {
             throw new InvalidOrderException("price");
         }
 
-        // rule 6 balance should be enough to buy (quantity * price <= cash balance)
+        // rule 6 balance should be enough to buy, fee included
+        // (quantity * price * (1 + fee rate) <= cash balance)
         if (order.getSide() == OrderSide.BUY) {
-            BigDecimal cost = order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+            BigDecimal value = order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+            BigDecimal cost = value.add(value.multiply(feeRate));
             if (!account.isAffordable(cost)) {
                 throw new InsufficientFundsException(cost, account.getBalance());
             }
