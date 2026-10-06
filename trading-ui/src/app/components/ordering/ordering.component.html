@@ -1,132 +1,206 @@
 <div class="ordering-container">
   <h2>Place Order</h2>
 
-  <form [formGroup]="form" (ngSubmit)="submit()" class="order-form">
-    <!-- Account (Read-only) -->
-    <div class="form-group">
-      <label for="account">Account</label>
-      <input
-        id="account"
-        type="text"
-        [value]="account() || ''"
-        readonly
-        class="form-control"
-        data-testid="order-account"
-      />
-      <small>Your trading account (from token)</small>
-    </div>
+  @if (step() === 'edit') {
+    <form [formGroup]="form" (ngSubmit)="review()" class="order-form">
+      <!-- Account (Read-only) -->
+      <div class="form-group">
+        <label for="account">Account</label>
+        <input
+          id="account"
+          type="text"
+          [value]="account() || ''"
+          readonly
+          class="form-control"
+          data-testid="order-account"
+        />
+        <small>Your trading account (from token)</small>
+      </div>
 
-    <!-- Symbol -->
-    <div class="form-group">
-      <label for="symbol">Symbol</label>
-      <input
-        id="symbol"
-        type="text"
-        formControlName="symbol"
-        placeholder="e.g., AAPL, TCS.NS, FX:EURUSD"
-        class="form-control"
-        data-testid="order-symbol"
-      />
-      @if (form.controls.symbol.invalid && form.controls.symbol.touched) {
-        <div class="error-message" data-testid="order-symbol-error">
-          {{ symbolError() }}
-        </div>
-      }
-    </div>
+      <!-- Symbol -->
+      <div class="form-group">
+        <label for="symbol">Symbol</label>
+        <input
+          id="symbol"
+          type="text"
+          formControlName="symbol"
+          placeholder="e.g., AAPL, TCS.NS, FX:EURUSD"
+          class="form-control"
+          data-testid="order-symbol"
+        />
+        @if (form.controls.symbol.invalid && form.controls.symbol.touched) {
+          <div class="error-message" data-testid="order-symbol-error">
+            {{ symbolError() }}
+          </div>
+        }
+      </div>
 
-    <!-- Side (BUY/SELL) -->
-    <div class="form-group">
-      <label for="side">Side</label>
-      <select id="side" formControlName="side" class="form-control" data-testid="order-side">
-        <option [value]="OrderSide.BUY">Buy</option>
-        <option [value]="OrderSide.SELL">Sell</option>
-      </select>
-    </div>
+      <!-- Side (BUY/SELL) -->
+      <div class="form-group">
+        <label for="side">Side</label>
+        <select id="side" formControlName="side" class="form-control" data-testid="order-side">
+          <option [value]="OrderSide.BUY">Buy</option>
+          <option [value]="OrderSide.SELL">Sell</option>
+        </select>
+      </div>
 
-    <!-- Quantity -->
-    <div class="form-group">
-      <label for="quantity">Quantity</label>
-      <input
-        id="quantity"
-        type="number"
-        formControlName="quantity"
-        placeholder="Whole units"
-        class="form-control"
-        data-testid="order-quantity"
-      />
-      @if (form.controls.quantity.invalid && form.controls.quantity.touched) {
-        <div class="error-message" data-testid="order-quantity-error">
-          {{ quantityError() }}
-        </div>
-      }
-    </div>
+      <!-- Quantity -->
+      <div class="form-group">
+        <label for="quantity">Quantity</label>
+        <input
+          id="quantity"
+          type="number"
+          formControlName="quantity"
+          placeholder="Whole units"
+          class="form-control"
+          data-testid="order-quantity"
+        />
+        @if (form.controls.quantity.invalid && form.controls.quantity.touched) {
+          <div class="error-message" data-testid="order-quantity-error">
+            {{ quantityError() }}
+          </div>
+        }
+      </div>
 
-    <!-- Price -->
-    <div class="form-group">
-      <label for="price">Price</label>
-      <input
-        id="price"
-        type="number"
-        step="0.01"
-        formControlName="price"
-        placeholder="Per unit (max 2 decimals)"
-        class="form-control"
-        data-testid="order-price"
-      />
-      @if (form.controls.price.invalid && form.controls.price.touched) {
-        <div class="error-message" data-testid="order-price-error">
-          {{ priceError() }}
-        </div>
-      }
-      @if (quote(); as q) {
-        <div class="current-price" data-testid="order-current-price">
-          @if (q.mid != null) {
-            Current price <strong>{{ q.mid | number: '1.2-4' }} {{ q.currency }}</strong>
-            @if (q.bid != null && q.ask != null) {
-              (bid {{ q.bid | number: '1.2-4' }} / ask {{ q.ask | number: '1.2-4' }})
+      <!-- Price -->
+      <div class="form-group">
+        <label for="price">Price</label>
+        <input
+          id="price"
+          type="number"
+          step="0.01"
+          formControlName="price"
+          placeholder="Per unit (max 2 decimals)"
+          class="form-control"
+          data-testid="order-price"
+        />
+        @if (form.controls.price.invalid && form.controls.price.touched) {
+          <div class="error-message" data-testid="order-price-error">
+            {{ priceError() }}
+          </div>
+        }
+        @if (quote(); as q) {
+          <div class="current-price" data-testid="order-current-price">
+            @if (q.mid != null) {
+              Current price <strong>{{ q.mid | number: '1.2-4' }} {{ q.currency }}</strong>
+              @if (q.bid != null && q.ask != null) {
+                (bid {{ q.bid | number: '1.2-4' }} / ask {{ q.ask | number: '1.2-4' }})
+              }
+              @if (q.stale) {
+                <span class="stale" data-testid="order-quote-stale">
+                  stale{{ q.asOf ? ', last priced ' + (q.asOf | date: 'shortTime') : '' }}
+                </span>
+              } @else if (q.asOf) {
+                · live {{ q.asOf | date: 'mediumTime' }}
+              }
+              @if (suggestedPrice(); as s) {
+                <div data-testid="order-suggested-price">
+                  Suggested limit {{ s | number: '1.2-2' }} ({{
+                    form.controls.side.value === 'BUY' ? '+' : '−'
+                  }}{{ bufferPercent }}% past the
+                  {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})
+                  @if (form.controls.price.value !== s) {
+                    <button
+                      type="button"
+                      class="link-button"
+                      data-testid="order-use-suggested"
+                      (click)="useSuggestedPrice()"
+                    >
+                      Use it
+                    </button>
+                  }
+                </div>
+              }
+            } @else {
+              No live price for {{ q.symbol }} yet.
             }
-            @if (q.stale) {
-              <span class="stale" data-testid="order-quote-stale">
-                stale{{ q.asOf ? ', last priced ' + (q.asOf | date: 'shortTime') : '' }}
-              </span>
-            } @else if (q.asOf) {
-              · live {{ q.asOf | date: 'mediumTime' }}
-            }
-            @if (suggestedPrice(); as s) {
-              <div data-testid="order-suggested-price">
-                Suggested limit {{ s | number: '1.2-2' }} ({{
-                  form.controls.side.value === 'BUY' ? '+' : '−'
-                }}{{ bufferPercent }}% past the
-                {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})
-                @if (form.controls.price.value !== s) {
-                  <button
-                    type="button"
-                    class="link-button"
-                    data-testid="order-use-suggested"
-                    (click)="useSuggestedPrice()"
-                  >
-                    Use it
-                  </button>
-                }
-              </div>
-            }
+          </div>
+        }
+      </div>
+
+      <!-- Review: nothing is sent until Confirm on the next step -->
+      <button type="submit" class="btn btn-primary" data-testid="order-submit">Review order</button>
+    </form>
+  } @else if (reviewed(); as order) {
+    <section class="order-review" aria-labelledby="order-review-title" data-testid="order-review">
+      <h3 id="order-review-title">Review your order</h3>
+      <dl>
+        <dt>Order</dt>
+        <dd data-testid="order-review-summary">
+          {{ order.side === 'BUY' ? 'Buy' : 'Sell' }} {{ order.quantity | number }}
+          {{ order.symbol }} at {{ order.price | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
+        </dd>
+
+        <dt>Estimated cost</dt>
+        <dd data-testid="order-review-cost">
+          @if (estimate(); as e) {
+            {{ e.cost | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
           } @else {
-            No live price for {{ q.symbol }} yet.
+            —
           }
+        </dd>
+
+        <dt>Fees</dt>
+        <dd data-testid="order-review-fee">
+          @if (estimate(); as e) {
+            {{ e.fee | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
+            <small>({{ feeRate()! * 100 | number: '1.0-4' }}% of the value)</small>
+          } @else if (isLoadingReview()) {
+            Loading…
+          } @else {
+            —
+          }
+        </dd>
+
+        <dt>{{ order.side === 'BUY' ? 'Total to pay' : 'Total you receive' }}</dt>
+        <dd data-testid="order-review-total">
+          @if (estimate(); as e) {
+            <strong>{{ e.total | number: '1.2-2' }} {{ priceCurrency() ?? '' }}</strong>
+          } @else {
+            —
+          }
+        </dd>
+
+        @if (cashRemaining() !== null) {
+          <dt>Cash remaining</dt>
+          <dd data-testid="order-review-cash" [class.negative]="cashRemaining()! < 0">
+            {{ cashRemaining() | number: '1.2-2' }} {{ balance()?.currency }}
+          </dd>
+        }
+      </dl>
+      <p class="note">
+        Estimated at your limit price. A fill can be at a better price, and the fee is charged on
+        the price you actually get, in your account's currency.
+      </p>
+
+      @if (reviewError()) {
+        <div class="alert alert-error" role="alert" data-testid="order-review-error">
+          {{ reviewError() }}
         </div>
       }
-    </div>
 
-    <!-- Submit Button -->
-    <button
-      type="submit"
-      class="btn btn-primary"
-      [disabled]="isSubmitting()"
-      data-testid="order-submit"
-    >
-      {{ isSubmitting() ? 'Submitting...' : 'Place Order' }}
-    </button>
-  </form>
+      <div class="review-actions">
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="order-review-confirm"
+          [disabled]="isSubmitting() || estimate() === null"
+          (click)="submit()"
+        >
+          {{ isSubmitting() ? 'Submitting...' : 'Confirm order' }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          data-testid="order-review-back"
+          [disabled]="isSubmitting()"
+          (click)="back()"
+        >
+          Back
+        </button>
+      </div>
+    </section>
+  }
 
   <!-- Success Message -->
   @if (successMessage()) {

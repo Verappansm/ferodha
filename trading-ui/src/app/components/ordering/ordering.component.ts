@@ -19,7 +19,13 @@ import {
   switchMap,
 } from 'rxjs';
 import { Session } from '../../core/session/session';
-import { TradeApi, OrderSide, OrderResponse, InstrumentQuote } from '../../api/trade-api';
+import {
+  TradeApi,
+  OrderSide,
+  OrderResponse,
+  InstrumentQuote,
+  BalanceResponse,
+} from '../../api/trade-api';
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { errorMessage } from '../../core/errors/error-message';
@@ -51,7 +57,43 @@ const RETRY_MESSAGES = {
 };
 
 const OUTCOME_UNKNOWN =
-  'We could not confirm whether your order was placed. Check the Orders page, or press Place Order again: retrying this same order can never place it twice.';
+  'We could not confirm whether your order was placed. Check the Orders page, or press Confirm again: retrying this same order can never place it twice.';
+
+const FEE_UNAVAILABLE =
+  'We could not load the fee schedule, so we cannot show what this order will cost. Go back and try again.';
+
+/** The order as it was when the customer pressed Review. */
+export interface ReviewedOrder {
+  symbol: string;
+  side: OrderSide;
+  quantity: number;
+  price: number;
+}
+
+export interface OrderEstimate {
+  /** quantity x limit price. */
+  cost: number;
+  /** cost x the published fee rate. */
+  fee: number;
+  /** What a BUY pays (cost + fee) or a SELL receives (cost - fee). */
+  total: number;
+}
+
+/**
+ * The executor's rule, applied to the limit price: fee = value x rate, added
+ * to a BUY's debit and taken from a SELL's credit. The rate comes from
+ * GET /api/v1/fees, never from a copy here.
+ */
+export function orderEstimate(
+  side: OrderSide,
+  quantity: number,
+  price: number,
+  rate: number,
+): OrderEstimate {
+  const cost = quantity * price;
+  const fee = cost * rate;
+  return { cost, fee, total: side === 'BUY' ? cost + fee : cost - fee };
+}
 
 function quantityValidator(control: AbstractControl): ValidationErrors | null {
   const value: unknown = control.value;
@@ -118,9 +160,42 @@ export class OrderingComponent {
 
   readonly OrderSide = OrderSide; // For template access
 
+  /** Review before submission: nothing reaches the platform until Confirm. */
+  readonly step = signal<'edit' | 'review'>('edit');
+  readonly reviewed = signal<ReviewedOrder | null>(null);
+  readonly feeRate = signal<number | null>(null);
+  readonly balance = signal<BalanceResponse | null>(null);
+  readonly isLoadingReview = signal(false);
+  readonly reviewError = signal('');
+
+  readonly estimate = computed(() => {
+    const order = this.reviewed();
+    const rate = this.feeRate();
+    if (!order || rate === null) return null;
+    return orderEstimate(order.side, order.quantity, order.price, rate);
+  });
+
+  /** The instrument's currency, when the quote names one. */
+  readonly priceCurrency = computed(() => this.quote()?.currency ?? null);
+
+  /**
+   * Cash left after a BUY. Shown only when the balance and the price are in
+   * the same currency: otherwise the executor converts at settlement, and a
+   * subtraction across currencies would be wrong.
+   */
+  readonly cashRemaining = computed(() => {
+    const order = this.reviewed();
+    const estimate = this.estimate();
+    const balance = this.balance();
+    if (!order || order.side !== 'BUY' || !estimate || !balance) return null;
+    const currency = this.priceCurrency();
+    if (currency && currency !== balance.currency) return null;
+    return balance.cashBalance - estimate.total;
+  });
+
   /**
    * The idempotency key of the order on the ticket. It is kept until the
-   * platform gives a definite answer, so pressing Place Order again after a
+   * platform gives a definite answer, so pressing Confirm again after a
    * network failure re-sends the same key and can never place a second
    * order. Editing the ticket makes it a different order, with a new key.
    */
@@ -155,7 +230,7 @@ export class OrderingComponent {
       });
 
     // Buy/sell shortcuts pre-fill the ticket: symbol, side and, from the
-    // instrument page, a suggested price. Nothing is sent until Place Order.
+    // instrument page, a suggested price. Nothing is sent until Confirm.
     this.route.queryParams.pipe(takeUntilDestroyed()).subscribe((params) => {
       if (params['side'] === 'BUY' || params['side'] === 'SELL') {
         this.form.controls.side.setValue(params['side']);
@@ -215,15 +290,70 @@ export class OrderingComponent {
     return null;
   }
 
+  /**
+   * Step one: validate the ticket and show every figure. The fee rate and
+   * balance are read fresh each time, so the review shows today's numbers.
+   */
+  async review(): Promise<void> {
+    this.successMessage.set('');
+    this.errorMessage.set('');
+    this.orderResult.set(null);
+    this.reviewError.set('');
+
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const accountId = this.account();
+    if (!accountId) {
+      this.errorMessage.set('You must be signed in to place an order');
+      return;
+    }
+
+    const { symbol, side, quantity, price } = this.form.getRawValue();
+    this.reviewed.set({
+      symbol: symbol.trim().toUpperCase(),
+      side,
+      quantity: Number(quantity),
+      price: Number(price),
+    });
+    this.feeRate.set(null);
+    this.balance.set(null);
+    this.step.set('review');
+
+    this.isLoadingReview.set(true);
+    try {
+      const [fees, balance] = await Promise.all([
+        firstValueFrom(this.tradeApi.feeSchedule()).catch(() => null),
+        // The cash line is a convenience: the review still works without it.
+        firstValueFrom(this.tradeApi.balance(accountId)).catch(() => null),
+      ]);
+      if (fees) {
+        this.feeRate.set(fees.rate);
+      } else {
+        this.reviewError.set(FEE_UNAVAILABLE);
+      }
+      this.balance.set(balance);
+    } finally {
+      this.isLoadingReview.set(false);
+    }
+  }
+
+  /** Back to the ticket with every field as it was (and the same idempotency key). */
+  back(): void {
+    this.step.set('edit');
+    this.reviewError.set('');
+    this.errorMessage.set('');
+  }
+
+  /** Step two: place exactly the order that was reviewed. */
   async submit(): Promise<void> {
-    // Clear previous messages
     this.successMessage.set('');
     this.errorMessage.set('');
     this.orderResult.set(null);
 
-    // Validate form
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    if (this.form.invalid || this.step() !== 'review' || this.feeRate() === null) {
       return;
     }
 
@@ -259,14 +389,17 @@ export class OrderingComponent {
       this.form.reset({ side: 'BUY' as OrderSide });
       this.quote.set(null);
       this.pendingKey = null;
+      this.step.set('edit');
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 0) {
-        // No answer: the order may or may not exist. Keep the key for a retry.
+        // No answer: the order may or may not exist. Stay on the review and
+        // keep the key, so Confirm again re-sends this same order.
         this.errorMessage.set(OUTCOME_UNKNOWN);
       } else {
         // The platform answered, so this order is settled one way or the other.
         this.pendingKey = null;
         this.errorMessage.set(errorMessage(error, isRetry ? RETRY_MESSAGES : PLACE_ORDER_MESSAGES));
+        this.step.set('edit');
       }
     } finally {
       this.isSubmitting.set(false);

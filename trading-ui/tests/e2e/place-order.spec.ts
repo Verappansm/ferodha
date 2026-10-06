@@ -116,9 +116,10 @@ test.describe('Place Order Journey', () => {
     await page.fill('input[data-testid="order-quantity"]', '1');
     await page.fill('input[data-testid="order-price"]', '150.00');
 
-    // Submit form
+    // Review, then confirm (LEAP-017)
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     // Wait for request to complete
     await page.waitForLoadState('networkidle');
@@ -149,9 +150,10 @@ test.describe('Place Order Journey', () => {
     await page.fill('input[data-testid="order-quantity"]', '1');
     await page.fill('input[data-testid="order-price"]', '100.00');
 
-    // Submit form
+    // Review, then confirm (LEAP-017)
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     // Wait for response from server
     await page.waitForTimeout(1000);
@@ -189,6 +191,7 @@ test.describe('Place Order Journey', () => {
 
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     await page.waitForTimeout(1000);
     await page.waitForLoadState('networkidle');

@@ -3,22 +3,51 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { ActivatedRoute } from '@angular/router';
-import { OrderingComponent } from './ordering.component';
+import { OrderingComponent, orderEstimate } from './ordering.component';
 import { Session } from '../../core/session/session';
 import { TradeApi, OrderResponse, OrderStatus, OrderSide } from '../../api/trade-api';
+
+describe('orderEstimate', () => {
+  it('the estimate equals quantity times price plus the published fee', () => {
+    const e = orderEstimate('BUY', 10, 150, 0.001);
+    expect(e.cost).toBe(1500);
+    expect(e.fee).toBeCloseTo(1.5, 10);
+    expect(e.total).toBeCloseTo(1501.5, 10);
+  });
+
+  it('a sell receives the value less the fee', () => {
+    expect(orderEstimate('SELL', 10, 150, 0.001).total).toBeCloseTo(1498.5, 10);
+  });
+});
 
 describe('OrderingComponent', () => {
   let fixture: ComponentFixture<OrderingComponent>;
   let placeOrder: ReturnType<typeof vi.fn>;
+  let feeSchedule: ReturnType<typeof vi.fn>;
+  let balance: ReturnType<typeof vi.fn>;
   const accountId = signal(3);
 
   beforeEach(async () => {
     placeOrder = vi.fn().mockReturnValue(of({}));
+    feeSchedule = vi.fn().mockReturnValue(of({ rate: 0.001 }));
+    balance = vi
+      .fn()
+      .mockReturnValue(
+        of({ accountId: 3, cashBalance: 100000, currency: 'USD', asOf: '2026-10-06T10:00:00Z' }),
+      );
     await TestBed.configureTestingModule({
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
-        { provide: TradeApi, useValue: { placeOrder, quote: vi.fn().mockReturnValue(of(null)) } },
+        {
+          provide: TradeApi,
+          useValue: {
+            placeOrder,
+            feeSchedule,
+            balance,
+            quote: vi.fn().mockReturnValue(of(null)),
+          },
+        },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -48,10 +77,21 @@ describe('OrderingComponent', () => {
     el.dispatchEvent(new Event('change'));
   }
 
-  async function submit(): Promise<void> {
-    byTestId<HTMLButtonElement>('order-submit')!.click();
+  async function click(id: string): Promise<void> {
+    byTestId<HTMLButtonElement>(id)!.click();
     await fixture.whenStable();
     fixture.detectChanges();
+  }
+
+  /** Review, then Confirm, as a customer would. On the review already, only Confirm. */
+  async function submit(): Promise<void> {
+    fixture.detectChanges();
+    if (!byTestId('order-review')) {
+      await click('order-submit');
+    }
+    if (byTestId('order-review')) {
+      await click('order-review-confirm');
+    }
   }
 
   it('renders the account read-only from the session token', () => {
@@ -336,6 +376,7 @@ describe('OrderingComponent', () => {
     fillValidOrder();
 
     await submit();
+    await click('order-review-back');
     input('order-quantity', '11');
     await submit();
 
@@ -392,6 +433,78 @@ describe('OrderingComponent', () => {
 
     expect(placeOrder).not.toHaveBeenCalled();
     expect(byTestId('order-price-error')?.textContent).toContain('2 decimal places');
+  });
+
+  describe('review and confirm (LEAP-017)', () => {
+    it('Review shows cost, fee, total and cash remaining, and sends nothing', async () => {
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(placeOrder).not.toHaveBeenCalled();
+      expect(feeSchedule).toHaveBeenCalled();
+      expect(byTestId('order-review-cost')?.textContent).toContain('1,500.00');
+      expect(byTestId('order-review-fee')?.textContent).toContain('1.50');
+      expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
+      expect(byTestId('order-review-cash')?.textContent).toContain('98,498.50');
+    });
+
+    it('a sell shows what it receives and no cash-remaining line', async () => {
+      fillValidOrder();
+      select('order-side', OrderSide.SELL);
+      input('order-price', '150.00');
+      await click('order-submit');
+
+      expect(byTestId('order-review-total')?.textContent).toContain('1,498.50');
+      expect(byTestId('order-review-cash')).toBeNull();
+    });
+
+    it('back returns to the ticket with every field kept', async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-back');
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(fixture.componentInstance.form.getRawValue()).toEqual({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+      expect(placeOrder).not.toHaveBeenCalled();
+    });
+
+    it('confirm places exactly the reviewed order', async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-confirm');
+
+      expect(placeOrder).toHaveBeenCalledTimes(1);
+      expect(placeOrder.mock.calls[0][0]).toMatchObject({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+    });
+
+    it('without the fee schedule the review says so and cannot be confirmed', async () => {
+      feeSchedule.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-error')?.textContent).toContain('fee schedule');
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(true);
+    });
+
+    it('without the balance the review still works, with no cash line', async () => {
+      balance.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
+      expect(byTestId('order-review-cash')).toBeNull();
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(false);
+    });
   });
 
   it('shows the order message from the API response', async () => {
