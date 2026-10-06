@@ -38,6 +38,8 @@ below is a decision the team has taken and will defend at review.
 | B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
 | B23 | Password on the wire | `contracts/auth-api.yaml` RegisterRequest, LoginRequest; admin login (B18) | `password` is the password itself, 12 to 128 characters | The trading UI and the admin console send `sha256("ferodha-v1:" + lower-case email + ":" + password)`, 64 hex characters, in its place; the auth service bcrypts what arrives, unchanged. The 12-character minimum is enforced in the browser on the typed password. Seed users re-hashed by trade-api Liquibase 012 |
 
+| B24 | Fee schedule route | `contracts/trade-api.yaml` | No fee route; the fee is applied only by the executor at settlement | `GET /api/v1/fees` in trade_api returns `{ "rate" }`, read from the executor's `EXECUTOR_FEE_RATE` (LEAP-017) |
+
 ## Why
 
 **B01 (username is an email).** An email is an identity a person already has,
@@ -193,3 +195,14 @@ changes. Consequences:
 - trade-api Liquibase 012 re-hashes the six seed users for the seed password.
   A user who registered before this change cannot sign in until they register
   again: their plain password was never kept, so it cannot be re-hashed.
+
+**B24 (fee schedule).** The order ticket shows the estimated fee before the
+customer confirms, but the rule lives only in the executor, which applies it
+at settlement, after placement. A rate copied into the UI would drift the day
+`EXECUTOR_FEE_RATE` changes. trade_api reads the same variable and serves it,
+so the estimate and the charge come from one value. Only the rate is exposed;
+the UI multiplies, the executor still charges. The estimate is in the
+instrument's currency; the executor converts to the account's currency at
+settlement (fixed 90 INR = 1 USD until LEAP-006). `docker-compose.yml` passes
+`EXECUTOR_FEE_RATE` to neither service today, so both use the 0.001 default; a
+rate set there must be given to trade-api and trade-executor together.

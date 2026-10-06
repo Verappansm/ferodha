@@ -75,6 +75,8 @@ tags:
     description: Account details, cash balance, holdings and order history.
   - name: Instruments
     description: Market instruments and tradable symbols.
+  - name: Fees
+    description: The commission the platform charges on a fill.
 
 security:
   - bearerAuth: []
@@ -518,6 +520,25 @@ paths:
           $ref: '#/components/responses/InstrumentNotFound'
         '422':
           $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/fees:
+    get:
+      tags: [Fees]
+      operationId: getFeeSchedule
+      summary: Get the fee schedule
+      description: |
+        The commission the Trade Executor charges on a fill, on both BUY and SELL:
+        fee = trade value x rate. The order ticket reads it to show an estimate before the
+        customer confirms, so the UI never carries its own copy of the rule.
+      responses:
+        '200':
+          description: The fee schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSchedule'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
 
 components:
 
@@ -1017,6 +1038,17 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PricePoint'
+
+    FeeSchedule:
+      type: object
+      additionalProperties: false
+      required: [rate]
+      properties:
+        rate:
+          type: number
+          minimum: 0
+          description: Fraction of the trade value charged as commission (0.001 is 0.1%).
+          example: 0.001
 
     PriceSnapshot:
       type: object
