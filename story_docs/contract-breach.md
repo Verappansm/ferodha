@@ -40,6 +40,7 @@ below is a decision the team has taken and will defend at review.
 | B24 | Order review and fee rate | `contracts/trade-api.yaml`; Sprint 7 executor | No review route; the executor holds the fee rate and applies it at settlement | `POST /api/v1/orders/review` returns cost, fee and total for a ticket without placing it. The rate lives only in trade_api (`fee.rate`), is written on each order as `Orders.fee_rate` (Liquibase 014), and the executor charges the order's own rate (LEAP-017) |
 | B25 | Rejection reason in order history | `contracts/trade-api.yaml` OrderHistoryEntry | No field says why an order was rejected | Optional `rejectionReason` (the executor's code, null unless `REJECTED`), shown on the Orders page and on the order ticket |
 | B26 | Change password and forced reset | `contracts/auth-api.yaml`; LEAP-010, LEAP-016 stories | `/auth/login` answers only 200 or `AUTH-401` | Right credentials on a user with a forced reset answer `AUTH-428` (HTTP 428) and no tokens; `POST /auth/change-password` (current password as the credential, so no token) sets the new one, clears the flag and revokes every refresh token |
+| B27 | Automated strategies | Sprint 10 stretch brief (`catalogue/stretch.md`); `contracts/kafka-topics.md` | No strategy routes; no delegated identity | `GET/POST /api/v1/strategies`, `/{id}`, `/{id}/events`, `/{id}/enable`, `/{id}/disable` in trade_api; orders placed with a 60 second delegated token carrying `strategyId` and `act.sub` claims, accepted only on `POST /api/v1/orders` and only while the strategy is ENABLED; consumer group `strategy-service` on `market-data` and `trade-events`; Liquibase 015 |
 
 ## Why
 
@@ -230,3 +231,12 @@ out, so it tells someone guessing nothing the shared `AUTH-401` does not.
 The route authenticates with the current password rather than a token because
 a user whose reset was forced cannot hold one. Failures count towards the
 login throttle.
+
+**B27 (automated strategies).** The brief puts strategy execution inside the
+Trade REST API as its own package (`com.trade.strategy`), with its own tables,
+routes and a `strategy-service` consumer group; none of that is in the Sprint
+6 contract. The routes are hand-written in the UI like the watchlist ones and
+are not yet in `design/trade-api.yaml`. The delegated token adds two claims
+(`strategyId`, `act`) to the contract's claim set; the token is only ever
+accepted by trade_api, never by the auth service. The decisions behind the
+identity and the limits are in `story_docs/decision-log/0001` and `0002`.

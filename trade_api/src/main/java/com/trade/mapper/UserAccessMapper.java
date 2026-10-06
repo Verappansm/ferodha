@@ -16,4 +16,9 @@ public interface UserAccessMapper {
     // An admin console token: the operator must be an ACTIVE admin. A forced
     // reset is not checked here, because admin sign-in does not enforce one.
     boolean isAdminBlocked(@Param("userId") String userId);
+
+    // A delegated strategy token is honoured only while its strategy still
+    // belongs to the token's user and is ENABLED: disabling a strategy stops
+    // its very next order, whatever the token's remaining lifetime.
+    boolean isStrategyTokenValid(@Param("strategyId") String strategyId, @Param("userId") String userId);
 }

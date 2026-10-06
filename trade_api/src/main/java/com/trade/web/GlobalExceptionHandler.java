@@ -5,6 +5,8 @@ import com.trade.exception.AccountNotActiveException;
 import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DomainException;
+import com.trade.exception.StrategyNotFoundException;
+import com.trade.exception.StrategyStateException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
@@ -56,7 +58,9 @@ public class GlobalExceptionHandler {
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
             Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
-            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE)
+            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE),
+            Map.entry(StrategyNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(StrategyStateException.class, HttpStatus.CONFLICT)
     );
 
     @ExceptionHandler(DomainException.class)

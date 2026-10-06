@@ -8,6 +8,7 @@ import { InstrumentsComponent } from './components/instruments/instruments.compo
 import { OrderingComponent } from './components/ordering/ordering.component';
 import { OrdersComponent } from './components/orders/orders.component';
 import { WatchlistComponent } from './components/watchlist/watchlist.component';
+import { StrategiesComponent } from './components/strategies/strategies.component';
 import { BankComponent } from './components/bank/bank.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { authGuard } from './core/guards/auth.guard';
@@ -32,6 +33,7 @@ export const routes: Routes = [
   { path: 'order', component: OrderingComponent, canActivate: [authGuard] },
   { path: 'orders', component: OrdersComponent, canActivate: [authGuard] },
   { path: 'watchlist', component: WatchlistComponent, canActivate: [authGuard] },
+  { path: 'strategies', component: StrategiesComponent, canActivate: [authGuard] },
   { path: 'bank', component: BankComponent, canActivate: [authGuard] },
   { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
 ];

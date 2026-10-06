@@ -1,0 +1,165 @@
+.strategies-container {
+  padding: 28px 24px;
+}
+
+.strategies-header {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.strategies-header h2 {
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.refresh {
+  height: 36px;
+  padding: 0 16px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.refresh:hover:not(:disabled) {
+  background: var(--ink-100);
+}
+
+.intro {
+  max-width: 70ch;
+  margin: 0 0 16px;
+  color: var(--ink-500);
+}
+
+.muted {
+  color: var(--ink-500);
+}
+
+.notice {
+  margin: 0 0 12px;
+  color: var(--positive);
+  font-weight: 600;
+}
+
+.strategy-form {
+  max-width: 760px;
+  margin-bottom: 24px;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+}
+
+.strategy-form h3 {
+  margin: 0 0 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 4px 16px;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0 12px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.limits {
+  white-space: normal;
+  font-size: 0.9rem;
+}
+
+.num {
+  text-align: right;
+}
+
+.actions-col {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  color: var(--ink-500);
+  border: 1px solid var(--ink-300);
+  border-radius: 999px;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.status-enabled {
+  color: var(--positive);
+}
+
+.status-tripped {
+  color: var(--negative);
+}
+
+.status-disabled,
+.status-completed,
+.status-expired {
+  color: var(--ink-500);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--brand-600);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.activity-row td {
+  background: var(--ink-100);
+  white-space: normal;
+}
+
+.activity {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity li {
+  display: flex;
+  gap: 12px;
+  padding: 3px 0;
+}
+
+.activity .when {
+  color: var(--ink-500);
+  white-space: nowrap;
+}
+
+.activity .kind {
+  min-width: 90px;
+  font-weight: 700;
+}

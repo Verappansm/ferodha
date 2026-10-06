@@ -101,9 +101,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             writeUnauthorised(response);
             return;
         }
+        if (principal.strategyId() != null) {
+            // A delegated strategy token places orders and does nothing else.
+            if (!isOrderPlacement(request)) {
+                writeError(response, HttpStatus.FORBIDDEN, "AUTH-403", "Forbidden");
+                return;
+            }
+            if (!isUuid(principal.strategyId())
+                    || !userAccess.isStrategyTokenValid(principal.strategyId(), principal.subjectUserId())) {
+                writeUnauthorised(response);
+                return;
+            }
+        }
 
         request.setAttribute(PRINCIPAL_ATTRIBUTE, principal);
         filterChain.doFilter(request, response);
+    }
+
+    private static boolean isOrderPlacement(HttpServletRequest request) {
+        return "POST".equals(request.getMethod()) && "/api/v1/orders".equals(request.getRequestURI());
     }
 
     private static boolean isUuid(String value) {

@@ -68,6 +68,13 @@ portfolio:
 fee:
   rate: ${EXECUTOR_FEE_RATE:0.001}
 
+# Automated strategies (com.trade.strategy). The group id is fixed: the engine
+# only needs quotes from now on, and a stale one is ignored (max-quote-age).
+strategy:
+  listen: ${STRATEGY_LISTEN:true}
+  group-id: strategy-service
+  max-quote-age-seconds: ${STRATEGY_MAX_QUOTE_AGE_SECONDS:900}
+
 logging:
   level:
     com.trade: INFO

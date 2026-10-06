@@ -45,6 +45,48 @@ export interface OrderFilter {
   to?: string;
 }
 
+/** Automated strategies (/api/v1/strategies), hand-written like the watchlist DTOs. */
+export type StrategyStatus = 'DISABLED' | 'ENABLED' | 'TRIPPED' | 'COMPLETED' | 'EXPIRED';
+
+export interface StrategyResponse {
+  strategyId: string;
+  name: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  triggerPrice: number;
+  quantity: number;
+  maxSpend: number | null;
+  maxPosition: number | null;
+  maxOrders: number;
+  maxFailures: number;
+  dryRun: boolean;
+  status: StrategyStatus;
+  ordersPlaced: number;
+  consecutiveFailures: number;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface StrategyEventResponse {
+  at: string;
+  kind: string;
+  detail: string | null;
+}
+
+export interface CreateStrategyRequest {
+  name: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  triggerPrice: number;
+  quantity: number;
+  maxSpend: number | null;
+  maxPosition: number | null;
+  maxOrders: number;
+  maxFailures: number;
+  dryRun: boolean;
+  expiresAt: string | null;
+}
+
 /** Watchlist DTOs (manually defined since OpenAPI spec has issues) */
 export interface WatchlistResponse {
   watchlistId: string;
@@ -144,7 +186,11 @@ export class TradeApi {
     return this.orders.cancelOrder(orderId.replace(/^ORD-/, ''));
   }
 
-  getInstruments(pageSize?: number, offset?: number, search?: string): Observable<PaginatedInstrumentsResponse> {
+  getInstruments(
+    pageSize?: number,
+    offset?: number,
+    search?: string,
+  ): Observable<PaginatedInstrumentsResponse> {
     return this.instruments.getInstruments(pageSize, offset, search);
   }
 
@@ -165,6 +211,36 @@ export class TradeApi {
     return this.instruments.getInstrumentHistory(symbol, range);
   }
 
+  // ===== Strategies API =====
+
+  strategies(): Observable<StrategyResponse[]> {
+    return this.http.get<StrategyResponse[]>(`${this.baseUrl}/api/v1/strategies`);
+  }
+
+  createStrategy(request: CreateStrategyRequest): Observable<StrategyResponse> {
+    return this.http.post<StrategyResponse>(`${this.baseUrl}/api/v1/strategies`, request);
+  }
+
+  enableStrategy(strategyId: string): Observable<StrategyResponse> {
+    return this.http.post<StrategyResponse>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}/enable`,
+      {},
+    );
+  }
+
+  disableStrategy(strategyId: string): Observable<StrategyResponse> {
+    return this.http.post<StrategyResponse>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}/disable`,
+      {},
+    );
+  }
+
+  strategyEvents(strategyId: string): Observable<StrategyEventResponse[]> {
+    return this.http.get<StrategyEventResponse[]>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}/events`,
+    );
+  }
+
   // ===== Watchlist API =====
 
   /** Get all watchlists for the current user */
@@ -183,8 +259,14 @@ export class TradeApi {
   }
 
   /** Update a watchlist (name or display order) */
-  updateWatchlist(watchlistId: string, request: UpdateWatchlistRequest): Observable<WatchlistResponse> {
-    return this.http.patch<WatchlistResponse>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}`, request);
+  updateWatchlist(
+    watchlistId: string,
+    request: UpdateWatchlistRequest,
+  ): Observable<WatchlistResponse> {
+    return this.http.patch<WatchlistResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}`,
+      request,
+    );
   }
 
   /** Delete a watchlist */
@@ -194,27 +276,48 @@ export class TradeApi {
 
   /** Get all items in a watchlist */
   getWatchlistItems(watchlistId: string): Observable<WatchlistItemResponse[]> {
-    return this.http.get<WatchlistItemResponse[]>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`);
+    return this.http.get<WatchlistItemResponse[]>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`,
+    );
   }
 
   /** Add an instrument to a watchlist */
-  addWatchlistItem(watchlistId: string, request: AddWatchlistItemRequest): Observable<WatchlistItemResponse> {
-    return this.http.post<WatchlistItemResponse>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`, request);
+  addWatchlistItem(
+    watchlistId: string,
+    request: AddWatchlistItemRequest,
+  ): Observable<WatchlistItemResponse> {
+    return this.http.post<WatchlistItemResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items`,
+      request,
+    );
   }
 
   /** Add an instrument to multiple watchlists at once */
-  addWatchlistItemsBulk(request: BulkAddWatchlistItemsRequest): Observable<WatchlistItemResponse[]> {
-    return this.http.post<WatchlistItemResponse[]>(`${this.baseUrl}/api/v1/watchlists/items/bulk`, request);
+  addWatchlistItemsBulk(
+    request: BulkAddWatchlistItemsRequest,
+  ): Observable<WatchlistItemResponse[]> {
+    return this.http.post<WatchlistItemResponse[]>(
+      `${this.baseUrl}/api/v1/watchlists/items/bulk`,
+      request,
+    );
   }
 
   /** Remove an instrument from a watchlist */
   removeWatchlistItem(watchlistId: string, itemId: string): Observable<void> {
-    return this.http.delete<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}`);
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}`,
+    );
   }
 
   /** Reorder items in a watchlist */
-  reorderWatchlistItems(watchlistId: string, request: ReorderWatchlistItemsRequest): Observable<void> {
-    return this.http.patch<void>(`${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`, request);
+  reorderWatchlistItems(
+    watchlistId: string,
+    request: ReorderWatchlistItemsRequest,
+  ): Observable<void> {
+    return this.http.patch<void>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`,
+      request,
+    );
   }
 
   /**

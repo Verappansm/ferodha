@@ -1,0 +1,279 @@
+<div class="strategies-container">
+  <div class="strategies-header">
+    <h2>Strategies</h2>
+    <div class="header-actions">
+      <button type="button" class="refresh" data-testid="strategies-refresh" (click)="refresh()">
+        Refresh
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="strategy-new"
+        [disabled]="showForm()"
+        (click)="openForm()"
+      >
+        New strategy
+      </button>
+    </div>
+  </div>
+
+  <p class="intro">
+    A strategy places an order for you when a price crosses a level, with nobody confirming it. A
+    BUY watches the ask and fires when it falls to your level; a SELL watches the bid and fires when
+    it rises to it. A new strategy starts disabled, and disabling one stops it at once and cancels
+    its working orders. Try a <strong>dry run</strong> first: it logs what it would do and places
+    nothing.
+  </p>
+
+  @if (notice()) {
+    <p class="notice" role="status" data-testid="strategy-notice">{{ notice() }}</p>
+  }
+  @if (error()) {
+    <p class="form-error" role="alert" data-testid="strategy-error">{{ error() }}</p>
+  }
+
+  @if (showForm()) {
+    <form
+      class="strategy-form"
+      [formGroup]="form"
+      (ngSubmit)="create()"
+      novalidate
+      data-testid="strategy-form"
+    >
+      <h3>New strategy</h3>
+      <div class="grid">
+        <div class="field">
+          <label class="field-label" for="s-name">Name</label>
+          <input id="s-name" class="input" formControlName="name" data-testid="strategy-name" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-symbol">Symbol</label>
+          <input
+            id="s-symbol"
+            class="input"
+            formControlName="symbol"
+            placeholder="AAPL"
+            data-testid="strategy-symbol"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-side">Action</label>
+          <select id="s-side" class="input" formControlName="side" data-testid="strategy-side">
+            <option value="BUY">Buy when the ask falls to the level</option>
+            <option value="SELL">Sell when the bid rises to the level</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-trigger">Trigger price</label>
+          <input
+            id="s-trigger"
+            class="input"
+            type="number"
+            step="0.01"
+            formControlName="triggerPrice"
+            data-testid="strategy-trigger"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-qty">Quantity per order</label>
+          <input
+            id="s-qty"
+            class="input"
+            type="number"
+            formControlName="quantity"
+            data-testid="strategy-quantity"
+          />
+        </div>
+        @if (isBuy()) {
+          <div class="field">
+            <label class="field-label" for="s-spend">Max spend (fees included)</label>
+            <input
+              id="s-spend"
+              class="input"
+              type="number"
+              step="0.01"
+              formControlName="maxSpend"
+              data-testid="strategy-max-spend"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label" for="s-position">Max position (units held)</label>
+            <input
+              id="s-position"
+              class="input"
+              type="number"
+              formControlName="maxPosition"
+              data-testid="strategy-max-position"
+            />
+          </div>
+        }
+        <div class="field">
+          <label class="field-label" for="s-orders">Max orders</label>
+          <input
+            id="s-orders"
+            class="input"
+            type="number"
+            formControlName="maxOrders"
+            data-testid="strategy-max-orders"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-failures">Stop after failures in a row</label>
+          <input
+            id="s-failures"
+            class="input"
+            type="number"
+            formControlName="maxFailures"
+            data-testid="strategy-max-failures"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-expires">Expires (optional)</label>
+          <input
+            id="s-expires"
+            class="input"
+            type="datetime-local"
+            formControlName="expiresAt"
+            data-testid="strategy-expires"
+          />
+        </div>
+      </div>
+      <label class="check">
+        <input type="checkbox" formControlName="dryRun" data-testid="strategy-dry-run" />
+        Dry run: log what it would do, place nothing
+      </label>
+
+      @if (form.touched && form.invalid) {
+        <p class="field-error" data-testid="strategy-form-hint">
+          @if (form.hasError('capsRequired')) {
+            A buy needs a max spend and a max position.
+          } @else {
+            Check the highlighted details: name, symbol, trigger price and quantity are required.
+          }
+        </p>
+      }
+      @if (formError()) {
+        <p class="form-error" role="alert" data-testid="strategy-form-error">{{ formError() }}</p>
+      }
+      <div class="form-actions">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          data-testid="strategy-save"
+          [disabled]="isSaving()"
+        >
+          {{ isSaving() ? 'Saving…' : 'Create strategy' }}
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="closeForm()">Cancel</button>
+      </div>
+    </form>
+  }
+
+  @if (isLoading() && !hasLoaded()) {
+    <p class="muted">Loading strategies…</p>
+  } @else if (hasLoaded() && strategies().length === 0) {
+    <p class="muted" data-testid="strategies-empty">
+      No strategies yet. Create one to have an order placed for you when a price crosses a level.
+    </p>
+  } @else if (strategies().length > 0) {
+    <div class="table-scroll">
+      <table data-testid="strategies-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Rule</th>
+            <th>Limits</th>
+            <th class="num">Orders</th>
+            <th class="num">Failures</th>
+            <th>Status</th>
+            <th class="actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (s of strategies(); track s.strategyId) {
+            <tr data-testid="strategy-row">
+              <td>
+                {{ s.name }}
+                @if (s.dryRun) {
+                  <span class="tag">dry run</span>
+                }
+              </td>
+              <td data-testid="strategy-rule">{{ rule(s) }}</td>
+              <td class="limits">
+                @if (s.side === 'BUY') {
+                  Spend ≤ {{ s.maxSpend | number: '1.2-2' }}<br />
+                  Position ≤ {{ s.maxPosition }}
+                } @else {
+                  Held units only
+                }
+                @if (s.expiresAt) {
+                  <br />Expires {{ s.expiresAt | date: 'd MMM y, HH:mm' }}
+                }
+              </td>
+              <td class="num">{{ s.ordersPlaced }} / {{ s.maxOrders }}</td>
+              <td class="num">{{ s.consecutiveFailures }} / {{ s.maxFailures }}</td>
+              <td>
+                <span
+                  [class]="'status status-' + s.status.toLowerCase()"
+                  data-testid="strategy-status"
+                  >{{ s.status }}</span
+                >
+              </td>
+              <td class="actions-col">
+                @if (s.status === 'ENABLED') {
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-testid="strategy-disable"
+                    [disabled]="busyId() !== null"
+                    (click)="disable(s)"
+                  >
+                    Disable
+                  </button>
+                } @else if (s.status === 'DISABLED' || s.status === 'TRIPPED') {
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    data-testid="strategy-enable"
+                    [disabled]="busyId() !== null"
+                    (click)="enable(s)"
+                  >
+                    {{ s.status === 'TRIPPED' ? 'Re-enable' : 'Enable' }}
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn btn-link"
+                  data-testid="strategy-activity"
+                  [attr.aria-expanded]="expandedId() === s.strategyId"
+                  (click)="toggleActivity(s)"
+                >
+                  Activity
+                </button>
+              </td>
+            </tr>
+            @if (expandedId() === s.strategyId) {
+              <tr class="activity-row" data-testid="strategy-activity-row">
+                <td colspan="7">
+                  @if (events().length === 0) {
+                    <span class="muted">No activity yet.</span>
+                  } @else {
+                    <ul class="activity">
+                      @for (e of events(); track $index) {
+                        <li data-testid="strategy-event">
+                          <span class="when">{{ e.at | date: 'd MMM, HH:mm:ss' }}</span>
+                          <span class="kind">{{ e.kind }}</span>
+                          <span>{{ e.detail }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
