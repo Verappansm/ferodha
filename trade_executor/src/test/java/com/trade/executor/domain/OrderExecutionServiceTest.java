@@ -54,7 +54,9 @@ class OrderExecutionServiceTest {
     // more meaningful here than mocks, same as OrderServiceTest wiring a
     // real OrderLogic over mocked mappers.
     private final CurrencyConverter currencyConverter = new CurrencyConverter();
-    private final FeeCalculator feeCalculator = new FeeCalculator(new BigDecimal("0.001"));
+    private final FeeCalculator feeCalculator = new FeeCalculator();
+    // The rate trade_api writes on a portal order; the executor charges it.
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.001");
 
     private OrderExecutionService orderExecutionService;
 
@@ -206,7 +208,7 @@ class OrderExecutionServiceTest {
     private void givenOrder(OrderSide side, BigDecimal limitPrice, int quantity) {
         when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.of(
                 new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", side.name(), quantity, limitPrice, "NEW",
-                        0, java.time.OffsetDateTime.now())));
+                        0, java.time.OffsetDateTime.now(), FEE_RATE)));
     }
 
     private void givenTradableInstrument(String currency) {

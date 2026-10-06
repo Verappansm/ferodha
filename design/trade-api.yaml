@@ -75,8 +75,6 @@ tags:
     description: Account details, cash balance, holdings and order history.
   - name: Instruments
     description: Market instruments and tradable symbols.
-  - name: Fees
-    description: The commission the platform charges on a fill.
 
 security:
   - bearerAuth: []
@@ -174,6 +172,42 @@ paths:
                   value:
                     errorCode: ORD-409
                     message: Duplicate order
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/orders/review:
+    post:
+      tags: [Orders]
+      operationId: reviewOrder
+      summary: Review an order before placing it
+      description: |
+        The figures the order ticket shows before the customer confirms (LEAP-017): cost at the
+        limit price, the fee at the platform's rate (the rate placing the order records on it), the
+        total, and the cash left after a BUY. Creates no order and publishes nothing. The executor
+        may fill at a better price, so for a BUY these figures are an upper bound.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderReviewRequest'
+      responses:
+        '200':
+          description: The review figures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderReviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          description: The account or the instrument does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '422':
           $ref: '#/components/responses/InvalidInput'
 
@@ -520,25 +554,6 @@ paths:
           $ref: '#/components/responses/InstrumentNotFound'
         '422':
           $ref: '#/components/responses/InvalidInput'
-
-  /api/v1/fees:
-    get:
-      tags: [Fees]
-      operationId: getFeeSchedule
-      summary: Get the fee schedule
-      description: |
-        The commission the Trade Executor charges on a fill, on both BUY and SELL:
-        fee = trade value x rate. The order ticket reads it to show an estimate before the
-        customer confirms, so the UI never carries its own copy of the rule.
-      responses:
-        '200':
-          description: The fee schedule.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FeeSchedule'
-        '401':
-          $ref: '#/components/responses/Unauthorised'
 
 components:
 
@@ -1039,16 +1054,80 @@ components:
           items:
             $ref: '#/components/schemas/PricePoint'
 
-    FeeSchedule:
+    OrderReviewRequest:
       type: object
       additionalProperties: false
-      required: [rate]
+      required: [accountId, symbol, side, quantity, price]
+      description: A PlaceOrderRequest without the idempotency key; a review creates nothing.
       properties:
-        rate:
+        accountId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: ACME
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          example: 100
+        price:
           type: number
-          minimum: 0
+          format: double
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+          example: 25.50
+
+    OrderReviewResponse:
+      type: object
+      additionalProperties: false
+      required: [symbol, side, quantity, price, currency, estimatedCost, feeRate, fee, total,
+                 cashBalance, accountCurrency]
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+        price:
+          type: number
+          format: double
+        currency:
+          type: string
+          description: The instrument's currency; estimatedCost, fee and total are in it.
+        estimatedCost:
+          type: number
+          format: double
+          description: quantity x price.
+        feeRate:
+          type: number
+          format: double
           description: Fraction of the trade value charged as commission (0.001 is 0.1%).
-          example: 0.001
+        fee:
+          type: number
+          format: double
+          description: estimatedCost x feeRate, to two decimal places.
+        total:
+          type: number
+          format: double
+          description: What a BUY pays (cost + fee) or a SELL receives (cost - fee).
+        cashBalance:
+          type: number
+          format: double
+        accountCurrency:
+          type: string
+        cashRemaining:
+          type: [number, 'null']
+          format: double
+          description: Cash left after a BUY; null for a SELL or when the two currencies differ.
 
     PriceSnapshot:
       type: object

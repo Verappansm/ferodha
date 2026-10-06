@@ -1,6 +1,8 @@
 package com.trade.controller;
 
 import com.trade.dto.OrderResponseDto;
+import com.trade.dto.OrderReviewRequestDto;
+import com.trade.dto.OrderReviewResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.event.OrderPlacedPayload;
 import com.trade.event.OrderPlacedPublisher;
@@ -59,6 +61,15 @@ public class OrderController {
 
         // returns order with "NEW" here as per story 3
         return ResponseEntity.ok(placed);
+    }
+
+    // The review step before Confirm (LEAP-017): cost, fee and total for the
+    // ticket as typed. Creates no order and publishes nothing.
+    @PostMapping("/review")
+    public OrderReviewResponseDto reviewOrder(@Valid @RequestBody OrderReviewRequestDto request,
+                                              @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws DomainException {
+        return orderService.reviewOrder(request, principal.accountId());
     }
 
     @DeleteMapping("/{id}")

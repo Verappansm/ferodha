@@ -16,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderMapperIT extends MapperIntegrationTestSupport {
 
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.001");
+
     @Autowired
     private AccountMapper accountMapper;
 
@@ -33,7 +35,7 @@ class OrderMapperIT extends MapperIntegrationTestSupport {
         UUID orderId = UUID.randomUUID();
 
         int affected = orderMapper.insertOrder(orderId, account.userId(), account.accountUuid(), instrumentId,
-                "BUY", 10, new BigDecimal("100.00"), new BigDecimal("100.00"), "FILLED", "IT-KEY-1");
+                "BUY", 10, new BigDecimal("100.00"), new BigDecimal("100.00"), "FILLED", "IT-KEY-1", FEE_RATE);
 
         assertEquals(1, affected);
         OrderRow row = orderMapper.findByOrderId(orderId).orElseThrow();
@@ -54,7 +56,7 @@ class OrderMapperIT extends MapperIntegrationTestSupport {
         UUID orderId = UUID.randomUUID();
 
         orderMapper.insertOrder(orderId, account.userId(), account.accountUuid(), instrumentId,
-                "BUY", 5, new BigDecimal("50.00"), null, "NEW", "IT-KEY-NEW-PRICE");
+                "BUY", 5, new BigDecimal("50.00"), null, "NEW", "IT-KEY-NEW-PRICE", FEE_RATE);
 
         OrderRow row = orderMapper.findByOrderId(orderId).orElseThrow();
         assertEquals("NEW", row.status());
@@ -67,11 +69,11 @@ class OrderMapperIT extends MapperIntegrationTestSupport {
         AccountRow account = givenAccount("order-dup@example.com", "BANK-ORDER-2", new BigDecimal("10000.00"));
         UUID instrumentId = insertTradableInstrument("ORD2");
         orderMapper.insertOrder(UUID.randomUUID(), account.userId(), account.accountUuid(), instrumentId,
-                "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-DUP");
+                "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-DUP", FEE_RATE);
 
         assertThrows(DataIntegrityViolationException.class, () ->
                 orderMapper.insertOrder(UUID.randomUUID(), account.userId(), account.accountUuid(), instrumentId,
-                        "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-DUP"));
+                        "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-DUP", FEE_RATE));
     }
 
     @Test
@@ -82,9 +84,9 @@ class OrderMapperIT extends MapperIntegrationTestSupport {
         UUID newOrderId = UUID.randomUUID();
         UUID filledOrderId = UUID.randomUUID();
         orderMapper.insertOrder(newOrderId, account.userId(), account.accountUuid(), instrumentId,
-                "BUY", 5, new BigDecimal("50.00"), null, "NEW", "IT-KEY-NEW");
+                "BUY", 5, new BigDecimal("50.00"), null, "NEW", "IT-KEY-NEW", FEE_RATE);
         orderMapper.insertOrder(filledOrderId, account.userId(), account.accountUuid(), instrumentId,
-                "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-FILLED");
+                "BUY", 5, new BigDecimal("50.00"), new BigDecimal("50.00"), "FILLED", "IT-KEY-FILLED", FEE_RATE);
 
         assertEquals(1, orderMapper.cancelIfNew(newOrderId));
         assertEquals(0, orderMapper.cancelIfNew(filledOrderId));
@@ -135,7 +137,7 @@ class OrderMapperIT extends MapperIntegrationTestSupport {
                                             BigDecimal price, String idempotencyKey) {
         UUID orderId = UUID.randomUUID();
         orderMapper.insertOrder(orderId, account.userId(), account.accountUuid(), instrumentId,
-                side, quantity, price, price, "FILLED", idempotencyKey);
+                side, quantity, price, price, "FILLED", idempotencyKey, FEE_RATE);
         orderMapper.insertTrade(orderId, price, quantity);
     }
 }

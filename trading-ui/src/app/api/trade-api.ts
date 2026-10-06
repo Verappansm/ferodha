@@ -3,7 +3,6 @@ import { Observable } from 'rxjs';
 import { AccountsService } from './generated/trade/api/accounts.service';
 import { OrdersService } from './generated/trade/api/orders.service';
 import { InstrumentsService } from './generated/trade/api/instruments.service';
-import { FeesService } from './generated/trade/api/fees.service';
 import { AccountResponse } from './generated/trade/model/account-response';
 import { BalanceResponse } from './generated/trade/model/balance-response';
 import { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
@@ -19,10 +18,12 @@ import { InstrumentQuote } from './generated/trade/model/instrument-quote';
 import { PriceHistory } from './generated/trade/model/price-history';
 import { PricePoint } from './generated/trade/model/price-point';
 import { PriceSnapshot } from './generated/trade/model/price-snapshot';
-import { FeeSchedule } from './generated/trade/model/fee-schedule';
+import { OrderReviewRequest } from './generated/trade/model/order-review-request';
+import { OrderReviewResponse } from './generated/trade/model/order-review-response';
 
 export type {
-  FeeSchedule,
+  OrderReviewRequest,
+  OrderReviewResponse,
   AccountResponse,
   BalanceResponse,
   OrderHistoryEntry,
@@ -56,7 +57,6 @@ export class TradeApi {
   private readonly accounts = inject(AccountsService);
   private readonly orders = inject(OrdersService);
   private readonly instruments = inject(InstrumentsService);
-  private readonly fees = inject(FeesService);
 
   account(accountId: number): Observable<AccountResponse> {
     return this.accounts.getAccount(accountId);
@@ -110,8 +110,11 @@ export class TradeApi {
     return this.instruments.getInstrumentHistory(symbol, range);
   }
 
-  /** The commission rate the executor charges on a fill, for the ticket's estimate (LEAP-017). */
-  feeSchedule(): Observable<FeeSchedule> {
-    return this.fees.getFeeSchedule();
+  /**
+   * The review step's figures (LEAP-017): cost, fee and total for the ticket
+   * as typed, worked out by trade_api. Creates no order.
+   */
+  reviewOrder(order: OrderReviewRequest): Observable<OrderReviewResponse> {
+    return this.orders.reviewOrder(order);
   }
 }

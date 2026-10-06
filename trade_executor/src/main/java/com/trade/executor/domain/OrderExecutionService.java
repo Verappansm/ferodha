@@ -139,7 +139,7 @@ public class OrderExecutionService {
         BigDecimal tradeValueInstrumentCcy = executedPrice.multiply(BigDecimal.valueOf(order.quantity()));
         BigDecimal tradeValueAccountCcy =
                 currencyConverter.convert(tradeValueInstrumentCcy, instrument.currency(), account.currency());
-        BigDecimal fee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(tradeValueAccountCcy));
+        BigDecimal fee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(tradeValueAccountCcy, order.feeRate()));
         BigDecimal totalCashDelta = MoneyRounding.toMoneyScale(side == OrderSide.BUY
                 ? tradeValueAccountCcy.add(fee)
                 : tradeValueAccountCcy.subtract(fee));
@@ -189,7 +189,7 @@ public class OrderExecutionService {
         int remainingQuantity = order.remainingQuantity();
         BigDecimal worstCaseValue = currencyConverter.convert(
                 order.limitPrice().multiply(BigDecimal.valueOf(remainingQuantity)), instrument.currency(), account.currency());
-        BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(worstCaseValue));
+        BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(worstCaseValue, order.feeRate()));
 
         Optional<RejectionReason> preCheck = side == OrderSide.BUY
                 ? ExecutionRuleCheck.checkAffordable(account, MoneyRounding.toMoneyScale(worstCaseValue.add(worstCaseFee)))

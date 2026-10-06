@@ -1,40 +1,54 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
-import { OrderingComponent, orderEstimate } from './ordering.component';
+import { Location } from '@angular/common';
+import { ActivatedRoute, Params, Router } from '@angular/router';
+import { BehaviorSubject, of, throwError } from 'rxjs';
+import { OrderingComponent } from './ordering.component';
 import { Session } from '../../core/session/session';
-import { TradeApi, OrderResponse, OrderStatus, OrderSide } from '../../api/trade-api';
+import {
+  TradeApi,
+  OrderResponse,
+  OrderReviewRequest,
+  OrderReviewResponse,
+  OrderStatus,
+  OrderSide,
+} from '../../api/trade-api';
 
-describe('orderEstimate', () => {
-  it('the estimate equals quantity times price plus the published fee', () => {
-    const e = orderEstimate('BUY', 10, 150, 0.001);
-    expect(e.cost).toBe(1500);
-    expect(e.fee).toBeCloseTo(1.5, 10);
-    expect(e.total).toBeCloseTo(1501.5, 10);
-  });
-
-  it('a sell receives the value less the fee', () => {
-    expect(orderEstimate('SELL', 10, 150, 0.001).total).toBeCloseTo(1498.5, 10);
-  });
-});
+/** What trade_api's review answers for a ticket: a 0.1% fee and 100,000 USD of cash. */
+function reviewOf(order: OrderReviewRequest): OrderReviewResponse {
+  const estimatedCost = order.quantity * order.price;
+  const fee = Math.round(estimatedCost * 0.001 * 100) / 100;
+  const buy = order.side === OrderSide.BUY;
+  const total = buy ? estimatedCost + fee : estimatedCost - fee;
+  return {
+    ...order,
+    currency: 'USD',
+    estimatedCost,
+    feeRate: 0.001,
+    fee,
+    total,
+    cashBalance: 100000,
+    accountCurrency: 'USD',
+    cashRemaining: buy ? 100000 - total : null,
+  };
+}
 
 describe('OrderingComponent', () => {
   let fixture: ComponentFixture<OrderingComponent>;
   let placeOrder: ReturnType<typeof vi.fn>;
-  let feeSchedule: ReturnType<typeof vi.fn>;
-  let balance: ReturnType<typeof vi.fn>;
+  let reviewOrder: ReturnType<typeof vi.fn>;
+  let navigate: ReturnType<typeof vi.fn>;
+  let back: ReturnType<typeof vi.fn>;
+  let queryParams: BehaviorSubject<Params>;
   const accountId = signal(3);
 
   beforeEach(async () => {
     placeOrder = vi.fn().mockReturnValue(of({}));
-    feeSchedule = vi.fn().mockReturnValue(of({ rate: 0.001 }));
-    balance = vi
-      .fn()
-      .mockReturnValue(
-        of({ accountId: 3, cashBalance: 100000, currency: 'USD', asOf: '2026-10-06T10:00:00Z' }),
-      );
+    reviewOrder = vi.fn((order: OrderReviewRequest) => of(reviewOf(order)));
+    navigate = vi.fn().mockResolvedValue(true);
+    back = vi.fn();
+    queryParams = new BehaviorSubject<Params>({});
     await TestBed.configureTestingModule({
       imports: [OrderingComponent],
       providers: [
@@ -43,17 +57,13 @@ describe('OrderingComponent', () => {
           provide: TradeApi,
           useValue: {
             placeOrder,
-            feeSchedule,
-            balance,
+            reviewOrder,
             quote: vi.fn().mockReturnValue(of(null)),
           },
         },
-        {
-          provide: ActivatedRoute,
-          useValue: {
-            queryParams: of({}),
-          },
-        },
+        { provide: ActivatedRoute, useValue: { queryParams } },
+        { provide: Router, useValue: { navigate } },
+        { provide: Location, useValue: { back } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(OrderingComponent);
@@ -436,12 +446,18 @@ describe('OrderingComponent', () => {
   });
 
   describe('review and confirm (LEAP-017)', () => {
-    it('Review shows cost, fee, total and cash remaining, and sends nothing', async () => {
+    it('Review shows the figures trade_api works out, and places nothing', async () => {
       fillValidOrder();
       await click('order-submit');
 
       expect(placeOrder).not.toHaveBeenCalled();
-      expect(feeSchedule).toHaveBeenCalled();
+      expect(reviewOrder).toHaveBeenCalledWith({
+        accountId: 3,
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
       expect(byTestId('order-review-cost')?.textContent).toContain('1,500.00');
       expect(byTestId('order-review-fee')?.textContent).toContain('1.50');
       expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
@@ -487,23 +503,101 @@ describe('OrderingComponent', () => {
       });
     });
 
-    it('without the fee schedule the review says so and cannot be confirmed', async () => {
-      feeSchedule.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    it('a review that cannot be worked out says so and cannot be confirmed', async () => {
+      reviewOrder.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
       fillValidOrder();
       await click('order-submit');
 
-      expect(byTestId('order-review-error')?.textContent).toContain('fee schedule');
+      expect(byTestId('order-review-error')?.textContent).toContain('could not work out');
       expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(true);
     });
 
-    it('without the balance the review still works, with no cash line', async () => {
-      balance.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 503 })));
+    it('a review the platform refuses shows its sentence', async () => {
+      reviewOrder.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 404,
+              error: { errorCode: 'INS-404', message: 'Instrument not found' },
+            }),
+        ),
+      );
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-error')?.textContent?.trim()).not.toBe('');
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(true);
+    });
+
+    it('without a cash figure (a sell, or another currency) there is no cash line', async () => {
+      reviewOrder.mockImplementation((order: OrderReviewRequest) =>
+        of({ ...reviewOf(order), accountCurrency: 'INR', cashRemaining: null }),
+      );
       fillValidOrder();
       await click('order-submit');
 
       expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
       expect(byTestId('order-review-cash')).toBeNull();
       expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(false);
+    });
+  });
+
+  describe('the review in the browser history', () => {
+    it('Review adds the review flag to the URL as a new history entry', async () => {
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { review: '1' }, replaceUrl: false }),
+      );
+    });
+
+    it("the browser's Back from the review returns to the ticket with every field kept", async () => {
+      fillValidOrder();
+      await click('order-submit');
+      queryParams.next({ review: '1' });
+
+      queryParams.next({}); // what popping the history entry does
+      fixture.detectChanges();
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(fixture.componentInstance.form.getRawValue()).toEqual({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+      expect(placeOrder).not.toHaveBeenCalled();
+    });
+
+    it("the page's Back button pops the review's history entry", async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-back');
+
+      expect(back).toHaveBeenCalledTimes(1);
+    });
+
+    it('a review flag with no review behind it (a reload) is dropped from the URL', async () => {
+      queryParams.next({ symbol: 'AAPL', review: '1' });
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { review: null }, replaceUrl: true }),
+      );
+    });
+
+    it('the review flag changing never overwrites what was typed', async () => {
+      queryParams.next({ symbol: 'AAPL', side: 'BUY', price: '150' });
+      input('order-quantity', '10');
+      input('order-price', '149.00');
+      await click('order-submit');
+
+      queryParams.next({ symbol: 'AAPL', side: 'BUY', price: '150', review: '1' });
+
+      expect(fixture.componentInstance.form.controls.price.value).toBe(149);
     });
   });
 
@@ -555,6 +649,8 @@ describe('OrderingComponent price suggestion', () => {
         { provide: Session, useValue: { accountId: signal(3) } },
         { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
         { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
+        { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
+        { provide: Location, useValue: { back: vi.fn() } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(OrderingComponent);

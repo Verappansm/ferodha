@@ -111,7 +111,7 @@ public class OrderBookMatcher {
                 // justifies re-checking the incoming side once, up front.
                 BigDecimal restingTradeValue = currencyConverter.convert(
                         executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), restingAccount.currency());
-                BigDecimal restingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(restingTradeValue));
+                BigDecimal restingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(restingTradeValue, resting.feeRate()));
                 Optional<RejectionReason> restingCheck = restingSide == OrderSide.BUY
                         ? ExecutionRuleCheck.checkAffordable(restingAccount, MoneyRounding.toMoneyScale(restingTradeValue.add(restingFee)))
                         : ExecutionRuleCheck.checkHoldingsSufficient(
@@ -124,7 +124,7 @@ public class OrderBookMatcher {
 
                 BigDecimal incomingTradeValue = currencyConverter.convert(
                         executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), incomingAccount.currency());
-                BigDecimal incomingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(incomingTradeValue));
+                BigDecimal incomingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(incomingTradeValue, incoming.feeRate()));
 
                 BigDecimal restingCashDelta = MoneyRounding.toMoneyScale(restingSide == OrderSide.BUY
                         ? restingTradeValue.add(restingFee) : restingTradeValue.subtract(restingFee));

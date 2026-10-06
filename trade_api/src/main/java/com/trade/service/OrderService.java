@@ -3,12 +3,16 @@ package com.trade.service;
 import com.trade.domain.Order;
 import com.trade.domain.OrderLogic;
 import com.trade.dto.OrderResponseDto;
+import com.trade.dto.OrderReviewRequestDto;
+import com.trade.dto.OrderReviewResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.enums.OrderSide;
 import com.trade.enums.OrderStatus;
+import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DomainException;
 import com.trade.exception.DuplicateOrderException;
+import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
 import com.trade.mapper.AccountMapper;
@@ -17,11 +21,13 @@ import com.trade.mapper.InstrumentMapper;
 import com.trade.mapper.InstrumentRow;
 import com.trade.mapper.OrderMapper;
 import com.trade.mapper.OrderRow;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.UUID;
 
 @Service
@@ -32,14 +38,19 @@ public class OrderService {
     private final OrderMapper orderMapper;
     private final OrderLogic orderLogic;
     private final AccountAccessGuard accessGuard;
+    // The commission rate (LEAP-017). Only trade_api holds it: it is written on
+    // every order, and trade_executor charges each fill at the order's own rate.
+    private final BigDecimal feeRate;
 
     public OrderService(AccountMapper accountMapper, InstrumentMapper instrumentMapper,
-                        OrderMapper orderMapper, OrderLogic orderLogic, AccountAccessGuard accessGuard) {
+                        OrderMapper orderMapper, OrderLogic orderLogic, AccountAccessGuard accessGuard,
+                        @Value("${fee.rate}") BigDecimal feeRate) {
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
         this.orderMapper = orderMapper;
         this.orderLogic = orderLogic;
         this.accessGuard = accessGuard;
+        this.feeRate = feeRate;
     }
 
     //service must roll back on every failure after the balance write
@@ -72,7 +83,7 @@ public class OrderService {
             orderMapper.insertOrder(
                     orderId, account.userId(), account.accountUuid(), instrument.instrumentId(),
                     order.getSide().name(), order.getQuantity(), order.getPrice(), order.getExecutedPrice(),
-                    order.getStatus().name(), order.getIdempotencyKey());
+                    order.getStatus().name(), order.getIdempotencyKey(), feeRate);
         } catch (DataIntegrityViolationException e) {
             throw new DuplicateOrderException(order.getIdempotencyKey());
         }
@@ -85,6 +96,35 @@ public class OrderService {
                 order.getSide(),
                 order.getQuantity(),
                 order.getPrice());
+    }
+
+    // The review step (LEAP-017): what the order will cost at its limit price,
+    // with the fee at the rate placeOrder would write on it. Reads only; it
+    // saves and publishes nothing. The executor may fill at a better price, so
+    // for a BUY these figures are an upper bound.
+    public OrderReviewResponseDto reviewOrder(OrderReviewRequestDto request, Long callerAccountId)
+            throws DomainException {
+        accessGuard.requireTokenMatches(request.accountId(), callerAccountId);
+        AccountRow account = accountMapper.findById(request.accountId())
+                .orElseThrow(() -> new AccountNotFoundException(request.accountId()));
+        accessGuard.requireActiveAndMatches(account, callerAccountId);
+
+        String symbol = request.symbol().trim().toUpperCase();
+        InstrumentRow instrument = instrumentMapper.findBySymbol(symbol)
+                .filter(i -> Boolean.TRUE.equals(i.tradable()))
+                .orElseThrow(() -> new InstrumentNotFoundException(symbol));
+
+        BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
+        BigDecimal fee = cost.multiply(feeRate).setScale(2, RoundingMode.HALF_UP);
+        boolean buy = request.side() == OrderSide.BUY;
+        BigDecimal total = buy ? cost.add(fee) : cost.subtract(fee);
+        boolean sameCurrency = instrument.quoteCurrency().equals(account.currency());
+        BigDecimal cashRemaining = buy && sameCurrency ? account.cashBalance().subtract(total) : null;
+
+        return new OrderReviewResponseDto(
+                symbol, request.side(), request.quantity(), request.price(),
+                instrument.quoteCurrency(), cost, feeRate, fee, total,
+                account.cashBalance(), account.currency(), cashRemaining);
     }
 
     @Transactional(rollbackFor = Exception.class)

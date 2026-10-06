@@ -2,7 +2,7 @@
   <h2>Place Order</h2>
 
   @if (step() === 'edit') {
-    <form [formGroup]="form" (ngSubmit)="review()" class="order-form">
+    <form [formGroup]="form" (ngSubmit)="startReview()" class="order-form">
       <!-- Account (Read-only) -->
       <div class="form-group">
         <label for="account">Account</label>
@@ -121,57 +121,47 @@
       <!-- Review: nothing is sent until Confirm on the next step -->
       <button type="submit" class="btn btn-primary" data-testid="order-submit">Review order</button>
     </form>
-  } @else if (reviewed(); as order) {
+  } @else {
     <section class="order-review" aria-labelledby="order-review-title" data-testid="order-review">
       <h3 id="order-review-title">Review your order</h3>
-      <dl>
-        <dt>Order</dt>
-        <dd data-testid="order-review-summary">
-          {{ order.side === 'BUY' ? 'Buy' : 'Sell' }} {{ order.quantity | number }}
-          {{ order.symbol }} at {{ order.price | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
-        </dd>
-
-        <dt>Estimated cost</dt>
-        <dd data-testid="order-review-cost">
-          @if (estimate(); as e) {
-            {{ e.cost | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
-          } @else {
-            —
-          }
-        </dd>
-
-        <dt>Fees</dt>
-        <dd data-testid="order-review-fee">
-          @if (estimate(); as e) {
-            {{ e.fee | number: '1.2-2' }} {{ priceCurrency() ?? '' }}
-            <small>({{ feeRate()! * 100 | number: '1.0-4' }}% of the value)</small>
-          } @else if (isLoadingReview()) {
-            Loading…
-          } @else {
-            —
-          }
-        </dd>
-
-        <dt>{{ order.side === 'BUY' ? 'Total to pay' : 'Total you receive' }}</dt>
-        <dd data-testid="order-review-total">
-          @if (estimate(); as e) {
-            <strong>{{ e.total | number: '1.2-2' }} {{ priceCurrency() ?? '' }}</strong>
-          } @else {
-            —
-          }
-        </dd>
-
-        @if (cashRemaining() !== null) {
-          <dt>Cash remaining</dt>
-          <dd data-testid="order-review-cash" [class.negative]="cashRemaining()! < 0">
-            {{ cashRemaining() | number: '1.2-2' }} {{ balance()?.currency }}
+      @if (review(); as r) {
+        <dl>
+          <dt>Order</dt>
+          <dd data-testid="order-review-summary">
+            {{ r.side === 'BUY' ? 'Buy' : 'Sell' }} {{ r.quantity | number }} {{ r.symbol }} at
+            {{ r.price | number: '1.2-2' }} {{ r.currency }}
           </dd>
-        }
-      </dl>
-      <p class="note">
-        Estimated at your limit price. A fill can be at a better price, and the fee is charged on
-        the price you actually get, in your account's currency.
-      </p>
+
+          <dt>Estimated cost</dt>
+          <dd data-testid="order-review-cost">
+            {{ r.estimatedCost | number: '1.2-2' }} {{ r.currency }}
+          </dd>
+
+          <dt>Fees</dt>
+          <dd data-testid="order-review-fee">
+            {{ r.fee | number: '1.2-2' }} {{ r.currency }}
+            <small>({{ r.feeRate * 100 | number: '1.0-4' }}% of the value)</small>
+          </dd>
+
+          <dt>{{ r.side === 'BUY' ? 'Total to pay' : 'Total you receive' }}</dt>
+          <dd data-testid="order-review-total">
+            <strong>{{ r.total | number: '1.2-2' }} {{ r.currency }}</strong>
+          </dd>
+
+          @if (r.cashRemaining != null) {
+            <dt>Cash remaining</dt>
+            <dd data-testid="order-review-cash" [class.negative]="r.cashRemaining < 0">
+              {{ r.cashRemaining | number: '1.2-2' }} {{ r.accountCurrency }}
+            </dd>
+          }
+        </dl>
+        <p class="note">
+          Estimated at your limit price. A fill can be at a better price, and the fee is charged on
+          the price you actually get, in your account's currency.
+        </p>
+      } @else if (isLoadingReview()) {
+        <p data-testid="order-review-loading">Working out the cost…</p>
+      }
 
       @if (reviewError()) {
         <div class="alert alert-error" role="alert" data-testid="order-review-error">
@@ -184,7 +174,7 @@
           type="button"
           class="btn btn-primary"
           data-testid="order-review-confirm"
-          [disabled]="isSubmitting() || estimate() === null"
+          [disabled]="isSubmitting() || review() === null"
           (click)="submit()"
         >
           {{ isSubmitting() ? 'Submitting...' : 'Confirm order' }}

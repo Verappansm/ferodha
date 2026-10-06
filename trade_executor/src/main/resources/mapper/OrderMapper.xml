@@ -14,6 +14,7 @@
             <arg column="status" javaType="java.lang.String"/>
             <arg column="filled_quantity" javaType="int"/>
             <arg column="placed_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="fee_rate" javaType="java.math.BigDecimal"/>
         </constructor>
     </resultMap>
 
@@ -27,7 +28,8 @@
         o.limit_price AS price,
         o.status,
         o.filled_quantity,
-        o.placed_at
+        o.placed_at,
+        o.fee_rate
     </sql>
 
     <select id="findById" resultMap="orderRow">
