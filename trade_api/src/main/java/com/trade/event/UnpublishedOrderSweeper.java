@@ -52,16 +52,23 @@ public class UnpublishedOrderSweeper {
             }
             log.warn("Resending ORDER_PLACED for {} order(s) Kafka never acknowledged", stuck.size());
             for (UnpublishedOrderRow row : stuck) {
-                publisher.publish(new OrderPlacedPayload(
-                        "ORD-" + row.orderId(),
-                        row.accountId(),
-                        row.symbol(),
-                        OrderSide.valueOf(row.side()),
-                        row.quantity(),
-                        row.price(),
-                        row.idempotencyKey(),
-                        row.placedAt().toInstant(),
-                        CurrencyConversion.ratesForInstrument(row.instrumentCurrency())));
+                // Per row: the batch is oldest-first, so one row that cannot
+                // be rebuilt (e.g. an instrument currency with no rate) would
+                // otherwise block every order behind it on every cycle.
+                try {
+                    publisher.publish(new OrderPlacedPayload(
+                            "ORD-" + row.orderId(),
+                            row.accountId(),
+                            row.symbol(),
+                            OrderSide.valueOf(row.side()),
+                            row.quantity(),
+                            row.price(),
+                            row.idempotencyKey(),
+                            row.placedAt().toInstant(),
+                            CurrencyConversion.ratesForInstrument(row.instrumentCurrency())));
+                } catch (RuntimeException e) {
+                    log.warn("Could not resend ORDER_PLACED for {}: {}", row.orderId(), e.getMessage());
+                }
             }
         } catch (RuntimeException e) {
             // A failed sweep (database or broker down) is retried next cycle;

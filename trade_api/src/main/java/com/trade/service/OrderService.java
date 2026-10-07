@@ -16,6 +16,7 @@ import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
+import com.trade.exception.UnsupportedCurrencyException;
 import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
 import com.trade.mapper.InstrumentMapper;
@@ -77,6 +78,9 @@ public class OrderService {
         InstrumentRow instrument = instrumentMapper.findBySymbol(request.symbol())
                 .orElseThrow(() -> new IllegalStateException(
                         "Instrument " + request.symbol() + " passed evaluation but is missing at write time"));
+        // Both sides: a SELL needs the rate too, to settle its proceeds, and
+        // the executor only has the rates this service puts on ORDER_PLACED.
+        requireConvertible(instrument, account);
 
         if (order.getSide() == OrderSide.BUY) {
             BigDecimal instrumentValue = order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
@@ -126,6 +130,7 @@ public class OrderService {
         InstrumentRow instrument = instrumentMapper.findBySymbol(symbol)
                 .filter(i -> Boolean.TRUE.equals(i.tradable()))
                 .orElseThrow(() -> new InstrumentNotFoundException(symbol));
+        requireConvertible(instrument, account);
 
         BigDecimal cost = request.price().multiply(BigDecimal.valueOf(request.quantity()));
         BigDecimal fee = cost.multiply(feeRate).setScale(2, RoundingMode.HALF_UP);
@@ -151,6 +156,13 @@ public class OrderService {
         InstrumentRow instrument = instrumentMapper.findBySymbol(normalized)
                 .orElseThrow(() -> new InstrumentNotFoundException(normalized));
         return CurrencyConversion.ratesForInstrument(instrument.quoteCurrency());
+    }
+
+    private static void requireConvertible(InstrumentRow instrument, AccountRow account)
+            throws UnsupportedCurrencyException {
+        if (!CurrencyConversion.isSupported(instrument.quoteCurrency(), account.currency())) {
+            throw new UnsupportedCurrencyException(instrument.quoteCurrency(), account.currency());
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

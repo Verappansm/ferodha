@@ -17,6 +17,7 @@ import com.trade.exception.InvalidParameterException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
 import com.trade.exception.PricingUnavailableException;
+import com.trade.exception.UnsupportedCurrencyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -60,7 +61,8 @@ public class GlobalExceptionHandler {
             Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
             Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE),
             Map.entry(StrategyNotFoundException.class, HttpStatus.NOT_FOUND),
-            Map.entry(StrategyStateException.class, HttpStatus.CONFLICT)
+            Map.entry(StrategyStateException.class, HttpStatus.CONFLICT),
+            Map.entry(UnsupportedCurrencyException.class, HttpStatus.UNPROCESSABLE_ENTITY)
     );
 
     @ExceptionHandler(DomainException.class)

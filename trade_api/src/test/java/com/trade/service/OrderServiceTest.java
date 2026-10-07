@@ -4,6 +4,7 @@ import com.trade.domain.AccountRepository;
 import com.trade.domain.IdempotencyKeyStore;
 import com.trade.domain.InstrumentRepository;
 import com.trade.domain.OrderLogic;
+import com.trade.domain.Position;
 import com.trade.domain.PositionRepository;
 import com.trade.dto.OrderResponseDto;
 import com.trade.dto.OrderReviewRequestDto;
@@ -18,6 +19,7 @@ import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
+import com.trade.exception.UnsupportedCurrencyException;
 import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
 import com.trade.mapper.InstrumentMapper;
@@ -224,6 +226,33 @@ class OrderServiceTest {
     }
 
     @Test
+    @DisplayName("A SELL from an account in a currency with no fixed rate is FX-422 and writes nothing")
+    void sellFromUnsupportedCurrencyIsRefused() {
+        givenAccountInCurrency("EUR");
+        givenTradableInstrument();
+        // Holds the shares, so the SELL passes OrderLogic and reaches the currency check.
+        OrderLogic holdingLogic = new OrderLogic(new AccountRepositoryImpl(accountMapper),
+                new InstrumentRepositoryImpl(instrumentMapper),
+                (accountId, symbol) -> Optional.of(new Position(accountId, symbol, 100L, new BigDecimal("90.00"))),
+                new IdempotencyKeyStoreImpl(orderMapper));
+        OrderService service = new OrderService(accountMapper, instrumentMapper, orderMapper, holdingLogic,
+                new AccountAccessGuard(), FEE_RATE);
+        PlaceOrderRequestDto sell = new PlaceOrderRequestDto(1L, "AAPL", OrderSide.SELL, 20, new BigDecimal("100.00"), "KEY-1");
+
+        assertThrows(UnsupportedCurrencyException.class, () -> service.placeOrder(sell, 1L));
+        verify(orderMapper, never()).insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Reviewing an order in a currency with no fixed rate is FX-422, not a 500")
+    void reviewInUnsupportedCurrencyIsRefused() {
+        givenAccountInCurrency("EUR");
+        givenTradableInstrument();
+
+        assertThrows(UnsupportedCurrencyException.class, () -> orderService.reviewOrder(reviewRequest(OrderSide.BUY), 1L));
+    }
+
+    @Test
     @DisplayName("Reviewing an order for another account is ACC-403")
     void reviewOfAnotherAccountIsRefused() {
         assertThrows(AccountNotActiveException.class, () -> orderService.reviewOrder(reviewRequest(OrderSide.BUY), 2L));
@@ -248,6 +277,12 @@ class OrderServiceTest {
         when(accountMapper.findById(1L)).thenReturn(Optional.of(new AccountRow(
                 1L, ACCOUNT_UUID, "ACC-000001", USER_UUID, "Test Holder", balance,
                 AccountStatus.ACTIVE.name(), version, OffsetDateTime.now(), "USD")));
+    }
+
+    private void givenAccountInCurrency(String currency) {
+        when(accountMapper.findById(1L)).thenReturn(Optional.of(new AccountRow(
+                1L, ACCOUNT_UUID, "ACC-000001", USER_UUID, "Test Holder", new BigDecimal("5000.00"),
+                AccountStatus.ACTIVE.name(), 0, OffsetDateTime.now(), currency)));
     }
 
     private void givenTradableInstrument() {
