@@ -36,5 +36,11 @@
     <include file="db/changelog/020-bank-demo-pin-verifiers.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/019-indian-instruments.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/021-bank-account-linking.sql" relativeToChangelogFile="false"/>
+    <!-- Moves the old Notifications table aside before 016 creates the module's own. -->
+    <include file="db/changelog/020-legacy-notifications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/016-notifications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
+    <!-- 017-notifications-v2.sql is deliberately not included: 018 supersedes it. -->
+
 
 </databaseChangeLog>

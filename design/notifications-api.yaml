@@ -1,0 +1,502 @@
+openapi: 3.1.0
+
+info:
+  title: Customer Notifications API
+  version: 1.0.0
+  summary: Notification management and history for the Trade REST API.
+  description: |
+    Customer-facing notifications for order outcomes (filled, rejected, cancelled) and
+    internal endpoints consumed by the notification module's Kafka consumer.
+
+    ## Overview
+
+    The notification module consumes `trade-events` from Kafka (filled, rejected, cancelled
+    outcomes) and delivers notifications to customers on their elected channel (from
+    `GET /api/v1/notification-preferences`). Every `/api/v1/notifications/**` route requires a
+    valid signed JWT in the `Authorization` header.
+
+    ## Notification lifecycle
+
+    1. **Kafka consumer receives event**: The notification consumer processes `trade-events`.
+    2. **Resolve channel**: Query `GET /api/v1/notification-preferences` for the customer's channel.
+    3. **Record notification**: POST to `POST /api/v1/notifications/internal/record` to create
+       a notification record in the database (durably recorded for delivery).
+    4. **Commit offset**: Only commit the Kafka offset after step 3 succeeds; the database
+       record is the source of truth, not Kafka acknowledgement.
+    5. **Send notification**: Asynchronously send via the resolved channel, update status to
+       `SENT` or `FAILED`. Re-delivery on `FAILED` is handled by a retry scheduler.
+    6. **Customer reads**: Customer queries `GET /api/v1/notifications` to view their own
+       notification history and details.
+
+    ## Idempotency
+
+    Notifications are keyed on the event identifier from the trade-events Kafka message.
+    A replayed event produces no second notification — the consumer treats the event as
+    idempotent and either updates the existing record or returns 409 Conflict.
+
+    ## Channels and routing
+
+    The resolved channel is one of:
+    - `EMAIL`: Sent via email provider.
+    - `IN_APP`: Stored in the database, fetched by the UI.
+
+    The routing decision and the resolved channel are recorded on every notification,
+    enabling audit trails and support investigations.
+
+    ## Authorization
+
+    `GET /api/v1/notifications` is owner-only: a customer can only read their own
+    notifications. The `accountId` from the JWT claim is matched against the notification's
+    `accountId`; a mismatch returns `ACC-403`, 403. Internal routes (prefix
+    `/api/v1/notifications/internal/**`) are callable by the notification consumer only
+    (in production, this is enforced by service-to-service authentication; in local
+    development, they are not exposed to the public API).
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Notifications
+    description: Customer notification history and details.
+  - name: Internal
+    description: Internal endpoints for the notification consumer.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: Get the signed-in user's notification history
+      description: |
+        Returns a paginated list of notifications for the signed-in customer, ordered by
+        creation time (newest first). A customer can only read their own notifications;
+        querying another account's notifications returns `ACC-403`, 403.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 100
+          description: Maximum number of notifications to return.
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of notifications to skip (for pagination).
+      responses:
+        '200':
+          description: List of notifications for the signed-in user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+
+  /api/v1/notifications/{notificationId}:
+    get:
+      tags: [Notifications]
+      operationId: getNotification
+      summary: Get a specific notification
+      description: |
+        Returns the details of a single notification. A customer can only access their own
+        notifications; querying another account's notification returns `ACC-403`, 403.
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The notification ID (UUID).
+      responses:
+        '200':
+          description: The notification details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/NotificationNotFound'
+
+  /api/v1/notifications/watchlist/alert:
+    post:
+      tags: [Notifications]
+      operationId: sendWatchlistAlert
+      summary: Trigger a watchlist alert notification
+      description: |
+        Entry point for watchlist feature to request a notification be delivered to the
+        signed-in customer. The notification is routed to the customer's elected channel
+        from notification preferences and recorded with status `QUEUED`.
+
+        Authorization: the caller must be authenticated. A customer can only send alerts
+        for their own account (accountId from JWT claim is used). Admins may have
+        additional permissions (to be defined).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendWatchlistAlertRequest'
+      responses:
+        '201':
+          description: Watchlist alert notification queued for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/PreferencesNotFound'
+
+  /api/v1/notifications/internal/record:
+    post:
+      tags: [Internal]
+      operationId: recordNotification
+      summary: Record a notification from a trade event (internal)
+      description: |
+        **Internal endpoint, callable by the notification consumer only.**
+
+        Consumes a trade event (filled, rejected, cancelled) and records a notification
+        in the database. The notification channel is resolved from customer preferences
+        and recorded on the notification. This endpoint is idempotent: if a notification
+        with the same `eventId` already exists, it returns 409 Conflict (or updates an
+        existing `QUEUED` record if the channel has changed).
+
+        The Kafka consumer must commit its offset only after this endpoint returns 201 or 409
+        (success or idempotent duplicate). On other errors (e.g., 500), the consumer must
+        retry without committing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordNotificationRequest'
+      responses:
+        '201':
+          description: Notification recorded and queued for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '409':
+          description: |
+            Idempotent duplicate: a notification for this event has already been recorded.
+            The Kafka consumer can safely commit its offset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate:
+                  value:
+                    errorCode: NOT-409
+                    message: Notification already recorded for this event
+        '422':
+          $ref: '#/components/responses/InvalidPayload'
+        '500':
+          description: |
+            Server error. The Kafka consumer must not commit its offset and should retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/notifications/internal/{notificationId}/status:
+    patch:
+      tags: [Internal]
+      operationId: updateNotificationStatus
+      summary: Update a notification's delivery status (internal)
+      description: |
+        **Internal endpoint, callable by the notification sender/scheduler only.**
+
+        Updates the delivery status of a notification to `SENT`, `FAILED`, or `RETRYING`.
+        The timestamp of the update is recorded. A notification in `SENT` or `FAILED`
+        status is not retried; one in `QUEUED` or `RETRYING` is eligible for retry.
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The notification ID (UUID).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationStatusRequest'
+      responses:
+        '200':
+          description: Notification status updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        '404':
+          $ref: '#/components/responses/NotificationNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidPayload'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        The customer access token issued by `POST /auth/login`. Customer-facing routes
+        (`GET /api/v1/notifications/**`, `POST /api/v1/notifications/watchlist/alert`)
+        require a valid token with an `accountId` claim. Internal routes
+        (`/api/v1/notifications/internal/**`) are restricted by service-to-service
+        authentication (not shown here; use a framework-specific interceptor or middleware).
+
+  responses:
+    Unauthorised:
+      description: Missing or invalid token, or the user is no longer active.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    AccountNotActive:
+      description: |
+        A valid token whose `accountId` claim does not match the account being addressed,
+        or the account is not active.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            forbidden:
+              value:
+                errorCode: ACC-403
+                message: Forbidden
+    NotificationNotFound:
+      description: The notification does not exist, or does not belong to the signed-in user.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: NOT-404
+                message: Notification not found
+    PreferencesNotFound:
+      description: Notification preferences have not been set for the user.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: NOT-404
+                message: Notification preferences not found
+    InvalidPayload:
+      description: The request payload is invalid or malformed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+
+  schemas:
+
+    NotificationChannel:
+      type: string
+      enum: [EMAIL, IN_APP]
+      description: |
+        The channel on which the notification is delivered:
+        - `EMAIL`: Sent to customer email.
+        - `IN_APP`: Stored in database for notification center.
+
+    NotificationStatus:
+      type: string
+      enum: [QUEUED, SENT, FAILED, RETRYING]
+      description: |
+        Current delivery status of the notification:
+        - `QUEUED`: Awaiting delivery.
+        - `SENT`: Successfully delivered.
+        - `FAILED`: Delivery failed; eligible for retry.
+        - `RETRYING`: Retry in progress.
+
+    TradeEventType:
+      type: string
+      enum: [ORDER_FILLED, ORDER_REJECTED, ORDER_CANCELLED]
+      description: The type of trade event that triggered this notification.
+
+    NotificationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - notificationId
+        - accountId
+        - eventId
+        - eventType
+        - resolvedChannel
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+          description: Unique identifier for this notification.
+        accountId:
+          type: integer
+          format: int64
+          description: The account that owns this notification.
+        eventId:
+          type: string
+          format: uuid
+          description: |
+            The event ID from the trade-events Kafka message. Used as the idempotency key
+            for replay detection.
+        eventType:
+          $ref: '#/components/schemas/TradeEventType'
+        orderId:
+          type: string
+          description: The order ID (e.g., `ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e`).
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        symbol:
+          type: string
+          description: The instrument symbol (e.g., `ACME`).
+          example: ACME
+        resolvedChannel:
+          $ref: '#/components/schemas/NotificationChannel'
+          description: |
+            The channel on which this notification is being delivered. Recorded at the time
+            the notification was created, enabling audit trails even if the customer later
+            changes their preference.
+        message:
+          type: string
+          description: Human-readable notification message.
+          example: Your order for 100 shares of ACME has been filled.
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        createdAt:
+          type: string
+          format: date-time
+          description: When the notification was recorded.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the notification status was last updated.
+
+    NotificationsListResponse:
+      type: object
+      additionalProperties: false
+      required: [notifications, total, limit, offset]
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+        total:
+          type: integer
+          description: Total number of notifications for this account.
+        limit:
+          type: integer
+          description: The limit parameter used in this request.
+        offset:
+          type: integer
+          description: The offset parameter used in this request.
+
+    RecordNotificationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - accountId
+        - eventId
+        - eventType
+        - orderId
+        - symbol
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          description: The trading account that owns the order.
+        eventId:
+          type: string
+          format: uuid
+          description: The event ID from the trade-events Kafka message (idempotency key).
+        eventType:
+          $ref: '#/components/schemas/TradeEventType'
+        orderId:
+          type: string
+          description: The order ID from the trade event.
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        symbol:
+          type: string
+          description: The instrument symbol.
+          example: ACME
+
+    SendWatchlistAlertRequest:
+      type: object
+      additionalProperties: false
+      required: [message, symbol]
+      properties:
+        symbol:
+          type: string
+          description: The instrument symbol being watched.
+          example: ACME
+        message:
+          type: string
+          maxLength: 500
+          description: Custom alert message from the watchlist feature.
+          example: Price has exceeded your target of $50.
+
+    UpdateNotificationStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        errorMessage:
+          type: string
+          maxLength: 500
+          description: |
+            If status is `FAILED`, record the reason for failure. Optional for other
+            statuses.
+          example: Email service returned 500 Internal Server Error
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, ACC-403, NOT-404, NOT-409, VAL-422]
+        message:
+          type: string

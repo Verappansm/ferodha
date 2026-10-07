@@ -9,6 +9,6 @@ import org.springframework.context.annotation.Configuration;
 // also try to construct real MyBatis mapper proxies against a context that
 // has no SqlSessionFactory.
 @Configuration
-@MapperScan({"com.trade.mapper", "com.trade.admin.mapper", "com.trade.strategy.mapper", "com.trade.preferences.mapper"})
+@MapperScan({"com.trade.mapper", "com.trade.admin.mapper", "com.trade.strategy.mapper", "com.trade.preferences.mapper", "com.trade.notification.mapper"})
 public class MyBatisConfig {
 }

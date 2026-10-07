@@ -135,14 +135,6 @@ CREATE TABLE Watchlist_Items (
     CONSTRAINT unique_item_per_watchlist UNIQUE (watchlist_id, instrument_id)
 );
 
--- 12. Notifications Table  (checked)
-CREATE TABLE Notifications (
-    notification_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
-    payload JSONB NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
 -- 13. Dynamic Positions Calculation View
 CREATE OR REPLACE VIEW Positions_View AS
 WITH TradeExecutions AS (
@@ -186,8 +178,6 @@ WHERE te.total_quantity <> 0;
 
 
 -- ------------------ stuff i added
-ALTER TABLE Notifications
-ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;
 
 ALTER TABLE Trades
 ADD COLUMN idempotency_key VARCHAR(100) UNIQUE;

@@ -289,7 +289,19 @@ foreach ($port in $PortsToCheck) {
 # before anything starts, so a firewall problem shows up here and not as a
 # stream of producer timeouts in the logs.
 foreach ($entry in $KafkaBootstrap.Split(',')) {
-    $kafkaHost, $kafkaPort = $entry.Trim().Split(':')
+    $trimmed = $entry.Trim()
+    # Strip protocol prefixes like kafka://, //, etc.
+    $trimmed = $trimmed -replace '^[a-z]+://', ''
+    $trimmed = $trimmed -replace '^//', ''
+
+    # Extract host and port (handles formats like "host:9092")
+    if ($trimmed -match '^([^:]+):(\d+)$') {
+        $kafkaHost = $matches[1]
+        $kafkaPort = $matches[2]
+    } else {
+        Fail "Invalid Kafka bootstrap server format: '$entry' (expected 'host:port')"
+    }
+
     if (-not (Test-Tcp $kafkaHost ([int]$kafkaPort) 5000)) {
         Fail "Cannot reach Kafka at ${kafkaHost}:${kafkaPort}. Is windows/kafka-linux.sh running on the Linux host, and is the port open in its firewall?"
     }
