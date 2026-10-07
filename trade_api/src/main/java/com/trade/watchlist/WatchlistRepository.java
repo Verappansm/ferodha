@@ -7,6 +7,7 @@ import java.util.UUID;
 public interface WatchlistRepository {
     Optional<Watchlist> findById(UUID watchlistId);
     List<Watchlist> findByUserId(UUID userId);
+    List<Watchlist> findAll(); // For price alert checking
     Watchlist save(Watchlist watchlist);
     void deleteById(UUID watchlistId);
     Optional<Watchlist> findByUserIdAndName(UUID userId, String name);

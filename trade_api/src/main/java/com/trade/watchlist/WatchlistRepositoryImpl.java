@@ -30,6 +30,13 @@ public class WatchlistRepositoryImpl implements WatchlistRepository {
     }
 
     @Override
+    public List<Watchlist> findAll() {
+        return watchlistMapper.findAll().stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
     public Watchlist save(Watchlist watchlist) {
         WatchlistRow row = new WatchlistRow(
                 watchlist.getWatchlistId(),

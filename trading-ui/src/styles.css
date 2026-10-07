@@ -6,6 +6,10 @@
  * Theme: <html data-theme="light|dark"> forces one; with no attribute the
  * operating system's preference decides (see core/theme/theme.ts).
  */
+
+@import 'ag-grid-community/styles/ag-grid.css';
+@import 'ag-grid-community/styles/ag-theme-alpine.css';
+
 :root {
   --brand-950: #06291d;
   --brand-900: #0a3a2a;

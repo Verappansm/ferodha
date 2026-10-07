@@ -113,11 +113,33 @@ export interface WatchlistItemResponse {
   addedAt: string;
   displayOrder: number;
   intradayData: IntradayPricePoint[];
+  alertPrice: number | null;
+  alertDirection: string | null;
 }
 
 export interface IntradayPricePoint {
   timestamp: string;
   price: number;
+}
+
+/** Price Alert DTOs */
+export interface CreatePriceAlertRequest {
+  itemId: string;
+  alertPrice: number;
+  alertDirection: 'ABOVE' | 'BELOW';
+}
+
+export interface UpdatePriceAlertRequest {
+  alertPrice: number | null;
+  alertDirection: 'ABOVE' | 'BELOW' | null;
+}
+
+export interface PriceAlertResponse {
+  itemId: string;
+  symbol: string;
+  name: string;
+  alertPrice: number | null;
+  alertDirection: string | null;
 }
 
 export interface CreateWatchlistRequest {
@@ -328,6 +350,39 @@ export class TradeApi {
     return this.http.patch<void>(
       `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`,
       request,
+    );
+  }
+
+  // ===== Price Alert API =====
+
+  /** Create a price alert for a watchlist item */
+  createPriceAlert(
+    watchlistId: string,
+    itemId: string,
+    request: CreatePriceAlertRequest,
+  ): Observable<PriceAlertResponse> {
+    return this.http.post<PriceAlertResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
+      request,
+    );
+  }
+
+  /** Update a price alert for a watchlist item */
+  updatePriceAlert(
+    watchlistId: string,
+    itemId: string,
+    request: UpdatePriceAlertRequest,
+  ): Observable<PriceAlertResponse> {
+    return this.http.patch<PriceAlertResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
+      request,
+    );
+  }
+
+  /** Delete a price alert for a watchlist item */
+  deletePriceAlert(watchlistId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
     );
   }
 

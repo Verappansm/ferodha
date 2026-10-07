@@ -30,5 +30,6 @@
     <include file="db/changelog/015-strategies.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/016-strategy-last-checked.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/017-preferences.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-price-alerts.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

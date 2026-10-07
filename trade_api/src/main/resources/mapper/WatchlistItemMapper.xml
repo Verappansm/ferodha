@@ -9,25 +9,27 @@
             <arg column="instrument_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
             <arg column="display_order" javaType="java.lang.Integer"/>
             <arg column="added_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="alert_price" javaType="java.math.BigDecimal"/>
+            <arg column="alert_direction" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <select id="findById" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
         FROM Watchlist_Items
         WHERE item_id = #{itemId}
     </select>
 
     <select id="findByWatchlistId" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
         FROM Watchlist_Items
         WHERE watchlist_id = #{watchlistId}
         ORDER BY display_order ASC
     </select>
 
     <insert id="insert">
-        INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at)
-        VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt})
+        INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction)
+        VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt}, #{alertPrice}, #{alertDirection})
     </insert>
 
     <delete id="deleteById">
@@ -36,7 +38,7 @@
     </delete>
 
     <select id="findByWatchlistIdAndInstrumentId" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
         FROM Watchlist_Items
         WHERE watchlist_id = #{watchlistId} AND instrument_id = #{instrumentId}
     </select>
@@ -55,6 +57,12 @@
     <update id="updateDisplayOrder">
         UPDATE Watchlist_Items
         SET display_order = #{displayOrder}
+        WHERE item_id = #{itemId}
+    </update>
+
+    <update id="updateAlert">
+        UPDATE Watchlist_Items
+        SET alert_price = #{alertPrice}, alert_direction = #{alertDirection}
         WHERE item_id = #{itemId}
     </update>
 
