@@ -3,11 +3,13 @@ package com.trade.watchlist;
 import com.trade.dto.AddWatchlistItemRequest;
 import com.trade.dto.BulkAddWatchlistItemsRequest;
 import com.trade.dto.CreateWatchlistRequest;
+import com.trade.dto.PriceAlertDtos;
 import com.trade.dto.ReorderWatchlistItemsRequest;
 import com.trade.dto.UpdateWatchlistRequest;
 import com.trade.dto.WatchlistItemResponse;
 import com.trade.dto.WatchlistResponse;
 import com.trade.exception.InstrumentNotFoundException;
+import com.trade.exception.InvalidRequestException;
 import com.trade.exception.WatchlistConflictException;
 import com.trade.exception.WatchlistItemNotFoundException;
 import com.trade.exception.WatchlistNotFoundException;
@@ -126,5 +128,43 @@ public class WatchlistController {
             throws WatchlistNotFoundException {
         UUID userId = getUserId(principal);
         watchlistService.reorderItems(userId, watchlistId, request);
+    }
+
+    // Price Alert endpoints
+
+    @PostMapping("/{watchlistId}/items/{itemId}/alert")
+    public PriceAlertDtos.PriceAlertResponse createPriceAlert(
+            @PathVariable UUID watchlistId,
+            @PathVariable UUID itemId,
+            @RequestBody PriceAlertDtos.CreatePriceAlertRequest request,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException, InvalidRequestException {
+        UUID userId = getUserId(principal);
+        // Ensure the itemId in the path matches the request body
+        if (!itemId.equals(request.itemId())) {
+            throw new InvalidRequestException("Item ID in path does not match request body");
+        }
+        return watchlistService.createPriceAlert(userId, request);
+    }
+
+    @PatchMapping("/{watchlistId}/items/{itemId}/alert")
+    public PriceAlertDtos.PriceAlertResponse updatePriceAlert(
+            @PathVariable UUID watchlistId,
+            @PathVariable UUID itemId,
+            @RequestBody PriceAlertDtos.UpdatePriceAlertRequest request,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException, InvalidRequestException {
+        UUID userId = getUserId(principal);
+        return watchlistService.updatePriceAlert(userId, itemId, request);
+    }
+
+    @DeleteMapping("/{watchlistId}/items/{itemId}/alert")
+    public void deletePriceAlert(
+            @PathVariable UUID watchlistId,
+            @PathVariable UUID itemId,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException {
+        UUID userId = getUserId(principal);
+        watchlistService.deletePriceAlert(userId, itemId);
     }
 }

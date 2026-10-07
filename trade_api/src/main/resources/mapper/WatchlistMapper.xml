@@ -24,6 +24,12 @@
         ORDER BY display_order ASC
     </select>
 
+    <select id="findAll" resultMap="watchlistRow">
+        SELECT watchlist_id, name, user_id, display_order
+        FROM Watchlist
+        ORDER BY user_id, display_order ASC
+    </select>
+
     <insert id="insert">
         INSERT INTO Watchlist (watchlist_id, name, user_id, display_order)
         VALUES (#{watchlistId}, #{name}, #{userId}, #{displayOrder})

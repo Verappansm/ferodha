@@ -1,5 +1,6 @@
 package com.trade.mapper;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
@@ -8,6 +9,8 @@ public record WatchlistItemRow(
         UUID watchlistId,
         UUID instrumentId,
         Integer displayOrder,
-        OffsetDateTime addedAt
+        OffsetDateTime addedAt,
+        BigDecimal alertPrice,
+        String alertDirection
 ) {
 }

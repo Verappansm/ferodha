@@ -15,6 +15,8 @@ import com.trade.mapper.PriceBarRow;
 import com.trade.mapper.PriceRangeRow;
 import com.trade.mapper.StoredPriceRow;
 import com.trade.service.portfolio.LatestQuotes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,8 @@ import java.util.Optional;
 @Service
 @Transactional(readOnly = true)
 public class MarketDataService {
+
+    private static final Logger log = LoggerFactory.getLogger(MarketDataService.class);
 
     // The chart ranges and how far back each reaches. 1D uses minute bars;
     // the rest use daily candles.
@@ -153,6 +157,32 @@ public class MarketDataService {
                             quote.asOf() == null || quote.asOf().isBefore(freshAfter)));
         }
         return prices;
+    }
+
+    /**
+     * Get latest prices as a map for price alert checking.
+     * Returns mid price for each symbol.
+     */
+    public Map<String, BigDecimal> getLatestPrices(List<String> symbols) {
+        try {
+            List<PriceSnapshotDto> prices = getPrices(symbols);
+            Map<String, BigDecimal> result = new HashMap<>();
+            for (PriceSnapshotDto price : prices) {
+                if (price.mid() != null) {
+                    result.put(price.symbol(), price.mid());
+                } else if (price.bid() != null && price.ask() != null) {
+                    result.put(price.symbol(), price.bid().add(price.ask()).divide(BigDecimal.valueOf(2)));
+                } else if (price.bid() != null) {
+                    result.put(price.symbol(), price.bid());
+                } else if (price.ask() != null) {
+                    result.put(price.symbol(), price.ask());
+                }
+            }
+            return result;
+        } catch (InvalidParameterException e) {
+            log.warn("Invalid symbols for price alert checking", e);
+            return Map.of();
+        }
     }
 
     public PriceHistoryResponseDto getHistory(String symbol, String range) throws DomainException {

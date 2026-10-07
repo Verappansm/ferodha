@@ -4,6 +4,7 @@ import com.trade.mapper.WatchlistItemMapper;
 import com.trade.mapper.WatchlistItemRow;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,7 +38,9 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
                 item.getWatchlistId(),
                 item.getInstrumentId(),
                 item.getDisplayOrder(),
-                item.getAddedAt()
+                item.getAddedAt(),
+                item.getAlertPrice(),
+                item.getAlertDirection()
         );
         watchlistItemMapper.insert(row);
         return item;
@@ -70,11 +73,17 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
     }
 
     @Override
+    public void updateAlert(UUID itemId, BigDecimal alertPrice, String alertDirection) {
+        watchlistItemMapper.updateAlert(itemId, alertPrice, alertDirection);
+    }
+
+    @Override
     public void updateDisplayOrders(UUID watchlistId, Map<UUID, Integer> itemOrderMap) {
         watchlistItemMapper.updateDisplayOrders(watchlistId, itemOrderMap);
     }
 
     private WatchlistItem toDomain(WatchlistItemRow row) {
-        return new WatchlistItem(row.itemId(), row.watchlistId(), row.instrumentId(), row.displayOrder(), row.addedAt());
+        return new WatchlistItem(row.itemId(), row.watchlistId(), row.instrumentId(), row.displayOrder(), row.addedAt(),
+                row.alertPrice(), row.alertDirection());
     }
 }

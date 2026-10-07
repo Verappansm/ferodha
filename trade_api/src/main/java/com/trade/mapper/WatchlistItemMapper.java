@@ -3,6 +3,7 @@ package com.trade.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +27,8 @@ public interface WatchlistItemMapper {
     int getMaxDisplayOrder(@Param("watchlistId") UUID watchlistId);
 
     void updateDisplayOrder(@Param("itemId") UUID itemId, @Param("displayOrder") int displayOrder);
+
+    void updateAlert(@Param("itemId") UUID itemId, @Param("alertPrice") BigDecimal alertPrice, @Param("alertDirection") String alertDirection);
 
     void updateDisplayOrders(@Param("watchlistId") UUID watchlistId, @Param("itemOrderMap") Map<UUID, Integer> itemOrderMap);
 }
