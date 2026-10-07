@@ -17,6 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import com.trade.exception.DuplicateBankTransferException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCrypt;
 
 /** Moves value only between an account and its database-linked bank account. */
@@ -62,7 +64,7 @@ public class BankFundsService {
         BankFundsRow row = bankFundsMapper.findAndLockByAccountId(accountId);
         if (row == null) throw new AccountNotFoundException(accountId);
         requireActive(row);
-        if (!BCrypt.checkpw(request.pinHash(), row.pinHash())) throw new BankTransferException();
+        if (!pinMatches(request.pinHash(), row.pinHash())) throw new BankTransferException();
 
         BigDecimal amount = request.amount().setScale(4, RoundingMode.UNNECESSARY);
         BigDecimal sourceBalance = deposit ? row.bankBalance() : row.tradingBalance();
@@ -73,13 +75,35 @@ public class BankFundsService {
         if (deposit) {
             if (bankFundsMapper.debitBank(row.bankAccountNumber(), amount) != 1) throw new BankTransferException();
             updateTradingBalance(row, row.tradingBalance().add(amount));
-            bankFundsMapper.insertTransaction(row.accountUuid(), "DEPOSIT", amount, request.idempotencyKey());
+            recordTransaction(row, "DEPOSIT", amount, request);
         } else {
             updateTradingBalance(row, row.tradingBalance().subtract(amount));
             if (bankFundsMapper.creditBank(row.bankAccountNumber(), amount) != 1) throw new BankTransferException();
-            bankFundsMapper.insertTransaction(row.accountUuid(), "WITHDRAWAL", amount, request.idempotencyKey());
+            recordTransaction(row, "WITHDRAWAL", amount, request);
         }
         return funds(accountId, callerAccountId);
+    }
+
+    // A bank row with no usable PIN ('not-set' on every account an operator opened,
+    // or a placeholder) cannot be bcrypt-checked, and must read as a plain refusal
+    // rather than an error: the answer never says which part was wrong.
+    private static boolean pinMatches(String proof, String stored) {
+        try {
+            return BCrypt.checkpw(proof, stored);
+        } catch (IllegalArgumentException notABcryptHash) {
+            return false;
+        }
+    }
+
+    // The unique index on the key is the guard: a browser retry of a transfer that
+    // already went through collides here, and the whole transfer rolls back.
+    private void recordTransaction(BankFundsRow row, String type, BigDecimal amount, BankTransferRequestDto request)
+            throws DuplicateBankTransferException {
+        try {
+            bankFundsMapper.insertTransaction(row.accountUuid(), type, amount, request.idempotencyKey());
+        } catch (DataIntegrityViolationException e) {
+            throw new DuplicateBankTransferException();
+        }
     }
 
     private void updateTradingBalance(BankFundsRow row, BigDecimal newBalance) throws ConcurrentUpdateException {

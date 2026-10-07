@@ -14,7 +14,7 @@
  */
 export interface ErrorResponse { 
     /**
-     * | Code | HTTP | Meaning | |---|---|---| | `ACC-404` | 404 | Account not found | | `ACC-403` | 403 | Account not active, or not reachable with this token | | `INS-404` | 404 | Instrument not found or not tradable | | `ORD-400` | 400 | Insufficient funds | | `ORD-409` | 409 | Insufficient holdings, duplicate order, or order not cancellable | | `VAL-422` | 422 | Invalid input | | `AUTH-401` | 401 | Unauthorised or invalid token | 
+     * | Code | HTTP | Meaning | |---|---|---| | `ACC-404` | 404 | Account not found | | `ACC-403` | 403 | Account not active, or not reachable with this token | | `INS-404` | 404 | Instrument not found or not tradable | | `ORD-400` | 400 | Insufficient funds | | `ORD-409` | 409 | Insufficient holdings, duplicate order, or order not cancellable | | `BNK-400` | 400 | A bank transfer was refused: amount, funds or PIN (one answer, so a wrong PIN is not revealed) | | `BNK-409` | 409 | A bank transfer key was already used, so a retry cannot move money twice | | `VAL-422` | 422 | Invalid input | | `AUTH-401` | 401 | Unauthorised or invalid token | 
      */
     errorCode: ErrorResponse.ErrorCodeEnum;
     /**
@@ -29,6 +29,8 @@ export namespace ErrorResponse {
         INS_404: 'INS-404',
         ORD_400: 'ORD-400',
         ORD_409: 'ORD-409',
+        BNK_400: 'BNK-400',
+        BNK_409: 'BNK-409',
         VAL_422: 'VAL-422',
         AUTH_401: 'AUTH-401',
     } as const;

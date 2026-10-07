@@ -8,7 +8,12 @@ import { Session } from '../../core/session/session';
 import { errorMessage } from '../../core/errors/error-message';
 import bcrypt from 'bcryptjs';
 
-const PIN_PROOF_SALT = '$2b$12$D6aOfmGWG4oQpLdkJ0PV.';
+/**
+ * The fixed salt of the PIN proof: the browser sends bcrypt(PIN, salt), never the
+ * PIN. A bcrypt salt is exactly 22 characters after "$2b$12$"; one short and
+ * bcryptjs throws "Illegal salt length" before any request is sent.
+ */
+export const PIN_PROOF_SALT = '$2b$12$D6aOfmGWG4oQpLdkJ0PV.e';
 
 @Component({
   selector: 'app-bank',
@@ -30,37 +35,54 @@ export class BankComponent implements OnInit {
   isLoading = signal(false);
   funds = signal<BankFundsResponse | null>(null);
 
-  ngOnInit(): void { void this.loadFunds(); }
+  ngOnInit(): void {
+    void this.loadFunds();
+  }
 
   async loadFunds(): Promise<void> {
     const accountId = this.session.accountId();
     if (accountId == null) return;
     this.isLoading.set(true);
     this.error.set('');
-    try { this.funds.set(await firstValueFrom(this.api.bankFunds(accountId))); }
-    catch (error) { this.error.set(errorMessage(error)); }
-    finally { this.isLoading.set(false); }
+    try {
+      this.funds.set(await firstValueFrom(this.api.bankFunds(accountId)));
+    } catch (error) {
+      this.error.set(errorMessage(error));
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   async submit(): Promise<void> {
     const accountId = this.session.accountId();
     const amount = this.amount();
     const pin = this.pin();
-    this.error.set(''); this.success.set('');
+    this.error.set('');
+    this.success.set('');
     if (accountId == null || amount == null || !Number.isFinite(amount) || amount <= 0 || !pin) {
-      this.error.set('Enter a positive amount and your bank PIN.'); return;
+      this.error.set('Enter a positive amount and your bank PIN.');
+      return;
     }
     this.isSubmitting.set(true);
     try {
-      const result = await firstValueFrom(this.api.bankTransfer(accountId, this.transactionType(), {
-        amount: Number(amount.toFixed(4)), pinHash: bcrypt.hashSync(pin, PIN_PROOF_SALT), idempotencyKey: crypto.randomUUID(),
-      }));
-      this.funds.set(result); this.pin.set('');
-      this.success.set(this.transactionType() === 'DEPOSIT'
-        ? 'Deposit completed. Your trading balance has been updated.'
-        : 'Withdrawal completed. Your bank balance has been updated.');
-    } catch (error) { this.error.set(errorMessage(error)); }
-    finally { this.isSubmitting.set(false); }
+      const result = await firstValueFrom(
+        this.api.bankTransfer(accountId, this.transactionType(), {
+          amount: Number(amount.toFixed(4)),
+          pinHash: bcrypt.hashSync(pin, PIN_PROOF_SALT),
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      );
+      this.funds.set(result);
+      this.pin.set('');
+      this.success.set(
+        this.transactionType() === 'DEPOSIT'
+          ? 'Deposit completed. Your trading balance has been updated.'
+          : 'Withdrawal completed. Your bank balance has been updated.',
+      );
+    } catch (error) {
+      this.error.set(errorMessage(error));
+    } finally {
+      this.isSubmitting.set(false);
+    }
   }
 }
-

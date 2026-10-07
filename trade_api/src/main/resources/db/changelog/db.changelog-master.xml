@@ -31,10 +31,8 @@
     <include file="db/changelog/016-strategy-last-checked.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/017-preferences.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/018-price-alerts.sql" relativeToChangelogFile="false"/>
-<<<<<<< Updated upstream
     <include file="db/changelog/019-watchlist-display-order.sql" relativeToChangelogFile="false"/>
-=======
     <include file="db/changelog/019-bank-transfer-idempotency.sql" relativeToChangelogFile="false"/>
->>>>>>> Stashed changes
+    <include file="db/changelog/020-bank-demo-pin-verifiers.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
