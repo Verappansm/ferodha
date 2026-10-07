@@ -5,12 +5,13 @@ import { firstValueFrom } from 'rxjs';
 import { DecimalPipe } from '@angular/common';
 import { AdminApi, AdminSummary, AuditEntry, FeeSummary, SystemHealth } from '../../api/admin-api';
 import { adminErrorMessage } from '../../core/errors/admin-error-message';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 
 /** Headline counts, service health and the latest decisions, each loaded independently. */
 @Component({
   selector: 'adm-overview',
-  imports: [RouterLink, DatePipe, DecimalPipe, StatusPillComponent],
+  imports: [RouterLink, DatePipe, DecimalPipe, InfoTipComponent, StatusPillComponent],
   template: `
     <div class="page">
       <header class="page-header">
@@ -32,7 +33,12 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
             [class.tile-attention]="s.pendingRequests > 0"
             data-testid="tile-pending"
           >
-            <div class="tile-label">Pending account requests</div>
+            <div class="tile-label">
+              Pending account requests<adm-info-tip
+                label="Pending account requests"
+                text="New customers waiting for an administrator to open their trading account. They cannot sign in until you approve."
+              />
+            </div>
             <div class="tile-value">{{ s.pendingRequests }}</div>
           </a>
           <a class="tile" routerLink="/users">
@@ -61,7 +67,12 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
           </a>
           @if (fees(); as f) {
             <a class="tile" routerLink="/fees" data-testid="tile-fees">
-              <div class="tile-label">Total fees (USD)</div>
+              <div class="tile-label">
+                Total fees (USD)<adm-info-tip
+                  label="Total fees"
+                  text="Commission taken on filled customer orders, all time. INR accounts are converted at 90 to the dollar."
+                />
+              </div>
               <div class="tile-value">{{ f.totalFees | number: '1.2-2' }}</div>
             </a>
             <a class="tile" routerLink="/fees" data-testid="tile-fees-month">

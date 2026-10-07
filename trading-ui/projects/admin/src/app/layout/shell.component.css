@@ -75,6 +75,18 @@
   box-shadow: inset 3px 0 0 var(--side-accent);
 }
 
+.nav-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+.nav-item.active .nav-icon {
+  color: var(--side-accent);
+  opacity: 1;
+}
+
 .nav-badge {
   min-width: 22px;
   margin-left: auto;

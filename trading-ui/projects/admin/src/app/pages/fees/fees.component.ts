@@ -8,6 +8,12 @@ import { PagerComponent } from '../../shared/pager.component';
 
 const PAGE_SIZE = 25;
 type Tab = 'user' | 'instrument';
+type Range = '7d' | '30d' | 'month' | 'all' | 'custom';
+
+/** A UTC calendar date, the way the fees routes read one. */
+function isoDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 /**
  * The commission the platform has taken: the total, this month, and who and
@@ -107,6 +113,18 @@ type Tab = 'user' | 'instrument';
           </div>
           <button type="submit" class="btn btn-primary">Apply</button>
           <button type="button" class="btn btn-secondary" (click)="clear()">Clear</button>
+          <div class="segmented range" role="group" aria-label="Quick range">
+            @for (r of ranges; track r.id) {
+              <button
+                type="button"
+                [attr.aria-pressed]="range() === r.id"
+                [attr.data-testid]="'fees-range-' + r.id"
+                (click)="quick(r.id)"
+              >
+                {{ r.label }}
+              </button>
+            }
+          </div>
         </form>
 
         @if (error()) {
@@ -128,20 +146,33 @@ type Tab = 'user' | 'instrument';
                     <th class="num">Orders</th>
                     <th class="num">Fees (own currency)</th>
                     <th class="num">Fees (USD)</th>
+                    <th>Share</th>
                   </tr>
                 </thead>
                 <tbody>
                   @for (u of users(); track u.accountId) {
                     <tr data-testid="fees-user-row">
                       <td>
-                        <strong>{{ u.name }}</strong
-                        ><br /><span class="muted">{{ u.email }}</span>
+                        <div class="who-cell">
+                          <span class="avatar" aria-hidden="true">{{ initials(u.name) }}</span>
+                          <span class="cell-stack"
+                            ><strong>{{ u.name }}</strong
+                            ><small>{{ u.email }}</small></span
+                          >
+                        </div>
                       </td>
                       <td class="mono">#{{ u.accountId }}</td>
                       <td class="num">{{ u.orders }}</td>
                       <td class="num">{{ u.fees | number: '1.2-2' }} {{ u.currency }}</td>
                       <td class="num">
                         {{ u.feesUsd == null ? '—' : (u.feesUsd | number: '1.2-2') }}
+                      </td>
+                      <td>
+                        <div class="share">
+                          <span class="share-bar"
+                            ><i [style.width.%]="userShare(u)" data-testid="fees-user-bar"></i
+                          ></span>
+                        </div>
                       </td>
                     </tr>
                   }
@@ -168,7 +199,7 @@ type Tab = 'user' | 'instrument';
                     <th>Instrument</th>
                     <th class="num">Orders</th>
                     <th class="num">Fees (USD)</th>
-                    <th class="num">Share</th>
+                    <th>Share of fees</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -180,7 +211,12 @@ type Tab = 'user' | 'instrument';
                       </td>
                       <td class="num">{{ i.orders }}</td>
                       <td class="num">{{ i.feesUsd | number: '1.2-2' }}</td>
-                      <td class="num">{{ share(i) | number: '1.0-1' }}%</td>
+                      <td>
+                        <div class="share">
+                          <span class="share-bar"><i [style.width.%]="share(i)"></i></span>
+                          <span class="muted">{{ share(i) | number: '1.0-1' }}%</span>
+                        </div>
+                      </td>
                     </tr>
                   }
                 </tbody>
@@ -192,28 +228,8 @@ type Tab = 'user' | 'instrument';
     </div>
   `,
   styles: `
-    .tabs {
-      display: flex;
-      gap: 4px;
-      margin: 20px 0 12px;
-      border-bottom: 1px solid var(--ink-200);
-    }
-    .tab {
-      padding: 9px 16px;
-      font: inherit;
-      font-weight: 600;
-      color: var(--ink-500);
-      background: none;
-      border: 0;
-      border-bottom: 2px solid transparent;
-      cursor: pointer;
-    }
-    .tab.active {
-      color: var(--brand-600);
-      border-bottom-color: var(--brand-600);
-    }
-    .num {
-      text-align: right;
+    .range {
+      margin-left: auto;
     }
   `,
 })
@@ -221,6 +237,14 @@ export class FeesComponent {
   private readonly api = inject(AdminApi);
 
   readonly pageSize = PAGE_SIZE;
+  readonly ranges: { id: Exclude<Range, 'custom'>; label: string }[] = [
+    { id: '7d', label: '7 days' },
+    { id: '30d', label: '30 days' },
+    { id: 'month', label: 'This month' },
+    { id: 'all', label: 'All time' },
+  ];
+  /** Which quick range the dates match; custom once they are typed. */
+  readonly range = signal<Range>('all');
   readonly filters = inject(NonNullableFormBuilder).group({ q: [''], from: [''], to: [''] });
 
   readonly tab = signal<Tab>('user');
@@ -248,7 +272,43 @@ export class FeesComponent {
     void this.load();
   }
 
+  /** Fills the dates for a quick range (UTC days, inclusive) and reloads. */
+  quick(range: Exclude<Range, 'custom'>): void {
+    const today = new Date();
+    const day = (offset: number) => isoDay(new Date(today.getTime() - offset * 86_400_000));
+    const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    const dates: Record<Exclude<Range, 'custom'>, { from: string; to: string }> = {
+      '7d': { from: day(6), to: day(0) },
+      '30d': { from: day(29), to: day(0) },
+      month: { from: isoDay(first), to: day(0) },
+      all: { from: '', to: '' },
+    };
+    this.filters.patchValue(dates[range]);
+    this.range.set(range);
+    this.error.set('');
+    this.page.set(0);
+    void this.load();
+  }
+
+  initials(name: string): string {
+    return (
+      name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0].toUpperCase())
+        .join('') || '?'
+    );
+  }
+
+  /** This customer's part of the largest payer's fees, for the bar. */
+  userShare(u: FeeUser): number {
+    const top = Math.max(0, ...this.users().map((x) => x.feesUsd ?? 0));
+    return top > 0 ? ((u.feesUsd ?? 0) / top) * 100 : 0;
+  }
+
   apply(): void {
+    this.range.set('custom');
     const { from, to } = this.filters.getRawValue();
     if (from && to && from > to) {
       this.error.set('The "from" date must be on or before the "to" date.');
@@ -260,6 +320,7 @@ export class FeesComponent {
 
   clear(): void {
     this.filters.reset();
+    this.range.set('all');
     this.page.set(0);
     void this.load();
   }

@@ -5,6 +5,8 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { firstValueFrom } from 'rxjs';
 import { AdminApi, AdminInstrument, InstrumentType } from '../../api/admin-api';
 import { adminErrorMessage } from '../../core/errors/admin-error-message';
+import { DrawerComponent } from '../../shared/drawer.component';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 import { PagerComponent } from '../../shared/pager.component';
 import { ReasonDialogComponent } from '../../shared/reason-dialog.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
@@ -22,6 +24,8 @@ const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,19}$/;
   imports: [
     DatePipe,
     ReactiveFormsModule,
+    DrawerComponent,
+    InfoTipComponent,
     PagerComponent,
     ReasonDialogComponent,
     StatusPillComponent,
@@ -51,86 +55,95 @@ const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,19}$/;
         <p class="notice notice-error" role="alert">{{ error() }}</p>
       }
 
-      @if (adding()) {
-        <section class="card add-card" data-testid="instrument-add-form">
-          <form class="add-form" [formGroup]="addForm" (ngSubmit)="add()" novalidate>
-            <h2>Add instrument</h2>
-            <p class="muted">
-              Prices come from the live feed, which can only price a symbol the market-data provider
-              knows. An unknown ticker is listed but has no price, and cannot be traded, until it
-              does.
-            </p>
-            <div class="add-grid">
-              <div class="field">
-                <label class="field-label" for="a-ticker">Ticker</label>
-                <input
-                  id="a-ticker"
-                  class="input mono"
-                  formControlName="ticker"
-                  placeholder="NEWCO"
-                  data-testid="add-ticker"
-                  (input)="upper()"
-                />
-                @if (invalid('ticker')) {
-                  <p class="field-error" data-testid="add-ticker-error">
-                    Letters, digits, dots or hyphens, up to 20 characters.
-                  </p>
-                }
-              </div>
-              <div class="field grow">
-                <label class="field-label" for="a-name">Name</label>
-                <input id="a-name" class="input" formControlName="name" data-testid="add-name" />
-                @if (invalid('name')) {
-                  <p class="field-error">Enter the instrument name.</p>
-                }
-              </div>
-              <div class="field">
-                <label class="field-label" for="a-exchange">Exchange</label>
-                <input
-                  id="a-exchange"
-                  class="input"
-                  formControlName="exchange"
-                  placeholder="NASDAQ"
-                  data-testid="add-exchange"
-                />
-                @if (invalid('exchange')) {
-                  <p class="field-error">Enter the exchange.</p>
-                }
-              </div>
-              <div class="field">
-                <label class="field-label" for="a-currency">Currency</label>
-                <input
-                  id="a-currency"
-                  class="input mono"
-                  formControlName="currency"
-                  maxlength="3"
-                  data-testid="add-currency"
-                  (input)="upper()"
-                />
-                @if (invalid('currency')) {
-                  <p class="field-error">Three capital letters, such as USD.</p>
-                }
-              </div>
-              <div class="field">
-                <label class="field-label" for="a-type">Type</label>
-                <select id="a-type" class="input" formControlName="type" data-testid="add-type">
-                  @for (t of types; track t) {
-                    <option [value]="t">{{ t }}</option>
-                  }
-                </select>
-              </div>
-              <div class="field">
-                <label class="field-label" for="a-sector">Sector (optional)</label>
-                <input
-                  id="a-sector"
-                  class="input"
-                  formControlName="sector"
-                  data-testid="add-sector"
-                />
-              </div>
+      <adm-drawer [open]="adding()" title="Add instrument" (closed)="closeAdd()">
+        <form [formGroup]="addForm" (ngSubmit)="add()" novalidate data-testid="instrument-add-form">
+          <p class="callout" role="note">
+            Prices come from the live feed, which can only price a symbol the market-data provider
+            knows. An unknown ticker is listed but has no price, and cannot be traded, until it
+            does.
+          </p>
+          <div class="form-grid">
+            <div class="field">
+              <label class="field-label" for="a-ticker"
+                >Ticker<adm-info-tip
+                  label="Ticker"
+                  text="The short code customers search and trade by: capital letters, digits, dots or hyphens, up to 20 characters."
+              /></label>
+              <input
+                id="a-ticker"
+                class="input mono"
+                formControlName="ticker"
+                placeholder="NEWCO"
+                data-testid="add-ticker"
+                (input)="upper()"
+              />
+              @if (invalid('ticker')) {
+                <p class="field-error" data-testid="add-ticker-error">
+                  Letters, digits, dots or hyphens, up to 20 characters.
+                </p>
+              }
             </div>
             <div class="field">
-              <label class="field-label" for="a-reason">Reason (recorded in the audit log)</label>
+              <label class="field-label" for="a-currency"
+                >Currency<adm-info-tip
+                  label="Currency"
+                  text="The currency the instrument is priced in, as three capital letters."
+              /></label>
+              <input
+                id="a-currency"
+                class="input mono"
+                formControlName="currency"
+                maxlength="3"
+                data-testid="add-currency"
+                (input)="upper()"
+              />
+              @if (invalid('currency')) {
+                <p class="field-error">Three capital letters, such as USD.</p>
+              }
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-name">Name</label>
+              <input id="a-name" class="input" formControlName="name" data-testid="add-name" />
+              @if (invalid('name')) {
+                <p class="field-error">Enter the instrument name.</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="a-exchange">Exchange</label>
+              <input
+                id="a-exchange"
+                class="input"
+                formControlName="exchange"
+                placeholder="NASDAQ"
+                data-testid="add-exchange"
+              />
+              @if (invalid('exchange')) {
+                <p class="field-error">Enter the exchange.</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="a-type">Type</label>
+              <select id="a-type" class="input" formControlName="type" data-testid="add-type">
+                @for (t of types; track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-sector">Sector (optional)</label>
+              <input
+                id="a-sector"
+                class="input"
+                formControlName="sector"
+                data-testid="add-sector"
+              />
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-reason"
+                >Reason<adm-info-tip
+                  label="Reason"
+                  text="Why this instrument is being added. It is written to the audit log with your name."
+              /></label>
               <input
                 id="a-reason"
                 class="input"
@@ -141,25 +154,23 @@ const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,19}$/;
                 <p class="field-error">Give a reason of at least 3 characters.</p>
               }
             </div>
-            @if (addError()) {
-              <p class="notice notice-error" role="alert" data-testid="add-error">
-                {{ addError() }}
-              </p>
-            }
-            <div class="add-actions">
-              <button
-                type="submit"
-                class="btn btn-primary"
-                data-testid="add-save"
-                [disabled]="saving()"
-              >
-                {{ saving() ? 'Adding…' : 'Add instrument' }}
-              </button>
-              <button type="button" class="btn btn-secondary" (click)="closeAdd()">Cancel</button>
-            </div>
-          </form>
-        </section>
-      }
+          </div>
+          @if (addError()) {
+            <p class="notice notice-error" role="alert" data-testid="add-error">{{ addError() }}</p>
+          }
+          <div class="drawer-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeAdd()">Cancel</button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              data-testid="add-save"
+              [disabled]="saving()"
+            >
+              {{ saving() ? 'Adding…' : 'Add instrument' }}
+            </button>
+          </div>
+        </form>
+      </adm-drawer>
 
       <section class="card">
         <form class="filters" [formGroup]="filters" (ngSubmit)="search()">

@@ -12,6 +12,17 @@
       <p class="nav-group">Operations</p>
       @for (item of operations; track item.path) {
         <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          <svg
+            class="nav-icon"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [attr.d]="item.icon" />
+          </svg>
           {{ item.label }}
           @if (item.path === '/account-requests' && pending()) {
             <span class="nav-badge" data-testid="pending-badge"
@@ -23,12 +34,34 @@
       <p class="nav-group">Markets</p>
       @for (item of markets; track item.path) {
         <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          <svg
+            class="nav-icon"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [attr.d]="item.icon" />
+          </svg>
           {{ item.label }}
         </a>
       }
       <p class="nav-group">System</p>
       @for (item of system; track item.path) {
         <a class="nav-item" [routerLink]="item.path" routerLinkActive="active">
+          <svg
+            class="nav-icon"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [attr.d]="item.icon" />
+          </svg>
           {{ item.label }}
         </a>
       }

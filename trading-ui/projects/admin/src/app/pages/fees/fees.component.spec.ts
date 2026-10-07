@@ -108,6 +108,32 @@ describe('FeesComponent', () => {
     expect(aapl.textContent).toContain('75%');
   });
 
+  it('quick ranges fill the dates and reload: the last 7 days, this month, then all time', async () => {
+    (el('fees-range-7d') as HTMLButtonElement).click();
+    await settle();
+    const call = feesByUser.mock.lastCall![0] as { from: string; to: string };
+    const days = (new Date(call.to).getTime() - new Date(call.from).getTime()) / 86_400_000;
+    expect(days).toBe(6);
+    expect(fixture.componentInstance.range()).toBe('7d');
+
+    (el('fees-range-month') as HTMLButtonElement).click();
+    await settle();
+    const month = feesByUser.mock.lastCall![0] as { from: string };
+    expect(month.from.endsWith('-01')).toBe(true);
+
+    (el('fees-range-all') as HTMLButtonElement).click();
+    await settle();
+    expect(feesByUser).toHaveBeenLastCalledWith({ q: '' }, { page: 0, size: 25 });
+  });
+
+  it('shows initials for each customer and a bar sized against the biggest payer', () => {
+    const [john, priya] = rows('fees-user-row');
+    expect(john.querySelector('.avatar')?.textContent?.trim()).toBe('JC');
+    expect(priya.querySelector('.avatar')?.textContent?.trim()).toBe('PM');
+    const widths = rows('fees-user-bar').map((bar) => bar.style.width);
+    expect(widths).toEqual(['90%', '100%']); // 4.50 against the top payer's 5.00
+  });
+
   it('applies the date range and the customer search to the per-user table', async () => {
     const form = fixture.componentInstance.filters;
     form.setValue({ q: 'john', from: '2026-10-01', to: '2026-10-31' });

@@ -85,6 +85,30 @@ describe('InstrumentsComponent adding an instrument', () => {
     expect(fixture.nativeElement.textContent).toContain('NEWCO is added and tradable');
   });
 
+  it('opens as a side panel that Escape, the close button and the dimmed page all close', async () => {
+    (el('instrument-add') as HTMLButtonElement).click();
+    await settle();
+    expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeTruthy();
+
+    fixture.nativeElement
+      .querySelector('[role="dialog"]')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await settle();
+    expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+
+    (el('instrument-add') as HTMLButtonElement).click();
+    await settle();
+    (fixture.nativeElement.querySelector('.drawer-h .icon-btn') as HTMLButtonElement).click();
+    await settle();
+    expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+
+    (el('instrument-add') as HTMLButtonElement).click();
+    await settle();
+    (fixture.nativeElement.querySelector('.scrim') as HTMLElement).click();
+    await settle();
+    expect(fixture.nativeElement.querySelector('[role="dialog"]')).toBeNull();
+  });
+
   it('blocks a bad ticker and a missing name before anything is sent', async () => {
     (el('instrument-add') as HTMLButtonElement).click();
     await settle();
