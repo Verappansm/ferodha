@@ -38,10 +38,28 @@ class TriggerAndRiskTest {
     }
 
     @Test
-    @DisplayName("The first observation never fires: there is no crossing without a before")
+    @DisplayName("A crossing needs a before: with no previous price it is not one")
     void noPreviousPriceNoCrossing() {
         assertFalse(TriggerRule.crossed("BUY", d("100"), null, d("50")));
         assertFalse(TriggerRule.crossed("SELL", d("100"), null, d("500")));
+    }
+
+    @Test
+    @DisplayName("Like a limit order, the first price seen fires when the level is already met")
+    void firstPriceFiresWhenAlreadyMet() {
+        assertTrue(TriggerRule.shouldFire("BUY", d("100"), null, d("99.90")));
+        assertTrue(TriggerRule.shouldFire("BUY", d("100"), null, d("100.00")));
+        assertFalse(TriggerRule.shouldFire("BUY", d("100"), null, d("100.10")));
+        assertTrue(TriggerRule.shouldFire("SELL", d("100"), null, d("100.10")));
+        assertFalse(TriggerRule.shouldFire("SELL", d("100"), null, d("99.90")));
+    }
+
+    @Test
+    @DisplayName("After the first price only a crossing fires, so a held level never repeats")
+    void afterTheFirstPriceOnlyCrossings() {
+        assertFalse(TriggerRule.shouldFire("BUY", d("100"), d("99.50"), d("99.00")));
+        assertTrue(TriggerRule.shouldFire("BUY", d("100"), d("100.50"), d("99.90")));
+        assertFalse(TriggerRule.shouldFire("BUY", d("100"), d("100.50"), null));
     }
 
     @Test

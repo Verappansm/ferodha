@@ -24,8 +24,20 @@ public record Strategy(
         Integer consecutiveFailures,
         BigDecimal lastPrice,
         OffsetDateTime expiresAt,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        OffsetDateTime lastCheckedAt
 ) {
+    // Without the time of the last check (rows in tests, mostly).
+    public Strategy(String strategyId, String userId, Long accountId, String name, String symbol, String side,
+                    BigDecimal triggerPrice, Integer quantity, BigDecimal maxSpend, Integer maxPosition,
+                    Integer maxOrders, Integer maxFailures, Boolean dryRun, String status, Integer ordersPlaced,
+                    Integer consecutiveFailures, BigDecimal lastPrice, OffsetDateTime expiresAt,
+                    OffsetDateTime createdAt) {
+        this(strategyId, userId, accountId, name, symbol, side, triggerPrice, quantity, maxSpend, maxPosition,
+                maxOrders, maxFailures, dryRun, status, ordersPlaced, consecutiveFailures, lastPrice, expiresAt,
+                createdAt, null);
+    }
+
     public boolean isBuy() {
         return "BUY".equals(side);
     }

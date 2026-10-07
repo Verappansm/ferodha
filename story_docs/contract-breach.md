@@ -41,6 +41,8 @@ below is a decision the team has taken and will defend at review.
 | B25 | Rejection reason in order history | `contracts/trade-api.yaml` OrderHistoryEntry | No field says why an order was rejected | Optional `rejectionReason` (the executor's code, null unless `REJECTED`), shown on the Orders page and on the order ticket |
 | B26 | Change password and forced reset | `contracts/auth-api.yaml`; LEAP-010, LEAP-016 stories | `/auth/login` answers only 200 or `AUTH-401` | Right credentials on a user with a forced reset answer `AUTH-428` (HTTP 428) and no tokens; `POST /auth/change-password` (current password as the credential, so no token) sets the new one, clears the flag and revokes every refresh token |
 | B27 | Automated strategies | Sprint 10 stretch brief (`catalogue/stretch.md`); `contracts/kafka-topics.md` | No strategy routes; no delegated identity | `GET/POST /api/v1/strategies`, `/{id}`, `/{id}/events`, `/{id}/enable`, `/{id}/disable` in trade_api; orders placed with a 60 second delegated token carrying `strategyId` and `act.sub` claims, accepted only on `POST /api/v1/orders` and only while the strategy is ENABLED; consumer group `strategy-service` on `market-data` and `trade-events`; Liquibase 015 |
+| B28 | Fill price source | `contracts/kafka-topics.md` (executor prices a fill with one Fauxnance quote); Sprint 7 brief | One real quote per order, `GET /quotes/{symbol}` | The executor fills at pricing_generator's live tick under every profile; the direct Fauxnance client is retired behind the profile `fauxnance-direct`. The fill rule is unchanged |
+| B29 | Admin fees and adding instruments | `design/admin-trade-api.yaml` (LEAP-022 lists and delists only) | No fee figures; no way to add an instrument | `GET /admin/fees/summary`, `/fees/by-user`, `/fees/by-instrument` (commission on filled portal orders, in USD) and `POST /admin/instruments`; a Fees page and tiles on the overview, and an Add instrument form on the Instruments page |
 
 ## Why
 
@@ -238,5 +240,27 @@ routes and a `strategy-service` consumer group; none of that is in the Sprint
 6 contract. The routes are hand-written in the UI like the watchlist ones and
 are not yet in `design/trade-api.yaml`. The delegated token adds two claims
 (`strategyId`, `act`) to the contract's claim set; the token is only ever
-accepted by trade_api, never by the auth service. The decisions behind the
+accepted by trade_api, never by the auth service. A strategy that is not running (disabled, or stopped after failures) can be
+edited with `PUT /api/v1/strategies/{id}`; a running one answers `STR-409`, so it
+never trades on a half-changed rule. The decisions behind the
 identity and the limits are in `story_docs/decision-log/0001` and `0002`.
+
+**B28 (fill price source).** The brief prices a fill with a real Fauxnance
+quote fetched per order. Every price the customer sees comes from the live
+ticker instead, so a limit chosen from the screen could be rejected against a
+quote the customer never saw. Fills now use the ticker's ask (BUY) and bid
+(SELL) with the same greater-than and less-than rule, so the price shown, the
+price suggested and the price filled are one number. The decision and the
+retired alternative are in `story_docs/decision-log/0003`.
+
+**B29 (admin fees and adding instruments).** The console could list and delist
+instruments but not show what the platform earns or add one. Fees are the sum of
+`Orders.fee_amount` over filled portal orders (market-maker and seeded orders
+pay none), reported in USD: INR accounts are converted at the executor's fixed
+90 INR = 1 USD, the unconverted per-currency totals are returned alongside, and
+a currency that cannot be converted is left out and flagged rather than summed
+as dollars. Adding an instrument inserts it as tradable and writes an
+`INSTRUMENT_ADDED` audit row with the admin's reason. Prices come from the live
+feed, which can only price a symbol Fauxnance knows, so the form says an unknown
+ticker is listed but has no price until it does. No customer notification is
+sent for a new listing yet.

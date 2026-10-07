@@ -65,6 +65,9 @@ export interface StrategyResponse {
   consecutiveFailures: number;
   expiresAt: string | null;
   createdAt: string;
+  /** The price it last watched (the ask for a BUY, the bid for a SELL) and when. */
+  lastPrice: number | null;
+  lastCheckedAt: string | null;
 }
 
 export interface StrategyEventResponse {
@@ -219,6 +222,14 @@ export class TradeApi {
 
   createStrategy(request: CreateStrategyRequest): Observable<StrategyResponse> {
     return this.http.post<StrategyResponse>(`${this.baseUrl}/api/v1/strategies`, request);
+  }
+
+  /** Rewrites a strategy that is not running (disabled or stopped); a running one answers STR-409. */
+  updateStrategy(strategyId: string, request: CreateStrategyRequest): Observable<StrategyResponse> {
+    return this.http.put<StrategyResponse>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}`,
+      request,
+    );
   }
 
   enableStrategy(strategyId: string): Observable<StrategyResponse> {

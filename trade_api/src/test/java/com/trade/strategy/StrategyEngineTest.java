@@ -87,10 +87,19 @@ class StrategyEngineTest {
     }
 
     @Test
-    @DisplayName("The first observation only remembers the price")
-    void firstObservationNeverFires() {
+    @DisplayName("The first price after enabling fires when the level is already met, like a limit order")
+    void firstObservationFiresWhenAlreadyMet() {
         quote(buy(null), "50.00", "50.10");
+        verify(placer).place(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("The first price after enabling only logs what it is waiting for when the level is not met")
+    void firstObservationWatchesWhenNotMet() {
+        quote(buy(null), "119.90", "120.00");
         verify(placer, never()).place(anyString(), any());
+        verify(mapper).insertEvent(eq(ID), eq("WATCHING"), contains("will buy when the ask falls to 100.00"));
+        verify(mapper).setLastPrice(ID, new BigDecimal("120.00"));
     }
 
     @Test

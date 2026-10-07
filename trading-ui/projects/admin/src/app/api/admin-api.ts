@@ -11,6 +11,7 @@ import { UserStatus } from './generated/auth/model/user-status';
 import { provideApi as provideAuthClient } from './generated/auth/provide-api';
 import { AdminAccountRequestsService } from './generated/trade/api/admin-account-requests.service';
 import { AdminAccountsService } from './generated/trade/api/admin-accounts.service';
+import { AdminFeesService } from './generated/trade/api/admin-fees.service';
 import { AdminInstrumentsService } from './generated/trade/api/admin-instruments.service';
 import { AdminOrdersService } from './generated/trade/api/admin-orders.service';
 import { AdminOverviewService } from './generated/trade/api/admin-overview.service';
@@ -25,6 +26,11 @@ import { AdminOrder } from './generated/trade/model/admin-order';
 import { AdminOrderStatus } from './generated/trade/model/admin-order-status';
 import { AdminSummary } from './generated/trade/model/admin-summary';
 import { AuditEntry } from './generated/trade/model/audit-entry';
+import { CreateInstrumentRequest } from './generated/trade/model/create-instrument-request';
+import { FeeInstrument } from './generated/trade/model/fee-instrument';
+import { FeeSummary } from './generated/trade/model/fee-summary';
+import { FeeUser } from './generated/trade/model/fee-user';
+import { FeeUserPage } from './generated/trade/model/fee-user-page';
 import { AuditPage } from './generated/trade/model/audit-page';
 import { ComponentHealth } from './generated/trade/model/component-health';
 import { InstrumentPage } from './generated/trade/model/instrument-page';
@@ -46,6 +52,11 @@ export type {
   AuditEntry,
   AuditPage,
   ComponentHealth,
+  CreateInstrumentRequest,
+  FeeInstrument,
+  FeeSummary,
+  FeeUser,
+  FeeUserPage,
   InstrumentPage,
   OrderPage,
   SystemHealth,
@@ -90,6 +101,7 @@ export class AdminApi {
   private readonly requests = inject(AdminAccountRequestsService);
   private readonly accounts = inject(AdminAccountsService);
   private readonly instruments = inject(AdminInstrumentsService);
+  private readonly fees = inject(AdminFeesService);
   private readonly orders = inject(AdminOrdersService);
   private readonly system = inject(AdminSystemService);
 
@@ -177,11 +189,34 @@ export class AdminApi {
       page.size,
     );
   }
+  addInstrument(request: CreateInstrumentRequest): Observable<AdminInstrument> {
+    return this.instruments.addInstrument(request);
+  }
   delistInstrument(id: string, reason: string): Observable<AdminInstrument> {
     return this.instruments.delistInstrument(id, { reason });
   }
   relistInstrument(id: string, reason: string): Observable<AdminInstrument> {
     return this.instruments.listInstrument(id, { reason });
+  }
+
+  // ---- Fees ----
+  feeSummary(): Observable<FeeSummary> {
+    return this.fees.getFeeSummary();
+  }
+  feesByUser(
+    filter: { from?: string; to?: string; q?: string },
+    page: PageQuery,
+  ): Observable<FeeUserPage> {
+    return this.fees.listFeesByUser(
+      filter.from || undefined,
+      filter.to || undefined,
+      filter.q || undefined,
+      page.page,
+      page.size,
+    );
+  }
+  feesByInstrument(filter: { from?: string; to?: string }): Observable<FeeInstrument[]> {
+    return this.fees.listFeesByInstrument(filter.from || undefined, filter.to || undefined);
   }
 
   // ---- Orders ----

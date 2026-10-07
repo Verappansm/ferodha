@@ -47,6 +47,11 @@ export const routes: Routes = [
           import('./pages/instruments/instruments.component').then((m) => m.InstrumentsComponent),
       },
       {
+        path: 'fees',
+        title: 'Fees · Operations console',
+        loadComponent: () => import('./pages/fees/fees.component').then((m) => m.FeesComponent),
+      },
+      {
         path: 'orders',
         title: 'All orders · Operations console',
         loadComponent: () =>

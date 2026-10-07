@@ -23,6 +23,15 @@ public interface StrategyMapper {
                @Param("maxOrders") int maxOrders, @Param("maxFailures") int maxFailures,
                @Param("dryRun") boolean dryRun, @Param("expiresAt") OffsetDateTime expiresAt);
 
+    // Rewrites the rule of a DISABLED or TRIPPED strategy (0 rows for any other
+    // status) and forgets the remembered price, so it watches afresh once enabled.
+    int update(@Param("strategyId") String strategyId, @Param("name") String name,
+               @Param("symbol") String symbol, @Param("side") String side,
+               @Param("triggerPrice") BigDecimal triggerPrice, @Param("quantity") int quantity,
+               @Param("maxSpend") BigDecimal maxSpend, @Param("maxPosition") Integer maxPosition,
+               @Param("maxOrders") int maxOrders, @Param("maxFailures") int maxFailures,
+               @Param("dryRun") boolean dryRun, @Param("expiresAt") OffsetDateTime expiresAt);
+
     Strategy findById(@Param("strategyId") String strategyId);
 
     List<Strategy> findByAccount(@Param("accountId") long accountId);

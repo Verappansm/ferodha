@@ -6,11 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.client.RestClient;
 
-// Only stood up under market-sim - there's nothing to point this at
-// otherwise, since FauxnanceClientConfig's own bean is what's active under
-// the spec-exact profile.
+// The client behind the live-ticker quote source (TradesGeneratorQuoteSource),
+// stood up under every profile except the retired fauxnance-direct one.
 @Configuration
-@Profile("market-sim")
+@Profile("!fauxnance-direct")
 public class TradesGeneratorClientConfig {
 
     @Bean

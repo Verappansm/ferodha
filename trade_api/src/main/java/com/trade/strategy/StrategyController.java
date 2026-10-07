@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -59,6 +60,14 @@ public class StrategyController {
                                               @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
         return service.events(id, principal.accountId());
+    }
+
+    // Only a strategy that is not running can be edited (STR-409 otherwise).
+    @PutMapping("/{id}")
+    public StrategyResponse update(@PathVariable String id, @Valid @RequestBody CreateStrategyRequest request,
+                                   @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
+            throws DomainException {
+        return service.update(id, request, principal.accountId());
     }
 
     @PostMapping("/{id}/enable")

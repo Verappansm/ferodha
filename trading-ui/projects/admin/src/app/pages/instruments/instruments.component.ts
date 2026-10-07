@@ -1,14 +1,18 @@
 import { Component, inject, signal, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { AdminApi, AdminInstrument, InstrumentType } from '../../api/admin-api';
 import { adminErrorMessage } from '../../core/errors/admin-error-message';
+import { DrawerComponent } from '../../shared/drawer.component';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 import { PagerComponent } from '../../shared/pager.component';
 import { ReasonDialogComponent } from '../../shared/reason-dialog.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 
 const PAGE_SIZE = 25;
+const TICKER_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,19}$/;
 
 /**
  * LEAP-022: which instruments customers can trade. Delisting refuses new
@@ -20,6 +24,8 @@ const PAGE_SIZE = 25;
   imports: [
     DatePipe,
     ReactiveFormsModule,
+    DrawerComponent,
+    InfoTipComponent,
     PagerComponent,
     ReasonDialogComponent,
     StatusPillComponent,
@@ -29,8 +35,17 @@ const PAGE_SIZE = 25;
       <header class="page-header">
         <div>
           <h1>Instruments</h1>
-          <p>List or delist instruments. Delisting stops new orders; holdings are kept.</p>
+          <p>Add, list or delist instruments. Delisting stops new orders; holdings are kept.</p>
         </div>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="instrument-add"
+          [disabled]="adding()"
+          (click)="openAdd()"
+        >
+          Add instrument
+        </button>
       </header>
 
       @if (notice()) {
@@ -39,6 +54,123 @@ const PAGE_SIZE = 25;
       @if (error()) {
         <p class="notice notice-error" role="alert">{{ error() }}</p>
       }
+
+      <adm-drawer [open]="adding()" title="Add instrument" (closed)="closeAdd()">
+        <form [formGroup]="addForm" (ngSubmit)="add()" novalidate data-testid="instrument-add-form">
+          <p class="callout" role="note">
+            Prices come from the live feed, which can only price a symbol the market-data provider
+            knows. An unknown ticker is listed but has no price, and cannot be traded, until it
+            does.
+          </p>
+          <div class="form-grid">
+            <div class="field">
+              <label class="field-label" for="a-ticker"
+                >Ticker<adm-info-tip
+                  label="Ticker"
+                  text="The short code customers search and trade by: capital letters, digits, dots or hyphens, up to 20 characters."
+              /></label>
+              <input
+                id="a-ticker"
+                class="input mono"
+                formControlName="ticker"
+                placeholder="NEWCO"
+                data-testid="add-ticker"
+                (input)="upper()"
+              />
+              @if (invalid('ticker')) {
+                <p class="field-error" data-testid="add-ticker-error">
+                  Letters, digits, dots or hyphens, up to 20 characters.
+                </p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="a-currency"
+                >Currency<adm-info-tip
+                  label="Currency"
+                  text="The currency the instrument is priced in, as three capital letters."
+              /></label>
+              <input
+                id="a-currency"
+                class="input mono"
+                formControlName="currency"
+                maxlength="3"
+                data-testid="add-currency"
+                (input)="upper()"
+              />
+              @if (invalid('currency')) {
+                <p class="field-error">Three capital letters, such as USD.</p>
+              }
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-name">Name</label>
+              <input id="a-name" class="input" formControlName="name" data-testid="add-name" />
+              @if (invalid('name')) {
+                <p class="field-error">Enter the instrument name.</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="a-exchange">Exchange</label>
+              <input
+                id="a-exchange"
+                class="input"
+                formControlName="exchange"
+                placeholder="NASDAQ"
+                data-testid="add-exchange"
+              />
+              @if (invalid('exchange')) {
+                <p class="field-error">Enter the exchange.</p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label" for="a-type">Type</label>
+              <select id="a-type" class="input" formControlName="type" data-testid="add-type">
+                @for (t of types; track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-sector">Sector (optional)</label>
+              <input
+                id="a-sector"
+                class="input"
+                formControlName="sector"
+                data-testid="add-sector"
+              />
+            </div>
+            <div class="field wide">
+              <label class="field-label" for="a-reason"
+                >Reason<adm-info-tip
+                  label="Reason"
+                  text="Why this instrument is being added. It is written to the audit log with your name."
+              /></label>
+              <input
+                id="a-reason"
+                class="input"
+                formControlName="reason"
+                data-testid="add-reason"
+              />
+              @if (invalid('reason')) {
+                <p class="field-error">Give a reason of at least 3 characters.</p>
+              }
+            </div>
+          </div>
+          @if (addError()) {
+            <p class="notice notice-error" role="alert" data-testid="add-error">{{ addError() }}</p>
+          }
+          <div class="drawer-actions">
+            <button type="button" class="btn btn-secondary" (click)="closeAdd()">Cancel</button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              data-testid="add-save"
+              [disabled]="saving()"
+            >
+              {{ saving() ? 'Adding…' : 'Add instrument' }}
+            </button>
+          </div>
+        </form>
+      </adm-drawer>
 
       <section class="card">
         <form class="filters" [formGroup]="filters" (ngSubmit)="search()">
@@ -143,6 +275,18 @@ export class InstrumentsComponent {
   private readonly dialog = viewChild.required(ReasonDialogComponent);
 
   readonly types = Object.values(InstrumentType);
+  readonly addForm = inject(NonNullableFormBuilder).group({
+    ticker: ['', [Validators.required, Validators.pattern(TICKER_PATTERN)]],
+    name: ['', [Validators.required, Validators.maxLength(150)]],
+    exchange: ['', [Validators.required, Validators.maxLength(50)]],
+    currency: ['USD', [Validators.required, Validators.pattern(/^[A-Z]{3}$/)]],
+    type: [InstrumentType.EQUITY as InstrumentType, Validators.required],
+    sector: [''],
+    reason: ['', [Validators.required, Validators.minLength(3), Validators.maxLength(500)]],
+  });
+  readonly adding = signal(false);
+  readonly saving = signal(false);
+  readonly addError = signal('');
   readonly pageSize = PAGE_SIZE;
   readonly filters = inject(NonNullableFormBuilder).group({
     q: [''],
@@ -166,6 +310,69 @@ export class InstrumentsComponent {
   search(): void {
     this.page.set(0);
     void this.load();
+  }
+
+  openAdd(): void {
+    this.addError.set('');
+    this.notice.set('');
+    this.adding.set(true);
+  }
+
+  closeAdd(): void {
+    this.adding.set(false);
+    this.addForm.reset({ currency: 'USD', type: InstrumentType.EQUITY });
+    this.addError.set('');
+  }
+
+  /** Tickers and currencies are capital letters; type them either way. */
+  upper(): void {
+    const { ticker, currency } = this.addForm.getRawValue();
+    this.addForm.patchValue(
+      { ticker: ticker.toUpperCase(), currency: currency.toUpperCase() },
+      { emitEvent: false },
+    );
+  }
+
+  invalid(field: 'ticker' | 'name' | 'exchange' | 'currency' | 'reason'): boolean {
+    const c = this.addForm.controls[field];
+    return c.invalid && (c.touched || c.dirty);
+  }
+
+  async add(): Promise<void> {
+    this.addError.set('');
+    if (this.addForm.invalid) {
+      this.addForm.markAllAsTouched();
+      return;
+    }
+    const v = this.addForm.getRawValue();
+    this.saving.set(true);
+    try {
+      const created = await firstValueFrom(
+        this.api.addInstrument({
+          ticker: v.ticker.trim(),
+          name: v.name.trim(),
+          exchange: v.exchange.trim(),
+          currency: v.currency,
+          type: v.type,
+          sector: v.sector.trim() || undefined,
+          reason: v.reason.trim(),
+        }),
+      );
+      this.closeAdd();
+      this.notice.set(
+        `${created.symbol} is added and tradable. It can be traded once the live feed has a price for it.`,
+      );
+      this.page.set(0);
+      await this.load();
+    } catch (e) {
+      this.addError.set(
+        e instanceof HttpErrorResponse && e.status === 409
+          ? 'An instrument with that ticker already exists.'
+          : adminErrorMessage(e),
+      );
+    } finally {
+      this.saving.set(false);
+    }
   }
 
   goTo(page: number): void {
