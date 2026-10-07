@@ -34,9 +34,15 @@ public interface AdminMapper {
     // deciding the same request cannot both succeed.
     AccountRequestDto lockAccountRequest(@Param("id") String requestId);
 
-    BankAccountRow findBankAccount(@Param("number") String bankAccountNumber);
+    // The bank account the simulated bank holds under this email, or null. The
+    // console never creates one: Third_Party_Bank rows are added in Postgres.
+    BankAccountRow findBankAccountByEmail(@Param("email") String email);
 
-    int insertBankAccount(@Param("number") String bankAccountNumber, @Param("email") String email);
+    // How many trading accounts already settle to this bank account (0 or 1).
+    int countAccountsOnBank(@Param("number") String bankAccountNumber);
+
+    // True once the user has entered the code mailed to their address.
+    boolean isEmailVerified(@Param("userId") String userId);
 
     // Opens the trading account and returns its numeric key (Accounts.id).
     long insertAccount(@Param("userId") String userId,

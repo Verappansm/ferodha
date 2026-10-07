@@ -671,13 +671,15 @@ components:
     ApproveAccountRequest:
       type: object
       additionalProperties: false
-      required: [bankAccountNumber, currency]
+      required: [currency]
       properties:
         bankAccountNumber:
           type: string
           minLength: 4
           maxLength: 50
-          description: The applicant's verified bank account in the simulated bank.
+          description: >-
+            Optional. The account is the one the simulated bank holds under the applicant's
+            verified email, never created or chosen here. If given, it must be that one.
           example: BANK-100004
         currency:
           type: string

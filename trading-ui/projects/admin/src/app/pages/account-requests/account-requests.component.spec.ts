@@ -65,10 +65,9 @@ describe('AccountRequestsComponent', () => {
     ]);
   });
 
-  it('approving sends the bank account and currency, then reloads', async () => {
+  it('approving sends only the currency (the bank account comes from the verified email), then reloads', async () => {
     const approveDialog = dialog(ApproveDialogComponent);
     vi.spyOn(approveDialog, 'ask').mockResolvedValue({
-      bankAccountNumber: 'BANK-100004',
       currency: 'INR',
       note: '',
     });
@@ -79,7 +78,7 @@ describe('AccountRequestsComponent', () => {
     await fixture.componentInstance.approve(pending('Older', '2026-09-30T10:00:00Z'));
     await fixture.whenStable();
 
-    expect(api.approveRequest).toHaveBeenCalledWith('req-Older', 'BANK-100004', 'INR', undefined);
+    expect(api.approveRequest).toHaveBeenCalledWith('req-Older', 'INR', undefined);
     expect(fixture.componentInstance.notice()).toContain('account #4 is open');
     expect(api.accountRequests).toHaveBeenCalledTimes(2);
   });

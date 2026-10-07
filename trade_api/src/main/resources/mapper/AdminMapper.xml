@@ -104,17 +104,19 @@
         </constructor>
     </resultMap>
 
-    <select id="findBankAccount" resultMap="bankAccount">
+    <select id="findBankAccountByEmail" resultMap="bankAccount">
         SELECT bank_account_number, email
         FROM Third_Party_Bank
-        WHERE bank_account_number = #{number}
+        WHERE lower(email) = lower(#{email})
     </select>
 
-    <!-- The simulated bank holds no PIN for an account an operator verified by hand. -->
-    <insert id="insertBankAccount">
-        INSERT INTO Third_Party_Bank (bank_account_number, email, pin_hash, balance)
-        VALUES (#{number}, #{email}, 'not-set', 0)
-    </insert>
+    <select id="countAccountsOnBank" resultType="int">
+        SELECT count(*) FROM Accounts WHERE bank_account_number = #{number}
+    </select>
+
+    <select id="isEmailVerified" resultType="boolean">
+        SELECT email_verified_at IS NOT NULL FROM Users WHERE user_id = #{userId}::uuid
+    </select>
 
     <!--
         business_ref is derived from the numeric key, as Liquibase 001 does for

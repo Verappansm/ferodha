@@ -48,17 +48,15 @@ class AdminServicesTest {
     }
 
     @Test
-    @DisplayName("Approving opens exactly one account, creates the bank record, and records the decision")
+    @DisplayName("Approving opens exactly one account on the bank account held under the verified email, and records the decision")
     void approveOpensOneAccount() {
-        when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("PENDING"));
-        when(mapper.findBankAccount("BANK-100004")).thenReturn(null);
+        givenVerifiedApplicantWithBank();
         when(mapper.insertAccount(anyString(), anyString(), anyString())).thenReturn(4L);
         when(mapper.approveAccountRequest(anyString(), anyString(), anyString(), anyString(), anyLong()))
                 .thenReturn(1);
 
-        requests.approve(REQUEST, new ApproveAccountRequest("BANK-100004", "USD", ""), ADMIN);
+        requests.approve(REQUEST, new ApproveAccountRequest(null, "USD", ""), ADMIN);
 
-        verify(mapper).insertBankAccount("BANK-100004", "priya@example.com");
         verify(mapper).insertAccount("77777777-7777-7777-7777-777777777771", "BANK-100004", "USD");
         verify(mapper).approveAccountRequest(REQUEST.toString(), ADMIN.userId().toString(), "BANK-100004", "USD", 4L);
         verify(audit).record(ADMIN, "ACCOUNT_REQUEST_APPROVED", "ACCOUNT_REQUEST", REQUEST.toString(), null);
@@ -83,16 +81,49 @@ class AdminServicesTest {
         assertEquals("ADM-404", e.getCode());
     }
 
-    @Test
-    @DisplayName("A bank account belonging to someone else is never linked")
-    void someoneElsesBankAccountIsRefused() {
+    private void givenVerifiedApplicantWithBank() {
         when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("PENDING"));
-        when(mapper.findBankAccount("BANK-100001")).thenReturn(new BankAccountRow("BANK-100001", "john.carter@example.com"));
+        when(mapper.isEmailVerified("77777777-7777-7777-7777-777777777771")).thenReturn(true);
+        when(mapper.findBankAccountByEmail("priya@example.com"))
+                .thenReturn(new BankAccountRow("BANK-100004", "priya@example.com"));
+    }
 
-        AdminException e = assertThrows(AdminException.class,
-                () -> requests.approve(REQUEST, new ApproveAccountRequest("BANK-100001", "USD", null), ADMIN));
+    private void assertRefused(ApproveAccountRequest body) {
+        AdminException e = assertThrows(AdminException.class, () -> requests.approve(REQUEST, body, ADMIN));
         assertEquals("ADM-409", e.getCode());
         verify(mapper, never()).insertAccount(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("An applicant who has not entered the emailed code is not approved")
+    void unverifiedEmailIsRefused() {
+        when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("PENDING"));
+        when(mapper.isEmailVerified("77777777-7777-7777-7777-777777777771")).thenReturn(false);
+        assertRefused(new ApproveAccountRequest(null, "USD", null));
+    }
+
+    @Test
+    @DisplayName("If the bank holds no account under the applicant's email, nothing is opened and none is created")
+    void noBankAccountUnderTheEmailIsRefused() {
+        when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("PENDING"));
+        when(mapper.isEmailVerified("77777777-7777-7777-7777-777777777771")).thenReturn(true);
+        when(mapper.findBankAccountByEmail("priya@example.com")).thenReturn(null);
+        assertRefused(new ApproveAccountRequest(null, "USD", null));
+    }
+
+    @Test
+    @DisplayName("An operator cannot point the applicant at a different bank account")
+    void someoneElsesBankAccountIsRefused() {
+        givenVerifiedApplicantWithBank();
+        assertRefused(new ApproveAccountRequest("BANK-100001", "USD", null));
+    }
+
+    @Test
+    @DisplayName("A bank account that already backs a trading account is never linked a second time")
+    void bankAccountAlreadyLinkedIsRefused() {
+        givenVerifiedApplicantWithBank();
+        when(mapper.countAccountsOnBank("BANK-100004")).thenReturn(1);
+        assertRefused(new ApproveAccountRequest(null, "USD", null));
     }
 
     @Test

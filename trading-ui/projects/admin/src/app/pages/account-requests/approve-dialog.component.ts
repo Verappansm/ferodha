@@ -3,7 +3,6 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { AccountRequest } from '../../api/admin-api';
 
 export interface ApprovalDetails {
-  bankAccountNumber: string;
   currency: string;
   note: string;
 }
@@ -25,23 +24,11 @@ export const CURRENCIES = ['USD', 'INR', 'EUR', 'GBP'];
             }}). They can sign in and trade as soon as you confirm.
           </p>
 
-          <div class="field">
-            <label class="field-label" for="bank">Verified bank account number</label>
-            <input
-              id="bank"
-              class="input mono"
-              formControlName="bankAccountNumber"
-              placeholder="BANK-100004"
-              data-testid="approve-bank"
-              [attr.aria-invalid]="invalid('bankAccountNumber')"
-              aria-describedby="bank-error"
-            />
-            @if (invalid('bankAccountNumber')) {
-              <p id="bank-error" class="field-error" data-testid="approve-bank-error">
-                Enter the bank account number, 4 to 50 characters.
-              </p>
-            }
-          </div>
+          <p class="dialog-text" data-testid="approve-bank-note">
+            The account settles to the bank account the bank holds under this email. It is not
+            chosen or created here, and approval is refused if the email is unverified, the bank has
+            none, or it is already linked.
+          </p>
 
           <div class="field">
             <label class="field-label" for="currency">Account currency</label>
@@ -79,10 +66,6 @@ export class ApproveDialogComponent {
   readonly currencies = CURRENCIES;
 
   readonly form = inject(NonNullableFormBuilder).group({
-    bankAccountNumber: [
-      '',
-      [Validators.required, Validators.minLength(4), Validators.maxLength(50)],
-    ],
     currency: ['USD', Validators.required],
     note: ['', Validators.maxLength(500)],
   });
@@ -91,7 +74,7 @@ export class ApproveDialogComponent {
 
   ask(request: AccountRequest): Promise<ApprovalDetails | null> {
     this.request.set(request);
-    this.form.reset({ bankAccountNumber: '', currency: request.currency || 'USD', note: '' });
+    this.form.reset({ currency: request.currency || 'USD', note: '' });
     const element = this.dialog().nativeElement;
     if (typeof element.showModal === 'function') element.showModal();
     else element.setAttribute('open', '');
@@ -105,7 +88,6 @@ export class ApproveDialogComponent {
     }
     const value = this.form.getRawValue();
     this.close({
-      bankAccountNumber: value.bankAccountNumber.trim(),
       currency: value.currency,
       note: value.note.trim(),
     });
@@ -117,10 +99,5 @@ export class ApproveDialogComponent {
     else element.removeAttribute('open');
     this.resolve?.(details);
     this.resolve = null;
-  }
-
-  invalid(field: 'bankAccountNumber'): boolean {
-    const control = this.form.controls[field];
-    return control.invalid && control.touched;
   }
 }

@@ -123,13 +123,9 @@ export class AdminApi {
   accountRequests(status?: AccountRequestStatus): Observable<AccountRequest[]> {
     return this.requests.listAccountRequests(status);
   }
-  approveRequest(
-    id: string,
-    bankAccountNumber: string,
-    currency: string,
-    note?: string,
-  ): Observable<AccountRequest> {
-    return this.requests.approveAccountRequest(id, { bankAccountNumber, currency, note });
+  /** The bank account is the one the bank holds under the applicant's verified email. */
+  approveRequest(id: string, currency: string, note?: string): Observable<AccountRequest> {
+    return this.requests.approveAccountRequest(id, { currency, note });
   }
   rejectRequest(id: string, reason: string): Observable<AccountRequest> {
     return this.requests.rejectAccountRequest(id, { reason });

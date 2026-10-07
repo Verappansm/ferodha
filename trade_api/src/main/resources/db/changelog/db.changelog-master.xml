@@ -35,5 +35,6 @@
     <include file="db/changelog/019-bank-transfer-idempotency.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/020-bank-demo-pin-verifiers.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/019-indian-instruments.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/021-bank-account-linking.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

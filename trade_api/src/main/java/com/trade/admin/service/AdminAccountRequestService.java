@@ -43,13 +43,23 @@ public class AdminAccountRequestService {
     public AccountRequestDto approve(UUID requestId, ApproveAccountRequest body, AdminPrincipal admin) {
         AccountRequestDto request = lockPending(requestId);
 
-        String bankAccount = body.bankAccountNumber().trim();
-        BankAccountRow bank = mapper.findBankAccount(bankAccount);
+        // The applicant proved the email is theirs by entering the code mailed to it,
+        // and the bank holds an account under that same email: that account, and only
+        // that one, is theirs. Operators cannot create or pick a bank account.
+        if (!mapper.isEmailVerified(request.userId())) {
+            throw AdminException.conflict("the applicant has not verified their email yet");
+        }
+        BankAccountRow bank = mapper.findBankAccountByEmail(request.applicantEmail());
         if (bank == null) {
-            mapper.insertBankAccount(bankAccount, request.applicantEmail());
-        } else if (!bank.email().equalsIgnoreCase(request.applicantEmail())) {
-            // Linking someone else's bank account would move their money.
-            throw AdminException.conflict("bank account " + bankAccount + " belongs to another user");
+            throw AdminException.conflict("the bank holds no account under " + request.applicantEmail());
+        }
+        String bankAccount = bank.bankAccountNumber();
+        String named = body.bankAccountNumber() == null ? "" : body.bankAccountNumber().trim();
+        if (!named.isEmpty() && !named.equals(bankAccount)) {
+            throw AdminException.conflict("bank account " + named + " is not the one held under the applicant's email");
+        }
+        if (mapper.countAccountsOnBank(bankAccount) > 0) {
+            throw AdminException.conflict("bank account " + bankAccount + " is already linked to an account");
         }
 
         long accountId = mapper.insertAccount(request.userId(), bankAccount, body.currency());

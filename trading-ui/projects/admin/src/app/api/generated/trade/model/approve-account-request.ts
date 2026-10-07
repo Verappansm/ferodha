@@ -11,9 +11,9 @@
 
 export interface ApproveAccountRequest { 
     /**
-     * The applicant\'s verified bank account in the simulated bank.
+     * Optional. The account is the one the simulated bank holds under the applicant\'s verified email, never created or chosen here. If given, it must be that one.
      */
-    bankAccountNumber: string;
+    bankAccountNumber?: string;
     currency: string;
     /**
      * Optional note recorded in the audit log.
