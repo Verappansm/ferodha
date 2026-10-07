@@ -113,6 +113,59 @@ class StrategyServiceTest {
                 eq(1), eq(3), eq(false), any());
     }
 
+    private void givenUpdatable(String status, int ordersPlaced) {
+        when(mapper.findById(ID)).thenReturn(new Strategy(ID, USER, 1L, "dip", "AAPL", "BUY",
+                new BigDecimal("100.00"), 50, new BigDecimal("10000.00"), 100, 1, 3, false, status, ordersPlaced, 0,
+                null, null, null));
+        when(mapper.update(eq(ID), anyString(), anyString(), anyString(), any(), anyInt(), any(), any(),
+                anyInt(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(1);
+    }
+
+    @Test
+    @DisplayName("A disabled strategy can be edited, with the same checks as creating one")
+    void editsADisabledStrategy() throws DomainException {
+        givenUpdatable("DISABLED", 0);
+        service.update(ID, buy("12000.00", 200), 1L);
+        verify(mapper).update(eq(ID), eq("dip"), eq("AAPL"), eq("BUY"), any(), eq(50), any(), eq(200), eq(1),
+                eq(3), eq(false), any());
+        verify(mapper).insertEvent(ID, "EDITED", "Rule edited by the customer");
+    }
+
+    @Test
+    @DisplayName("A stopped (tripped) strategy can be edited so its cause can be fixed")
+    void editsATrippedStrategy() throws DomainException {
+        givenUpdatable("TRIPPED", 0);
+        service.update(ID, buy("12000.00", 200), 1L);
+        verify(mapper).insertEvent(ID, "EDITED", "Rule edited by the customer");
+    }
+
+    @Test
+    @DisplayName("A running, completed or expired strategy cannot be edited")
+    void runningCannotBeEdited() {
+        for (String status : List.of("ENABLED", "COMPLETED", "EXPIRED")) {
+            givenUpdatable(status, 0);
+            assertThrows(StrategyStateException.class, () -> service.update(ID, buy("12000.00", 200), 1L));
+        }
+        verify(mapper, never()).update(anyString(), anyString(), anyString(), anyString(), any(), anyInt(),
+                any(), any(), anyInt(), anyInt(), org.mockito.ArgumentMatchers.anyBoolean(), any());
+    }
+
+    @Test
+    @DisplayName("An edit that goes below the orders already placed, or breaks a cap, is refused")
+    void editIsChecked() {
+        givenUpdatable("DISABLED", 3);
+        assertThrows(InvalidParameterException.class, () -> service.update(ID, buy("12000.00", 200), 1L)); // 1 < 3 placed
+        givenUpdatable("DISABLED", 0);
+        assertThrows(InvalidParameterException.class, () -> service.update(ID, buy("5000.00", 200), 1L));
+    }
+
+    @Test
+    @DisplayName("Someone else's strategy cannot be edited")
+    void notYoursCannotBeEdited() {
+        when(mapper.findById(ID)).thenReturn(strategy(2L, "DISABLED"));
+        assertThrows(StrategyNotFoundException.class, () -> service.update(ID, buy("12000.00", 200), 1L));
+    }
+
     @Test
     @DisplayName("Another account's strategy is STR-404, the same as one that does not exist")
     void notYoursIsNotFound() {

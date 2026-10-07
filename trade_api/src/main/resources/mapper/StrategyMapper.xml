@@ -52,6 +52,18 @@
         RETURNING strategy_id::text
     </select>
 
+    <update id="update">
+        UPDATE strategies
+        SET name = #{name}, symbol = #{symbol}, side = #{side}, trigger_price = #{triggerPrice},
+            quantity = #{quantity}, max_spend = #{maxSpend,jdbcType=DECIMAL},
+            max_position = #{maxPosition,jdbcType=INTEGER}, max_orders = #{maxOrders},
+            max_failures = #{maxFailures}, dry_run = #{dryRun},
+            expires_at = #{expiresAt,jdbcType=TIMESTAMP},
+            last_price = NULL, last_checked_at = NULL, updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status IN ('DISABLED', 'TRIPPED')
+    </update>
+
     <select id="findById" resultMap="strategy">
         SELECT <include refid="columns"/> FROM strategies
         WHERE strategy_id = CAST(#{strategyId} AS uuid)

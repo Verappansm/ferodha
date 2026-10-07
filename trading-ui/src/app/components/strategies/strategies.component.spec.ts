@@ -42,6 +42,7 @@ describe('StrategiesComponent', () => {
   let fixture: ComponentFixture<StrategiesComponent>;
   let strategies: ReturnType<typeof vi.fn>;
   let createStrategy: ReturnType<typeof vi.fn>;
+  let updateStrategy: ReturnType<typeof vi.fn>;
   let enableStrategy: ReturnType<typeof vi.fn>;
   let disableStrategy: ReturnType<typeof vi.fn>;
   let strategyEvents: ReturnType<typeof vi.fn>;
@@ -59,6 +60,7 @@ describe('StrategiesComponent', () => {
           useValue: {
             strategies,
             createStrategy,
+            updateStrategy,
             enableStrategy,
             disableStrategy,
             strategyEvents,
@@ -77,19 +79,18 @@ describe('StrategiesComponent', () => {
   beforeEach(() => {
     strategies = vi.fn().mockReturnValue(of([strategy()]));
     createStrategy = vi.fn().mockReturnValue(of(strategy()));
+    updateStrategy = vi.fn().mockReturnValue(of(strategy({ name: 'Renamed' })));
     enableStrategy = vi.fn().mockReturnValue(of(strategy({ status: 'ENABLED' })));
     disableStrategy = vi.fn().mockReturnValue(of(strategy({ status: 'DISABLED' })));
-    strategyEvents = vi
-      .fn()
-      .mockReturnValue(
-        of([
-          {
-            at: '2026-10-07T10:01:00Z',
-            kind: 'BLOCKED',
-            detail: 'Max spend 6000 would be exceeded',
-          },
-        ]),
-      );
+    strategyEvents = vi.fn().mockReturnValue(
+      of([
+        {
+          at: '2026-10-07T10:01:00Z',
+          kind: 'BLOCKED',
+          detail: 'Max spend 6000 would be exceeded',
+        },
+      ]),
+    );
     quote = vi
       .fn()
       .mockReturnValue(of({ symbol: 'AAPL', currency: 'USD', bid: 99.8, ask: 99.9, mid: 99.85 }));
@@ -167,16 +168,121 @@ describe('StrategiesComponent', () => {
       expect(text('strategy-watching')).toBe('Waiting for a price');
     });
 
-    it('explains every heading with an info note that opens on click', async () => {
-      const buttons = fixture.nativeElement.querySelectorAll('th app-info-tip button');
-      expect(buttons.length).toBe(8);
+    it('explains every part of a card with an info note that opens on click', async () => {
+      const buttons = fixture.nativeElement.querySelectorAll(
+        '[data-testid="strategy-row"] app-info-tip button',
+      );
+      expect(buttons.length).toBe(6);
       expect(fixture.nativeElement.querySelector('[role="tooltip"]')).toBeNull();
 
-      (buttons[1] as HTMLButtonElement).click();
+      (buttons[1] as HTMLButtonElement).click(); // the Rule note
       await settle();
       expect(fixture.nativeElement.querySelector('[role="tooltip"]').textContent).toContain(
         'A BUY watches the ask',
       );
+    });
+
+    it('counts how many are running, stopped and disabled', async () => {
+      strategies.mockReturnValue(
+        of([
+          strategy({ strategyId: 'a', status: 'ENABLED' }),
+          strategy({ strategyId: 'b', status: 'ENABLED' }),
+          strategy({ strategyId: 'c', status: 'TRIPPED' }),
+          strategy({ strategyId: 'd' }),
+        ]),
+      );
+      await fixture.componentInstance.refresh();
+      await settle();
+      const counts = text('strategy-counts');
+      expect(counts).toContain('2 running');
+      expect(counts).toContain('1 stopped after failures');
+      expect(counts).toContain('1 disabled');
+    });
+
+    it('draws where the watched price stands against the target', async () => {
+      strategies.mockReturnValue(
+        of([
+          strategy({ status: 'ENABLED', lastPrice: 101, lastCheckedAt: '2026-10-07T10:01:05Z' }),
+        ]),
+      );
+      await fixture.componentInstance.refresh();
+      await settle();
+      expect(el('strategy-gauge')).toBeTruthy();
+      expect(fixture.nativeElement.textContent).toContain('1.00% above the target');
+
+      strategies.mockReturnValue(of([strategy({ status: 'ENABLED', lastPrice: 99 })]));
+      await fixture.componentInstance.refresh();
+      await settle();
+      expect(fixture.nativeElement.textContent).toContain(
+        'Target reached (1.00% below the target)',
+      );
+    });
+
+    it('lets a disabled strategy be edited: the form opens filled in and saving rewrites it', async () => {
+      (el('strategy-edit') as HTMLButtonElement).click();
+      await settle();
+      expect((el('strategy-name') as HTMLInputElement).value).toBe('Buy the dip');
+      expect((el('strategy-trigger') as HTMLInputElement).value).toBe('100');
+      expect((el('strategy-quantity') as HTMLInputElement).value).toBe('50');
+      expect((el('strategy-max-spend') as HTMLInputElement).value).toBe('6000');
+      expect(text('strategy-save')).toBe('Save changes');
+
+      type('strategy-trigger', '95');
+      (el('strategy-save') as HTMLButtonElement).click();
+      await settle();
+
+      expect(createStrategy).not.toHaveBeenCalled();
+      expect(updateStrategy).toHaveBeenCalledWith(
+        's-1',
+        expect.objectContaining({
+          name: 'Buy the dip',
+          symbol: 'AAPL',
+          triggerPrice: 95,
+          quantity: 50,
+        }),
+      );
+      expect(el('strategy-form')).toBeNull();
+      expect(text('strategy-notice')).toContain('Strategy updated');
+    });
+
+    it('lets a stopped strategy be edited too, but never a running or finished one', async () => {
+      strategies.mockReturnValue(of([strategy({ status: 'TRIPPED' })]));
+      await fixture.componentInstance.refresh();
+      await settle();
+      expect((el('strategy-edit') as HTMLButtonElement).disabled).toBe(false);
+
+      strategies.mockReturnValue(of([strategy({ status: 'ENABLED' })]));
+      await fixture.componentInstance.refresh();
+      await settle();
+      const running = el('strategy-edit') as HTMLButtonElement;
+      expect(running.disabled).toBe(true);
+      expect(running.title).toContain('Disable the strategy first');
+
+      strategies.mockReturnValue(of([strategy({ status: 'COMPLETED' })]));
+      await fixture.componentInstance.refresh();
+      await settle();
+      expect(el('strategy-edit')).toBeNull();
+    });
+
+    it('shows the server sentence when an edit is refused', async () => {
+      updateStrategy.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              error: {
+                errorCode: 'STR-409',
+                message: 'Only a disabled or stopped strategy can be edited. Disable it first.',
+              },
+            }),
+        ),
+      );
+      (el('strategy-edit') as HTMLButtonElement).click();
+      await settle();
+      (el('strategy-save') as HTMLButtonElement).click();
+      await settle();
+      expect(text('strategy-form-error')).toContain('Disable it first');
+      expect(el('strategy-form')).toBeTruthy();
     });
 
     it('shows an empty state when there are none', async () => {

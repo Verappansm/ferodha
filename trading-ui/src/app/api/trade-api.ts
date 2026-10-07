@@ -224,6 +224,14 @@ export class TradeApi {
     return this.http.post<StrategyResponse>(`${this.baseUrl}/api/v1/strategies`, request);
   }
 
+  /** Rewrites a strategy that is not running (disabled or stopped); a running one answers STR-409. */
+  updateStrategy(strategyId: string, request: CreateStrategyRequest): Observable<StrategyResponse> {
+    return this.http.put<StrategyResponse>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}`,
+      request,
+    );
+  }
+
   enableStrategy(strategyId: string): Observable<StrategyResponse> {
     return this.http.post<StrategyResponse>(
       `${this.baseUrl}/api/v1/strategies/${strategyId}/enable`,

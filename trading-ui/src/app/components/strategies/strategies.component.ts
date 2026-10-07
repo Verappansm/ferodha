@@ -58,6 +58,14 @@ export const INFO = {
     'Practice mode: the strategy logs what it would have done and places nothing, so you can check your rule first.',
 } as const;
 
+/** An ISO instant as the value a datetime-local field takes (local time, to the minute). */
+function toLocalInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /**
  * The strategy routes answer STR-404 and STR-409 with a sentence written for
  * the customer; everything else goes through the shared catalogue.
@@ -109,6 +117,16 @@ export class StrategiesComponent {
   readonly busyId = signal<string | null>(null);
   readonly expandedId = signal<string | null>(null);
   readonly events = signal<StrategyEventResponse[]>([]);
+  /** The strategy being edited, or null while a new one is being set up. */
+  readonly editingId = signal<string | null>(null);
+
+  /** How many strategies are in each state, for the strip above the cards. */
+  readonly counts = computed(() => {
+    const list = this.strategies();
+    const n = (status: StrategyResponse['status']) =>
+      list.filter((s) => s.status === status).length;
+    return { running: n('ENABLED'), stopped: n('TRIPPED'), disabled: n('DISABLED') };
+  });
 
   /** Every tradable instrument (for the symbol search) and what the customer holds. */
   readonly instruments = signal<SymbolOption[]>([]);
@@ -212,15 +230,72 @@ export class StrategiesComponent {
 
   openForm(): void {
     this.formError.set('');
+    this.editingId.set(null);
+    this.form.reset();
+    this.showForm.set(true);
+    void this.loadHoldings();
+  }
+
+  /** Only a strategy that is not running can be changed: disabled, or stopped after failures. */
+  canEdit(s: StrategyResponse): boolean {
+    return s.status === 'DISABLED' || s.status === 'TRIPPED';
+  }
+
+  /** Opens the form filled with a strategy's rule. Saving rewrites it (it stays disabled or stopped). */
+  edit(s: StrategyResponse): void {
+    if (!this.canEdit(s)) return;
+    this.formError.set('');
+    this.notice.set('');
+    this.editingId.set(s.strategyId);
+    this.form.reset({
+      name: s.name,
+      symbol: s.symbol,
+      side: s.side,
+      triggerPrice: s.triggerPrice,
+      quantity: s.quantity,
+      maxSpend: s.maxSpend,
+      maxPosition: s.maxPosition,
+      maxOrders: s.maxOrders,
+      maxFailures: s.maxFailures,
+      dryRun: s.dryRun,
+      expiresAt: toLocalInput(s.expiresAt),
+    });
     this.showForm.set(true);
     void this.loadHoldings();
   }
 
   closeForm(): void {
     this.showForm.set(false);
+    this.editingId.set(null);
     this.form.reset();
     this.quote.set(null);
     this.formError.set('');
+  }
+
+  /**
+   * Where the price it is watching stands against the target, for the little
+   * gauge on each card: both markers sit inside the bar with room either side.
+   */
+  gauge(
+    s: StrategyResponse,
+  ): { now: number; target: number; reached: boolean; text: string } | null {
+    if (s.lastPrice == null) return null;
+    const target = s.triggerPrice;
+    const price = s.lastPrice;
+    const lo = Math.min(target, price);
+    const hi = Math.max(target, price);
+    const pad = (hi - lo) * 0.6 || hi * 0.01;
+    const min = lo - pad;
+    const span = hi + pad - min;
+    const gap = ((price - target) / target) * 100;
+    const reached = s.side === 'BUY' ? price <= target : price >= target;
+    const away = `${Math.abs(gap).toFixed(2)}% ${gap > 0 ? 'above' : 'below'} the target`;
+    return {
+      now: ((price - min) / span) * 100,
+      target: ((target - min) / span) * 100,
+      reached,
+      text: reached ? `Target reached (${away})` : away,
+    };
   }
 
   async create(): Promise<void> {
@@ -250,9 +325,16 @@ export class StrategiesComponent {
     };
     this.isSaving.set(true);
     try {
-      await firstValueFrom(this.tradeApi.createStrategy(request));
-      this.closeForm();
-      this.notice.set('Strategy created. It is disabled until you enable it.');
+      const editing = this.editingId();
+      if (editing) {
+        await firstValueFrom(this.tradeApi.updateStrategy(editing, request));
+        this.closeForm();
+        this.notice.set('Strategy updated. Enable it when you are ready.');
+      } else {
+        await firstValueFrom(this.tradeApi.createStrategy(request));
+        this.closeForm();
+        this.notice.set('Strategy created. It is disabled until you enable it.');
+      }
       await this.load();
     } catch (error) {
       this.formError.set(strategyError(error));

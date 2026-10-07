@@ -240,7 +240,9 @@ routes and a `strategy-service` consumer group; none of that is in the Sprint
 6 contract. The routes are hand-written in the UI like the watchlist ones and
 are not yet in `design/trade-api.yaml`. The delegated token adds two claims
 (`strategyId`, `act`) to the contract's claim set; the token is only ever
-accepted by trade_api, never by the auth service. The decisions behind the
+accepted by trade_api, never by the auth service. A strategy that is not running (disabled, or stopped after failures) can be
+edited with `PUT /api/v1/strategies/{id}`; a running one answers `STR-409`, so it
+never trades on a half-changed rule. The decisions behind the
 identity and the limits are in `story_docs/decision-log/0001` and `0002`.
 
 **B28 (fill price source).** The brief prices a fill with a real Fauxnance

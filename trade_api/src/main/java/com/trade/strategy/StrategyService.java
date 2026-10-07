@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 // The customer's side of strategies: configure, enable, disable, read. Every
@@ -56,9 +57,52 @@ public class StrategyService {
         this.feeRate = feeRate;
     }
 
+    // What a strategy may be edited in: only one that is not running.
+    private static final Set<String> EDITABLE = Set.of("DISABLED", "TRIPPED");
+
+    // The rule as it will be stored, after every check on it has passed.
+    private record Checked(String symbol, BigDecimal maxSpend, Integer maxPosition, int maxOrders,
+                           int maxFailures, boolean dryRun) {
+    }
+
     public StrategyResponse create(CreateStrategyRequest request, String userId, Long callerAccountId)
             throws DomainException {
         AccountRow account = activeAccount(callerAccountId);
+        Checked rule = check(request, account);
+        String id = mapper.insert(userId, account.id(), request.name().trim(), rule.symbol(),
+                request.side().name(), request.triggerPrice(), request.quantity(), rule.maxSpend(),
+                rule.maxPosition(), rule.maxOrders(), rule.maxFailures(), rule.dryRun(), request.expiresAt());
+        mapper.insertEvent(id, "CREATED", "Created disabled");
+        return StrategyResponse.from(mapper.findById(id));
+    }
+
+    // Changes the rule of a strategy that is not running (DISABLED, or TRIPPED
+    // after failures). A running one must be disabled first, so the engine never
+    // trades on a rule that is half changed. The same checks as creating apply,
+    // and the strategy starts watching afresh when it is enabled again.
+    public StrategyResponse update(String strategyId, CreateStrategyRequest request, Long callerAccountId)
+            throws DomainException {
+        Strategy current = owned(strategyId, callerAccountId);
+        AccountRow account = activeAccount(callerAccountId);
+        if (!EDITABLE.contains(current.status())) {
+            throw new StrategyStateException(
+                    "Only a disabled or stopped strategy can be edited. Disable it first.");
+        }
+        Checked rule = check(request, account);
+        if (rule.maxOrders() < current.ordersPlaced()) {
+            // It has already placed more orders than the new limit allows.
+            throw new InvalidParameterException("maxOrders");
+        }
+        if (mapper.update(strategyId, request.name().trim(), rule.symbol(), request.side().name(),
+                request.triggerPrice(), request.quantity(), rule.maxSpend(), rule.maxPosition(),
+                rule.maxOrders(), rule.maxFailures(), rule.dryRun(), request.expiresAt()) != 1) {
+            throw new StrategyStateException("This strategy changed while you were editing it. Reload and try again.");
+        }
+        mapper.insertEvent(strategyId, "EDITED", "Rule edited by the customer");
+        return StrategyResponse.from(mapper.findById(strategyId));
+    }
+
+    private Checked check(CreateStrategyRequest request, AccountRow account) throws DomainException {
         String symbol = request.symbol().trim().toUpperCase();
         instrumentMapper.findBySymbol(symbol)
                 .filter(i -> Boolean.TRUE.equals(i.tradable()))
@@ -92,13 +136,10 @@ public class StrategyService {
             throw new InvalidParameterException("expiresAt");
         }
 
-        String id = mapper.insert(userId, account.id(), request.name().trim(), symbol, request.side().name(),
-                request.triggerPrice(), quantity, maxSpend, maxPosition,
+        return new Checked(symbol, maxSpend, maxPosition,
                 request.maxOrders() == null ? 1 : request.maxOrders(),
                 request.maxFailures() == null ? 3 : request.maxFailures(),
-                Boolean.TRUE.equals(request.dryRun()), request.expiresAt());
-        mapper.insertEvent(id, "CREATED", "Created disabled");
-        return StrategyResponse.from(mapper.findById(id));
+                Boolean.TRUE.equals(request.dryRun()));
     }
 
     public List<StrategyResponse> list(Long callerAccountId) throws DomainException {
