@@ -486,3 +486,27 @@ html.compact table td {
   font-size: 13px !important;
   line-height: 1.3 !important;
 }
+
+/* LEAP-025: the first Tab on any page offers to jump past the navigation. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  background: var(--brand-800);
+  color: #fff;
+  border-radius: var(--radius-sm);
+}
+.skip-link:focus {
+  top: 0.5rem;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 2px;
+}
