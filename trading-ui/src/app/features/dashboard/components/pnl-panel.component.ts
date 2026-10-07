@@ -1,5 +1,5 @@
 import { Component, input, output } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { MoneyPipe } from '../../../core/format/money.pipe';
 import { RouterLink } from '@angular/router';
 import { PnlResponse } from '../../../api/portfolio-api';
 import { pnlDirection, pnlSign, pnlWord } from '../../../core/format/pnl';
@@ -11,7 +11,7 @@ import { PanelState } from '../panel-state';
  */
 @Component({
   selector: 'app-pnl-panel',
-  imports: [DecimalPipe, RouterLink],
+  imports: [MoneyPipe, RouterLink],
   templateUrl: './pnl-panel.component.html',
   styleUrl: './panel.css',
 })

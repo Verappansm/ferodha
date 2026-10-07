@@ -15,7 +15,7 @@
     </div>
   } @else if (state().data; as balance) {
     <p class="figure" data-testid="cash-amount">
-      {{ balance.cashBalance | number: '1.2-2'
+      {{ balance.cashBalance | money: '1.2-2' : 'balance'
       }}<span class="currency">{{ balance.currency }}</span>
     </p>
     @if (balance.cashBalance === 0) {

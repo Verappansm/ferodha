@@ -34,16 +34,16 @@
         } @else if (quote(); as q) {
           @if (q.mid != null) {
             <p class="price" data-testid="quote-mid">
-              {{ q.mid | number: '1.2-4' }} {{ q.currency }}
+              {{ q.mid | money: '1.2-4' }} {{ q.currency }}
             </p>
             <dl class="pairs">
               <div>
                 <dt>Bid</dt>
-                <dd>{{ q.bid != null ? (q.bid | number: '1.2-4') : '–' }}</dd>
+                <dd>{{ q.bid != null ? (q.bid | money: '1.2-4') : '–' }}</dd>
               </div>
               <div>
                 <dt>Ask</dt>
-                <dd>{{ q.ask != null ? (q.ask | number: '1.2-4') : '–' }}</dd>
+                <dd>{{ q.ask != null ? (q.ask | money: '1.2-4') : '–' }}</dd>
               </div>
             </dl>
           } @else {
@@ -74,19 +74,19 @@
             @if (q.dayLow != null && q.dayHigh != null) {
               <div>
                 <dt>Day range</dt>
-                <dd>{{ q.dayLow | number: '1.2-2' }} – {{ q.dayHigh | number: '1.2-2' }}</dd>
+                <dd>{{ q.dayLow | money: '1.2-2' }} – {{ q.dayHigh | money: '1.2-2' }}</dd>
               </div>
             }
             @if (q.previousClose != null) {
               <div>
                 <dt>Previous close</dt>
-                <dd>{{ q.previousClose | number: '1.2-2' }}</dd>
+                <dd>{{ q.previousClose | money: '1.2-2' }}</dd>
               </div>
             }
             @if (q.week52Low != null && q.week52High != null) {
               <div>
                 <dt>52-week range</dt>
-                <dd>{{ q.week52Low | number: '1.2-2' }} – {{ q.week52High | number: '1.2-2' }}</dd>
+                <dd>{{ q.week52Low | money: '1.2-2' }} – {{ q.week52High | money: '1.2-2' }}</dd>
               </div>
             }
           </dl>
@@ -130,12 +130,12 @@
         @if (summary(); as s) {
           <p class="summary" data-testid="chart-summary">
             Over the last {{ rangeLabel() }}, {{ symbol() }} traded between
-            {{ s.low | number: '1.2-2' }} and {{ s.high | number: '1.2-2' }}, moving from
-            {{ s.first | number: '1.2-2' }} to {{ s.last | number: '1.2-2' }}:
+            {{ s.low | money: '1.2-2' }} and {{ s.high | money: '1.2-2' }}, moving from
+            {{ s.first | money: '1.2-2' }} to {{ s.last | money: '1.2-2' }}:
             <span [class]="direction(s.change)"
-              >{{ sign(s.change) }}{{ abs(s.change) | number: '1.2-2' }}
+              >{{ sign(s.change) }}{{ abs(s.change) | money: '1.2-2' }}
               @if (s.changePercent != null) {
-                ({{ sign(s.change) }}{{ abs(s.changePercent) | number: '1.2-2' }}%)
+                ({{ sign(s.change) }}{{ abs(s.changePercent) | money: '1.2-2' }}%)
               }
               {{ word(s.change) }}</span
             >.
@@ -168,10 +168,10 @@
                   @for (p of points(); track p.time) {
                     <tr>
                       <td>{{ label(p.time) }}</td>
-                      <td class="num">{{ p.open | number: '1.2-2' }}</td>
-                      <td class="num">{{ p.high | number: '1.2-2' }}</td>
-                      <td class="num">{{ p.low | number: '1.2-2' }}</td>
-                      <td class="num">{{ p.close | number: '1.2-2' }}</td>
+                      <td class="num">{{ p.open | money: '1.2-2' }}</td>
+                      <td class="num">{{ p.high | money: '1.2-2' }}</td>
+                      <td class="num">{{ p.low | money: '1.2-2' }}</td>
+                      <td class="num">{{ p.close | money: '1.2-2' }}</td>
                     </tr>
                   }
                 </tbody>

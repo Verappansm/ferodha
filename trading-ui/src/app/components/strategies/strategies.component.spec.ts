@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { StrategiesComponent, strategyError } from './strategies.component';
 import { StrategyResponse, TradeApi } from '../../api/trade-api';
 import { Session } from '../../core/session/session';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 function strategy(overrides: Partial<StrategyResponse> = {}): StrategyResponse {
   return {
@@ -55,6 +56,7 @@ describe('StrategiesComponent', () => {
       imports: [StrategiesComponent],
       providers: [
         { provide: Session, useValue: { accountId: () => 3 } },
+        provideStubPreferences(),
         {
           provide: TradeApi,
           useValue: {

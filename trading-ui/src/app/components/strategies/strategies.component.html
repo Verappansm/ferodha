@@ -118,7 +118,7 @@
           </p>
           <div class="watching" data-testid="strategy-watching">
             @if (gauge(s); as g) {
-              <strong>{{ s.lastPrice | number: '1.2-2' }}</strong>
+              <strong>{{ s.lastPrice | money: '1.2-2' }}</strong>
               <small>{{ s.lastCheckedAt | date: 'HH:mm:ss' }}</small>
             } @else {
               {{ s.status === 'ENABLED' ? 'Waiting for a price' : '—' }}
@@ -130,13 +130,13 @@
               <span
                 class="mark mark-target"
                 [style.left.%]="g.target"
-                [attr.data-l]="'Target ' + (s.triggerPrice | number: '1.2-2')"
+                [attr.data-l]="'Target ' + (s.triggerPrice | money: '1.2-2')"
               ></span>
               <span
                 class="mark mark-now"
                 [style.left.%]="g.now"
                 [attr.data-l]="
-                  (s.side === 'BUY' ? 'Ask ' : 'Bid ') + (s.lastPrice | number: '1.2-2')
+                  (s.side === 'BUY' ? 'Ask ' : 'Bid ') + (s.lastPrice | money: '1.2-2')
                 "
               ></span>
             </div>
@@ -149,7 +149,7 @@
             <dt>Limits<app-info-tip label="Limits" [text]="info.limits" /></dt>
             <dd>
               @if (s.side === 'BUY') {
-                <span class="chip">Spend ≤ {{ s.maxSpend | number: '1.2-2' }}</span>
+                <span class="chip">Spend ≤ {{ s.maxSpend | money: '1.2-2' }}</span>
                 <span class="chip">Position ≤ {{ s.maxPosition }}</span>
               } @else {
                 <span class="chip">Held units only</span>
@@ -258,7 +258,7 @@
           />
           @if (!isBuy() && form.controls.symbol.value) {
             <p class="hint" data-testid="strategy-held">
-              You hold {{ held() | number }} {{ form.controls.symbol.value }}.
+              You hold {{ held() | money }} {{ form.controls.symbol.value }}.
             </p>
           }
         </div>
@@ -295,10 +295,10 @@
           <p class="price-now" data-testid="strategy-current-price">
             <i class="live" aria-hidden="true"></i>
             @if (q.ask != null || q.bid != null) {
-              Now: ask {{ q.ask | number: '1.2-2' }} · bid {{ q.bid | number: '1.2-2' }}
+              Now: ask {{ q.ask | money: '1.2-2' }} · bid {{ q.bid | money: '1.2-2' }}
               {{ q.currency }}
             } @else if (q.mid != null) {
-              Last price {{ q.mid | number: '1.2-2' }} {{ q.currency }}
+              Last price {{ q.mid | money: '1.2-2' }} {{ q.currency }}
             } @else {
               No price yet for {{ q.symbol }}
             }

@@ -10,7 +10,10 @@ import { OrdersComponent } from './components/orders/orders.component';
 import { WatchlistComponent } from './components/watchlist/watchlist.component';
 import { StrategiesComponent } from './components/strategies/strategies.component';
 import { BankComponent } from './components/bank/bank.component';
-import { SettingsComponent } from './components/settings/settings.component';
+import {
+  SettingsComponent,
+  unsavedPreferencesGuard,
+} from './components/settings/settings.component';
 import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -35,5 +38,10 @@ export const routes: Routes = [
   { path: 'watchlist', component: WatchlistComponent, canActivate: [authGuard] },
   { path: 'strategies', component: StrategiesComponent, canActivate: [authGuard] },
   { path: 'bank', component: BankComponent, canActivate: [authGuard] },
-  { path: 'settings', component: SettingsComponent, canActivate: [authGuard] },
+  {
+    path: 'settings',
+    component: SettingsComponent,
+    canActivate: [authGuard],
+    canDeactivate: [unsavedPreferencesGuard],
+  },
 ];

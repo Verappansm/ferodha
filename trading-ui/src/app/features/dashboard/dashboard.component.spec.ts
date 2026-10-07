@@ -8,6 +8,7 @@ import { Session } from '../../core/session/session';
 import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
 import { PortfolioApi, PricedPosition } from '../../api/portfolio-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 function order(
   orderId: string,
@@ -79,6 +80,7 @@ describe('DashboardComponent', () => {
       providers: [
         provideRouter([]),
         { provide: Session, useValue: { accountId: signal<number | null>(3) } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { balance, orderHistory } },
         { provide: PortfolioApi, useValue: { pnl, positions } },
       ],

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TradeApi, InstrumentResponse, InstrumentType, PriceSnapshot } from '../../api/trade-api';
 import { suggestedLimitPrice } from '../../core/format/limit-price';
+import { MoneyPipe } from '../../core/format/money.pipe';
 
 /** How often the prices of the rows on screen are re-read. */
 export const PRICE_REFRESH_MS = 15_000;
@@ -11,7 +12,7 @@ export const PRICE_REFRESH_MS = 15_000;
 @Component({
   selector: 'app-instruments',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MoneyPipe],
   templateUrl: './instruments.component.html',
   styleUrls: ['./instruments.component.css'],
 })

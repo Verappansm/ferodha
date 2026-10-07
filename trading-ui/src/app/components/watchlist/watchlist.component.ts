@@ -2,6 +2,8 @@ import { Component, computed, inject, signal, effect, OnDestroy } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { formatNumber } from '../../core/format/number-format';
+import { PreferencesStore } from '../../core/preferences/preferences.store';
 import { Session } from '../../core/session/session';
 import {
   TradeApi,
@@ -50,6 +52,7 @@ interface WatchlistRow {
 })
 export class WatchlistComponent implements OnDestroy {
   private readonly session = inject(Session);
+  private readonly preferences = inject(PreferencesStore);
   private readonly tradeApi = inject(TradeApi);
   private readonly router = inject(Router);
 
@@ -136,7 +139,9 @@ export class WatchlistComponent implements OnDestroy {
           // Get real-time price from price map
           const realPrice = this.priceMap().get(p.data?.symbol || '')?.mid;
           const displayPrice = realPrice ?? p.value;
-          return displayPrice ? `$${displayPrice.toFixed(2)}` : '—';
+          return displayPrice
+            ? `${formatNumber(displayPrice, this.preferences.numberFormat(), '1.2-2')}`
+            : '—';
         },
         cellClass: (params: any) => {
           const changePercent = params.data?.dayChangePercent as number;

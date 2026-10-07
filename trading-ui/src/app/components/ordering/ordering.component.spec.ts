@@ -14,6 +14,7 @@ import {
   OrderStatus,
   OrderSide,
 } from '../../api/trade-api';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 /** What trade_api's review answers for a ticket: a 0.1% fee and 100,000 USD of cash. */
 function reviewOf(order: OrderReviewRequest): OrderReviewResponse {
@@ -55,6 +56,7 @@ describe('OrderingComponent', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
+        provideStubPreferences(),
         {
           provide: TradeApi,
           useValue: {
@@ -704,6 +706,7 @@ describe('OrderingComponent price suggestion', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId: signal(3) } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
         { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
         { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },

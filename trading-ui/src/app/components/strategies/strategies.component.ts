@@ -1,6 +1,7 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   AbstractControl,
@@ -97,7 +98,7 @@ function buyNeedsCaps(group: AbstractControl): ValidationErrors | null {
  */
 @Component({
   selector: 'app-strategies',
-  imports: [ReactiveFormsModule, DatePipe, DecimalPipe, InfoTipComponent, SymbolPickerComponent],
+  imports: [ReactiveFormsModule, DatePipe, MoneyPipe, InfoTipComponent, SymbolPickerComponent],
   templateUrl: './strategies.component.html',
   styleUrl: './strategies.component.css',
 })

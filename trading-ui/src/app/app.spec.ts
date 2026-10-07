@@ -5,6 +5,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { App } from './app';
 import { Session } from './core/session/session';
+import { provideStubPreferences } from './core/preferences/preferences.testing';
 
 describe('App', () => {
   const isSignedIn = signal(false);
@@ -20,6 +21,7 @@ describe('App', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: Session, useValue: { isSignedIn, signOut } },
+        provideStubPreferences(),
       ],
     }).compileComponents();
   });

@@ -1,1 +1,178 @@
-<div class="settings-container"></div>
+<section class="settings">
+  <h2>Preferences</h2>
+
+  @if (!preferences.available()) {
+    <p class="notice" role="alert" data-testid="prefs-unavailable">
+      Settings are temporarily unavailable. The app is using the defaults until they can be loaded.
+    </p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="save()" novalidate data-testid="prefs-form">
+    <p class="account" data-testid="prefs-account">
+      Trading account:
+      <strong>{{ accountId() != null ? 'Account ' + accountId() : 'Your account' }}</strong>
+      <span class="muted">(opened every time you sign in)</span>
+    </p>
+
+    <fieldset class="card">
+      <legend>Notifications</legend>
+
+      <div class="row">
+        <span class="label">
+          Send alerts by
+          @if (isDefault('notificationChannel')) {
+            <span class="tag">Default</span>
+          }
+        </span>
+        <div class="options">
+          <label>
+            <input type="radio" formControlName="notificationChannel" value="IN_APP" />
+            In-app (bell and toast)
+          </label>
+          <label [class.disabled]="!preferences.values().contactDetail">
+            <input
+              type="radio"
+              formControlName="notificationChannel"
+              value="EMAIL"
+              data-testid="prefs-email"
+              [attr.disabled]="preferences.values().contactDetail ? null : true"
+            />
+            Email
+            @if (preferences.values().contactDetail; as email) {
+              <span class="muted">{{ email }}</span>
+            } @else {
+              <span class="muted">no email on file</span>
+            }
+          </label>
+        </div>
+      </div>
+
+      <div class="row" formGroupName="notifyOn">
+        <span class="label">
+          Tell me about
+          @if (isDefault('notifyOn')) {
+            <span class="tag">Default</span>
+          }
+        </span>
+        <div class="options grid">
+          <label><input type="checkbox" formControlName="orderFilled" /> Order filled</label>
+          <label><input type="checkbox" formControlName="orderRejected" /> Order rejected</label>
+          <label><input type="checkbox" formControlName="orderCancelled" /> Order cancelled</label>
+          <label><input type="checkbox" formControlName="priceAlerts" /> Price alerts</label>
+        </div>
+      </div>
+      <p class="hint">If an email cannot be sent, the alert still appears in the app.</p>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Display</legend>
+
+      <div class="row">
+        <span class="label">
+          Theme
+          @if (isDefault('theme')) {
+            <span class="tag">Default</span>
+          }
+        </span>
+        <div class="options">
+          <label><input type="radio" formControlName="theme" value="LIGHT" /> Light</label>
+          <label><input type="radio" formControlName="theme" value="DARK" /> Dark</label>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="label">
+          Number format
+          @if (isDefault('numberFormat')) {
+            <span class="tag">Default</span>
+          }
+        </span>
+        <div class="options">
+          <label>
+            <input type="radio" formControlName="numberFormat" value="INDIAN" />
+            {{ sample('INDIAN') }} <span class="muted">Indian</span>
+          </label>
+          <label>
+            <input type="radio" formControlName="numberFormat" value="INTERNATIONAL" />
+            {{ sample('INTERNATIONAL') }} <span class="muted">International</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="label" for="prefs-compact">
+          Compact tables
+          @if (isDefault('compactTables')) {
+            <span class="tag">Default</span>
+          }
+        </label>
+        <div class="options">
+          <input id="prefs-compact" type="checkbox" role="switch" formControlName="compactTables" />
+          <span class="muted">Tighter rows, so more fit on screen</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="label" for="prefs-hide">
+          Hide balances
+          @if (isDefault('hideBalances')) {
+            <span class="tag">Default</span>
+          }
+        </label>
+        <div class="options">
+          <input id="prefs-hide" type="checkbox" role="switch" formControlName="hideBalances" />
+          <span class="muted">Show ••••• until you press the eye icon in the top bar</span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="card">
+      <legend>Home</legend>
+      <div class="row">
+        <label class="label" for="prefs-start">
+          Open after sign-in
+          @if (isDefault('startPage')) {
+            <span class="tag">Default</span>
+          }
+        </label>
+        <div class="options">
+          <select id="prefs-start" formControlName="startPage" data-testid="prefs-start-page">
+            @for (page of startPages; track page.value) {
+              <option [value]="page.value">{{ page.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
+    </fieldset>
+
+    @if (status(); as s) {
+      <p
+        [class]="s.kind"
+        [attr.role]="s.kind === 'error' ? 'alert' : 'status'"
+        data-testid="prefs-status"
+      >
+        {{ s.text }}
+      </p>
+    }
+
+    <div class="actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="prefs-reset"
+        [disabled]="saving() || preferences.values().customised.length === 0"
+        (click)="resetToDefaults()"
+      >
+        Reset to defaults
+      </button>
+      <button
+        type="submit"
+        class="btn btn-primary"
+        data-testid="prefs-save"
+        [disabled]="saving() || !form.dirty"
+      >
+        {{ saving() ? 'Saving…' : 'Save' }}
+      </button>
+    </div>
+  </form>
+</section>

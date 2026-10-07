@@ -7,6 +7,7 @@ import { PortfolioComponent } from './portfolio.component';
 import { Session } from '../../core/session/session';
 import { PortfolioApi, PortfolioSummary, PricedPosition } from '../../api/portfolio-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 const SUMMARY: PortfolioSummary = {
   accountId: 3,
@@ -77,6 +78,7 @@ describe('PortfolioComponent', () => {
       providers: [
         provideRouter([]),
         { provide: Session, useValue: { accountId: signal<number | null>(3) } },
+        provideStubPreferences(),
         { provide: PortfolioApi, useValue: { summary, positions, pnl } },
       ],
     }).compileComponents();

@@ -18,36 +18,37 @@
       <div class="card">
         <dt>Total value</dt>
         <dd data-testid="portfolio-total">
-          {{ s.totalValue | number: '1.2-2' }} {{ s.baseCurrency }}
+          {{ s.totalValue | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}
         </dd>
         <span class="hint">Cash plus holdings</span>
       </div>
       <div class="card">
         <dt>Cash</dt>
-        <dd>{{ s.cashBalance | number: '1.2-2' }} {{ s.baseCurrency }}</dd>
+        <dd>{{ s.cashBalance | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}</dd>
       </div>
       <div class="card">
         <dt>Holdings value</dt>
-        <dd>{{ s.marketValue | number: '1.2-2' }} {{ s.baseCurrency }}</dd>
-        <span class="hint">Invested {{ s.costBasis | number: '1.2-2' }}</span>
+        <dd>{{ s.marketValue | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}</dd>
+        <span class="hint">Invested {{ s.costBasis | money: '1.2-2' : 'balance' }}</span>
       </div>
       <div class="card">
         <dt>Unrealised P&amp;L</dt>
         <dd [class]="direction(s.unrealisedPnl)" data-testid="portfolio-unrealised">
-          {{ sign(s.unrealisedPnl) }}{{ abs(s.unrealisedPnl) | number: '1.2-2' }}
+          {{ sign(s.unrealisedPnl) }}{{ abs(s.unrealisedPnl) | money: '1.2-2' : 'balance' }}
           {{ s.baseCurrency }}
         </dd>
         <span class="hint">
           {{ word(s.unrealisedPnl) }}
           @if (s.unrealisedPnlPercent != null) {
-            ({{ sign(s.unrealisedPnlPercent) }}{{ abs(s.unrealisedPnlPercent) | number: '1.2-2' }}%)
+            ({{ sign(s.unrealisedPnlPercent) }}{{ abs(s.unrealisedPnlPercent) | money: '1.2-2' }}%)
           }
         </span>
       </div>
       <div class="card">
         <dt>Realised P&amp;L</dt>
         <dd [class]="direction(s.realisedPnl)" data-testid="portfolio-realised">
-          {{ sign(s.realisedPnl) }}{{ abs(s.realisedPnl) | number: '1.2-2' }} {{ s.baseCurrency }}
+          {{ sign(s.realisedPnl) }}{{ abs(s.realisedPnl) | money: '1.2-2' : 'balance' }}
+          {{ s.baseCurrency }}
         </dd>
         <span class="hint">{{ word(s.realisedPnl) }}, booked at each sale</span>
       </div>
@@ -91,12 +92,12 @@
           @for (h of sortedHoldings(); track h.symbol) {
             <tr data-testid="portfolio-row">
               <td class="symbol">{{ h.symbol }}</td>
-              <td class="num">{{ h.quantity | number: '1.0-0' }}</td>
-              <td class="num">{{ h.averageCost | number: '1.2-2' }}</td>
-              <td class="num">{{ h.costBasis | number: '1.2-2' }} {{ h.currency }}</td>
+              <td class="num">{{ h.quantity | money: '1.0-0' }}</td>
+              <td class="num">{{ h.averageCost | money: '1.2-2' }}</td>
+              <td class="num">{{ h.costBasis | money: '1.2-2' : 'balance' }} {{ h.currency }}</td>
               <td class="num">
                 @if (h.lastPrice != null) {
-                  {{ h.lastPrice | number: '1.2-2' }}
+                  {{ h.lastPrice | money: '1.2-2' }}
                 } @else {
                   <span class="muted">No price</span>
                 }
@@ -112,14 +113,14 @@
               </td>
               <td class="num">
                 @if (h.marketValue != null) {
-                  {{ h.marketValue | number: '1.2-2' }} {{ h.currency }}
+                  {{ h.marketValue | money: '1.2-2' : 'balance' }} {{ h.currency }}
                 } @else {
                   <span class="muted">–</span>
                 }
               </td>
               <td class="num" [class]="direction(h.unrealisedPnl)">
                 @if (h.unrealisedPnl != null) {
-                  {{ sign(h.unrealisedPnl) }}{{ abs(h.unrealisedPnl) | number: '1.2-2' }}
+                  {{ sign(h.unrealisedPnl) }}{{ abs(h.unrealisedPnl) | money: '1.2-2' : 'balance' }}
                   {{ word(h.unrealisedPnl) }}
                 } @else {
                   <span class="muted">–</span>
@@ -128,7 +129,7 @@
               <td class="num" [class]="direction(h.unrealisedPnlPercent)">
                 @if (h.unrealisedPnlPercent != null) {
                   {{ sign(h.unrealisedPnlPercent)
-                  }}{{ abs(h.unrealisedPnlPercent) | number: '1.2-2' }}%
+                  }}{{ abs(h.unrealisedPnlPercent) | money: '1.2-2' }}%
                 } @else {
                   <span class="muted">–</span>
                 }
@@ -148,14 +149,15 @@
       <div class="card">
         <dt>Realised</dt>
         <dd [class]="direction(p.realisedPnl)">
-          {{ sign(p.realisedPnl) }}{{ abs(p.realisedPnl) | number: '1.2-2' }} {{ p.baseCurrency }}
+          {{ sign(p.realisedPnl) }}{{ abs(p.realisedPnl) | money: '1.2-2' : 'balance' }}
+          {{ p.baseCurrency }}
         </dd>
         <span class="hint">{{ word(p.realisedPnl) }}, locked in by sales</span>
       </div>
       <div class="card">
         <dt>Unrealised</dt>
         <dd [class]="direction(p.unrealisedPnl)">
-          {{ sign(p.unrealisedPnl) }}{{ abs(p.unrealisedPnl) | number: '1.2-2' }}
+          {{ sign(p.unrealisedPnl) }}{{ abs(p.unrealisedPnl) | money: '1.2-2' : 'balance' }}
           {{ p.baseCurrency }}
         </dd>
         <span class="hint">{{ word(p.unrealisedPnl) }} at today's prices</span>
@@ -163,7 +165,8 @@
       <div class="card">
         <dt>Total</dt>
         <dd [class]="direction(p.totalPnl)" data-testid="portfolio-total-pnl">
-          {{ sign(p.totalPnl) }}{{ abs(p.totalPnl) | number: '1.2-2' }} {{ p.baseCurrency }}
+          {{ sign(p.totalPnl) }}{{ abs(p.totalPnl) | money: '1.2-2' : 'balance' }}
+          {{ p.baseCurrency }}
         </dd>
         <span class="hint">{{ word(p.totalPnl) }}</span>
       </div>

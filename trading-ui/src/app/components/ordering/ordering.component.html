@@ -82,9 +82,9 @@
         @if (quote(); as q) {
           <div class="current-price" data-testid="order-current-price">
             @if (q.mid != null) {
-              Current price <strong>{{ q.mid | number: '1.2-4' }} {{ q.currency }}</strong>
+              Current price <strong>{{ q.mid | money: '1.2-4' }} {{ q.currency }}</strong>
               @if (q.bid != null && q.ask != null) {
-                (bid {{ q.bid | number: '1.2-4' }} / ask {{ q.ask | number: '1.2-4' }})
+                (bid {{ q.bid | money: '1.2-4' }} / ask {{ q.ask | money: '1.2-4' }})
               }
               @if (q.stale) {
                 <span class="stale" data-testid="order-quote-stale">
@@ -95,7 +95,7 @@
               }
               @if (suggestedPrice(); as s) {
                 <div data-testid="order-suggested-price">
-                  Suggested limit {{ s | number: '1.2-2' }} ({{
+                  Suggested limit {{ s | money: '1.2-2' }} ({{
                     form.controls.side.value === 'BUY' ? '+' : '−'
                   }}{{ bufferPercent }}% past the
                   {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})
@@ -130,30 +130,30 @@
         <dl>
           <dt>Order</dt>
           <dd data-testid="order-review-summary">
-            {{ r.side === 'BUY' ? 'Buy' : 'Sell' }} {{ r.quantity | number }} {{ r.symbol }} at
-            {{ r.price | number: '1.2-2' }} {{ r.currency }}
+            {{ r.side === 'BUY' ? 'Buy' : 'Sell' }} {{ r.quantity | money }} {{ r.symbol }} at
+            {{ r.price | money: '1.2-2' }} {{ r.currency }}
           </dd>
 
           <dt>Estimated cost</dt>
           <dd data-testid="order-review-cost">
-            {{ r.estimatedCost | number: '1.2-2' }} {{ r.currency }}
+            {{ r.estimatedCost | money: '1.2-2' }} {{ r.currency }}
           </dd>
 
           <dt>Fees</dt>
           <dd data-testid="order-review-fee">
-            {{ r.fee | number: '1.2-2' }} {{ r.currency }}
-            <small>({{ r.feeRate * 100 | number: '1.0-4' }}% of the value)</small>
+            {{ r.fee | money: '1.2-2' }} {{ r.currency }}
+            <small>({{ r.feeRate * 100 | money: '1.0-4' }}% of the value)</small>
           </dd>
 
           <dt>{{ r.side === 'BUY' ? 'Total to pay' : 'Total you receive' }}</dt>
           <dd data-testid="order-review-total">
-            <strong>{{ r.total | number: '1.2-2' }} {{ r.currency }}</strong>
+            <strong>{{ r.total | money: '1.2-2' }} {{ r.currency }}</strong>
           </dd>
 
           @if (r.cashRemaining != null) {
             <dt>Cash remaining</dt>
             <dd data-testid="order-review-cash" [class.negative]="r.cashRemaining < 0">
-              {{ r.cashRemaining | number: '1.2-2' }} {{ r.accountCurrency }}
+              {{ r.cashRemaining | money: '1.2-2' : 'balance' }} {{ r.accountCurrency }}
             </dd>
           }
         </dl>
