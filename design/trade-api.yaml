@@ -827,7 +827,8 @@ components:
     OrderHistoryEntry:
       type: object
       additionalProperties: false
-      required: [orderId, accountId, symbol, side, quantity, price, status, createdOn]
+      required: [orderId, accountId, symbol, side, quantity, price, status, createdOn,
+                 instrumentCurrency, accountCurrency, filledQuantity, estimatedValueAccountCurrency]
       properties:
         orderId:
           type: string
@@ -845,6 +846,34 @@ components:
           type: integer
           format: int32
           example: 100
+        instrumentCurrency:
+          type: string
+          description: Currency used for prices and instrument values.
+        accountCurrency:
+          type: string
+          description: Account cash currency.
+        filledQuantity:
+          type: integer
+          format: int32
+        filledValue:
+          type: [number, 'null']
+          format: double
+        filledValueAccountCurrency:
+          type: [number, 'null']
+          format: double
+        feeAmountInstrumentCurrency:
+          type: [number, 'null']
+          format: double
+        feeAmount:
+          type: [number, 'null']
+          format: double
+          description: Commission, in the account currency.
+        cashAmountAccountCurrency:
+          type: [number, 'null']
+          format: double
+        estimatedValueAccountCurrency:
+          type: number
+          format: double
         price:
           type: number
           format: double
@@ -1201,6 +1230,7 @@ components:
       type: object
       additionalProperties: false
       required: [symbol, side, quantity, price, currency, estimatedCost, feeRate, fee, total,
+                 estimatedCostAccountCurrency, feeAccountCurrency, totalAccountCurrency,
                  cashBalance, accountCurrency]
       properties:
         symbol:
@@ -1213,6 +1243,18 @@ components:
         price:
           type: number
           format: double
+        estimatedCostAccountCurrency:
+          type: number
+          format: double
+          description: Estimated notional in account currency.
+        feeAccountCurrency:
+          type: number
+          format: double
+          description: Estimated fee in account currency.
+        totalAccountCurrency:
+          type: number
+          format: double
+          description: Estimated total in account currency.
         currency:
           type: string
           description: The instrument's currency; estimatedCost, fee and total are in it.
