@@ -178,7 +178,7 @@
                 <td class="num">
                   @if (order.filledValue != null) {
                     {{ order.filledValue | number: '1.2-2' }} {{ order.instrumentCurrency }}
-                    @if (order.instrumentCurrency !== order.accountCurrency) {
+                    @if (order.instrumentCurrency !== order.accountCurrency && order.filledValueAccountCurrency != null) {
                       <small class="currency-secondary">
                         {{ order.filledValueAccountCurrency | number: '1.2-2' }} {{ order.accountCurrency }}
                       </small>

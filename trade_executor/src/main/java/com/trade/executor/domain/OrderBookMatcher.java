@@ -104,6 +104,15 @@ public class OrderBookMatcher {
                         .orElseThrow(() -> new IllegalStateException(
                                 "Resting order " + resting.orderId() + " references unknown account " + resting.accountId()));
 
+                // Skipped, never thrown: earlier matches in this walk have
+                // already committed, and failing here would leave the
+                // incoming order un-finalized for a redelivery to re-match.
+                if (!ApiSuppliedRates.hasRate(restingAccount.currency(), instrumentToAccountRates)) {
+                    log.info("Resting order {} is in {}, which has no API-supplied rate - skipping",
+                            resting.orderId(), restingAccount.currency());
+                    continue;
+                }
+
                 // Holdings can change after placement, so verify a resting
                 // sell order still has enough shares before matching.
                 BigDecimal restingTradeValue = ApiSuppliedRates.apply(

@@ -92,28 +92,36 @@ public class AccountService {
                 .collect(Collectors.groupingBy(OrderTradeFillRow::orderId));
         return rows.stream().map(row -> {
                     List<OrderTradeFillRow> fills = fillsByOrder.getOrDefault(row.orderId(), List.of());
+                    // A pair the fixed policy has no rate for (e.g. a EUR
+                    // account) must not fail the whole history: the
+                    // account-currency figures are left null for that row.
+                    boolean convertible = CurrencyConversion.isSupported(
+                            row.instrumentCurrency(), row.accountCurrency());
+                    BigDecimal feeRate = row.feeRate() != null ? row.feeRate() : BigDecimal.ZERO;
+                    boolean isBuySide = "BUY".equals(row.side());
                     BigDecimal instrumentValue = BigDecimal.ZERO;
                     BigDecimal accountValue = BigDecimal.ZERO;
                     BigDecimal instrumentFee = BigDecimal.ZERO;
                     BigDecimal cashAmount = BigDecimal.ZERO;
                     for (OrderTradeFillRow fill : fills) {
                         BigDecimal fillValue = fill.executionPrice().multiply(fill.executionQuantity());
-                        BigDecimal fillAccountValue = CurrencyConversion.convert(
-                                fillValue, row.instrumentCurrency(), row.accountCurrency());
                         instrumentValue = instrumentValue.add(fillValue);
-                        accountValue = accountValue.add(fillAccountValue);
-                        BigDecimal feeRate = row.feeRate() != null ? row.feeRate() : BigDecimal.ZERO;
                         instrumentFee = instrumentFee.add(CurrencyConversion.money(fillValue.multiply(feeRate)));
-                        BigDecimal fillFee = CurrencyConversion.money(fillAccountValue.multiply(feeRate));
-                        boolean isBuySide = row.side() != null && row.side().equals("BUY");
-                        cashAmount = cashAmount.add(CurrencyConversion.money(
-                                isBuySide ? fillAccountValue.add(fillFee) : fillAccountValue.subtract(fillFee)));
+                        if (convertible) {
+                            BigDecimal fillAccountValue = CurrencyConversion.convert(
+                                    fillValue, row.instrumentCurrency(), row.accountCurrency());
+                            accountValue = accountValue.add(fillAccountValue);
+                            BigDecimal fillFee = CurrencyConversion.money(fillAccountValue.multiply(feeRate));
+                            cashAmount = cashAmount.add(CurrencyConversion.money(
+                                    isBuySide ? fillAccountValue.add(fillFee) : fillAccountValue.subtract(fillFee)));
+                        }
                     }
-                    BigDecimal estimatedValue = row.price() == null
-                            ? BigDecimal.ZERO
-                            : CurrencyConversion.convert(
+                    BigDecimal estimatedValue = row.price() == null || row.quantity() == null
+                            ? (convertible ? BigDecimal.ZERO : null)
+                            : CurrencyConversion.tryConvert(
                                 row.price().multiply(BigDecimal.valueOf(row.quantity())),
-                                row.instrumentCurrency(), row.accountCurrency());
+                                row.instrumentCurrency(), row.accountCurrency()).orElse(null);
+                    boolean showAccountFills = !fills.isEmpty() && convertible;
                     return new OrderHistoryEntryDto(
                         "ORD-" + row.orderId(),
                         row.accountId(),
@@ -130,11 +138,11 @@ public class AccountService {
                         row.accountCurrency(),
                         fills.stream().mapToInt(fill -> fill.executionQuantity().intValue()).sum(),
                         fills.isEmpty() ? null : CurrencyConversion.money(instrumentValue),
-                        fills.isEmpty() ? null : CurrencyConversion.money(accountValue),
+                        showAccountFills ? CurrencyConversion.money(accountValue) : null,
                         fills.isEmpty() ? null : CurrencyConversion.money(instrumentFee),
                         row.feeAmount(),
-                        fills.isEmpty() ? null : CurrencyConversion.money(cashAmount),
-                        CurrencyConversion.money(estimatedValue));
+                        showAccountFills ? CurrencyConversion.money(cashAmount) : null,
+                        estimatedValue == null ? null : CurrencyConversion.money(estimatedValue));
                 })
                 .toList();
     }

@@ -113,6 +113,14 @@ public class OrderExecutionService {
             return;
         }
 
+        // The rates travel on the message and never change on redelivery,
+        // so a missing one is poison: dead-letter now, before anything is
+        // settled, rather than retry or fail half-way through a match walk.
+        if (!ApiSuppliedRates.hasRate(account.currency(), event.instrumentToAccountRates())) {
+            throw new PoisonMessageException("ORDER_PLACED " + event.orderId()
+                    + " carries no trade_api FX rate for account currency " + account.currency());
+        }
+
         if (matchingEnabled) {
             processWithMatching(order, account, event.instrumentToAccountRates());
             return;
