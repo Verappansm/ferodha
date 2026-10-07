@@ -28,5 +28,7 @@
     <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/014-order-fee-rate.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/015-strategies.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/016-notifications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
