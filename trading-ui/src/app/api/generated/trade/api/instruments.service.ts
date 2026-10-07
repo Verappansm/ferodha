@@ -315,15 +315,14 @@ export class InstrumentsService extends BaseService {
      * @endpoint get /api/v1/instruments
      * @param pageSize Number of instruments per page (default 20).
      * @param offset Zero-based offset for pagination (default 0).
-     * @param search Optional search query to filter instruments by ticker or name.
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public getInstruments(pageSize?: number, offset?: number, search?: string, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<PaginatedInstrumentsResponse>;
-    public getInstruments(pageSize?: number, offset?: number, search?: string, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<PaginatedInstrumentsResponse>>;
-    public getInstruments(pageSize?: number, offset?: number, search?: string, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<PaginatedInstrumentsResponse>>;
-    public getInstruments(pageSize?: number, offset?: number, search?: string, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public getInstruments(pageSize?: number, offset?: number, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<PaginatedInstrumentsResponse>;
+    public getInstruments(pageSize?: number, offset?: number, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<PaginatedInstrumentsResponse>>;
+    public getInstruments(pageSize?: number, offset?: number, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<PaginatedInstrumentsResponse>>;
+    public getInstruments(pageSize?: number, offset?: number, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
 
@@ -340,14 +339,6 @@ export class InstrumentsService extends BaseService {
             localVarQueryParameters,
             'offset',
             <any>offset,
-            QueryParamStyle.Form,
-            true,
-        );
-
-        localVarQueryParameters = this.addToHttpParams(
-            localVarQueryParameters,
-            'search',
-            <any>search,
             QueryParamStyle.Form,
             true,
         );

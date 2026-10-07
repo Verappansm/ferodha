@@ -2,7 +2,13 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideApiClients } from './provide-api-clients';
-import { OrderSide, OrderStatus, TradeApi } from './trade-api';
+import {
+  InstrumentType,
+  OrderSide,
+  OrderStatus,
+  PaginatedInstrumentsResponse,
+  TradeApi,
+} from './trade-api';
 
 const TRADE = 'http://trade.test';
 
@@ -77,5 +83,43 @@ describe('TradeApi', () => {
     );
     expect(request.request.params.has('to')).toBe(false);
     request.flush([]);
+  });
+
+  it('filters instruments by the search text when the generated client has no search parameter', () => {
+    let result: PaginatedInstrumentsResponse | undefined;
+
+    api.getInstruments(50, 0, 'app').subscribe((response) => {
+      result = response;
+    });
+
+    const request = http.expectOne(`${TRADE}/api/v1/instruments?pageSize=50&offset=0`);
+    expect(request.request.method).toBe('GET');
+    request.flush({
+      instruments: [
+        {
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          type: InstrumentType.EQUITY,
+          exchange: 'NASDAQ',
+          currency: 'USD',
+          sector: 'Technology',
+        },
+        {
+          symbol: 'MSFT',
+          name: 'Microsoft Corporation',
+          type: InstrumentType.EQUITY,
+          exchange: 'NASDAQ',
+          currency: 'USD',
+          sector: 'Technology',
+        },
+      ],
+      total: 2,
+      pageSize: 2,
+      offset: 0,
+    });
+
+    expect(result?.instruments.map((instrument) => instrument.symbol)).toEqual(['AAPL']);
+    expect(result?.total).toBe(1);
+    expect(result?.pageSize).toBe(1);
   });
 });

@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { AccountsService } from './generated/trade/api/accounts.service';
 import { OrdersService } from './generated/trade/api/orders.service';
 import { InstrumentsService } from './generated/trade/api/instruments.service';
@@ -194,7 +195,26 @@ export class TradeApi {
     offset?: number,
     search?: string,
   ): Observable<PaginatedInstrumentsResponse> {
-    return this.instruments.getInstruments(pageSize, offset, search);
+    const query = search?.trim().toLowerCase();
+    if (!query) {
+      return this.instruments.getInstruments(pageSize, offset);
+    }
+
+    return this.instruments.getInstruments(pageSize, offset).pipe(
+      map((response) => {
+        const instruments = response.instruments.filter(
+          (instrument) =>
+            instrument.symbol.toLowerCase().includes(query) ||
+            instrument.name.toLowerCase().includes(query),
+        );
+        return {
+          ...response,
+          instruments,
+          total: instruments.length,
+          pageSize: instruments.length,
+        };
+      }),
+    );
   }
 
   instrument(symbol: string): Observable<InstrumentResponse> {

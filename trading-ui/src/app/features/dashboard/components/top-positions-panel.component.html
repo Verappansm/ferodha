@@ -38,11 +38,10 @@
             </span>
             @if (position.marketValue != null) {
               <span class="num">
-                {{ position.marketValue | money: '1.2-2' : 'balance' }} {{ position.currency }}
+                {{ position.marketValue | money: '1.2-2' }} {{ position.currency }}
                 <br />
                 <span [class]="direction(position.unrealisedPnl)">
-                  {{ sign(position.unrealisedPnl)
-                  }}{{ abs(position.unrealisedPnl ?? 0) | money: '1.2-2' : 'balance' }}
+                  {{ sign(position.unrealisedPnl) }}{{ abs(position.unrealisedPnl ?? 0) | money: '1.2-2' }}
                   {{ word(position.unrealisedPnl) }}
                 </span>
               </span>
