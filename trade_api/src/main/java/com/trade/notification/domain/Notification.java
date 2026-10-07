@@ -19,6 +19,7 @@ public class Notification {
     private String errorMessage;
     private Instant createdAt;
     private Instant updatedAt;
+    private Instant readAt;
 
     public Notification() {
     }
@@ -37,6 +38,14 @@ public class Notification {
         this.status = NotificationStatus.QUEUED;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
+    }
+
+    public Instant getReadAt() {
+        return readAt;
+    }
+
+    public void setReadAt(Instant readAt) {
+        this.readAt = readAt;
     }
 
     public UUID getNotificationId() {

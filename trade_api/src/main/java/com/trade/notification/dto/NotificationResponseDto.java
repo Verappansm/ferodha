@@ -41,6 +41,16 @@ public class NotificationResponseDto {
 
     @JsonProperty("updatedAt")
     private Instant updatedAt;
+    @JsonProperty("readAt")
+    private Instant readAt;
+
+    public Instant getReadAt() {
+        return readAt;
+    }
+
+    public void setReadAt(Instant readAt) {
+        this.readAt = readAt;
+    }
 
     public NotificationResponseDto() {
     }

@@ -9,6 +9,13 @@ public interface NotificationRepository {
     Optional<Notification> findById(UUID notificationId);
     List<Notification> findByAccountIdOrderByCreatedDesc(Long accountId, int limit, int offset);
     long countByAccountId(Long accountId);
+
+    long countUnreadByAccountId(Long accountId);
+
+    /** 1 when it was the account's own and unread, else 0. */
+    int markRead(Long accountId, UUID notificationId);
+
+    int markAllRead(Long accountId);
     void save(Notification notification);
     void update(Notification notification);
 

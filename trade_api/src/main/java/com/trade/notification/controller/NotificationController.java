@@ -51,7 +51,26 @@ public class NotificationController {
         long total = service.countByAccount(accountId);
 
         NotificationsListResponseDto response = new NotificationsListResponseDto(notifications, total, limit, offset);
+        response.setUnread(service.unreadCount(accountId));
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/read-all")
+    public ResponseEntity<Void> markAllRead(@RequestHeader("Authorization") String authHeader) {
+        service.markAllRead(extractAccountIdFromToken(authHeader));
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{notificationId}/read")
+    public ResponseEntity<?> markRead(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable UUID notificationId) {
+        Long accountId = extractAccountIdFromToken(authHeader);
+        if (!service.markRead(accountId, notificationId)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponseDto("NOT-404", "Notification not found"));
+        }
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/{notificationId}")

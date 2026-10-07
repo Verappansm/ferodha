@@ -38,6 +38,28 @@
         </svg>
       </button>
       <a
+        routerLink="/notifications"
+        class="profile-icon nav-icon nav-bell"
+        routerLinkActive="active"
+        data-testid="nav-notifications"
+        [attr.aria-label]="
+          notifications.unread() > 0
+            ? 'Notifications, ' + notifications.unread() + ' unread'
+            : 'Notifications'
+        "
+        title="Notifications"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        </svg>
+        @if (notifications.unread() > 0) {
+        <span class="nav-badge" data-testid="nav-unread" aria-hidden="true"
+          >{{ notifications.unread() > 99 ? '99+' : notifications.unread() }}</span
+        >
+        }
+      </a>
+      <a
         routerLink="/settings"
         class="profile-icon nav-icon"
         title="Settings"

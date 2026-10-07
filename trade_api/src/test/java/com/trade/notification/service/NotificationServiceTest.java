@@ -111,4 +111,31 @@ class NotificationServiceTest {
         assertEquals("AAPL has gone above 200.00 (now 201.35)", saved.getValue().getMessage());
         assertEquals(NotificationEventType.PRICE_ALERT, saved.getValue().getEventType());
     }
+
+    @Test
+    @DisplayName("reading your own notification marks it read; someone else's or a missing one is refused")
+    void markRead() {
+        UUID mine = UUID.randomUUID();
+        UUID theirs = UUID.randomUUID();
+        when(repository.markRead(7L, mine)).thenReturn(1);
+        Notification other = new Notification();
+        other.setAccountId(9L);
+        when(repository.findById(theirs)).thenReturn(Optional.of(other));
+
+        assertTrue(service.markRead(7L, mine));
+        assertEquals(false, service.markRead(7L, theirs));
+        assertEquals(false, service.markRead(7L, UUID.randomUUID()));
+    }
+
+    @Test
+    @DisplayName("reading one that was already read is still success for its owner")
+    void markReadTwice() {
+        UUID mine = UUID.randomUUID();
+        Notification own = new Notification();
+        own.setAccountId(7L);
+        when(repository.markRead(7L, mine)).thenReturn(0);
+        when(repository.findById(mine)).thenReturn(Optional.of(own));
+
+        assertTrue(service.markRead(7L, mine));
+    }
 }

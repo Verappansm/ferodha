@@ -55,6 +55,23 @@ public class NotificationService {
         return repository.countByAccountId(accountId);
     }
 
+    public long unreadCount(Long accountId) {
+        return repository.countUnreadByAccountId(accountId);
+    }
+
+    /** Marks one of the account's own notifications read. False when it is not theirs or does not exist. */
+    public boolean markRead(Long accountId, UUID notificationId) {
+        if (repository.markRead(accountId, notificationId) == 1) {
+            return true;
+        }
+        // Already read is still success for the owner; someone else's or missing is not.
+        return repository.findById(notificationId).map(n -> n.getAccountId().equals(accountId)).orElse(false);
+    }
+
+    public int markAllRead(Long accountId) {
+        return repository.markAllRead(accountId);
+    }
+
     /**
      * Get a specific notification by ID.
      */
@@ -151,7 +168,7 @@ public class NotificationService {
     }
 
     private NotificationResponseDto toDto(Notification notification) {
-        return new NotificationResponseDto(
+        NotificationResponseDto dto = new NotificationResponseDto(
                 notification.getNotificationId(),
                 notification.getAccountId(),
                 notification.getEventId(),
@@ -164,6 +181,8 @@ public class NotificationService {
                 notification.getCreatedAt(),
                 notification.getUpdatedAt()
         );
+        dto.setReadAt(notification.getReadAt());
+        return dto;
     }
 
     /**

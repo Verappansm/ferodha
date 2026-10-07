@@ -41,6 +41,7 @@
     <include file="db/changelog/016-notifications.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/022-notifications-unify.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/023-notification-read-and-legacy.sql" relativeToChangelogFile="false"/>
 
 
 </databaseChangeLog>

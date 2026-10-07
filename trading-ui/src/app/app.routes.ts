@@ -108,6 +108,15 @@ export const routes: Routes = [
     canActivate: [authGuard],
   },
   {
+    path: 'notifications',
+    title: 'Notifications · Ferodha',
+    loadComponent: () =>
+      import('./components/notifications/notifications.component').then(
+        (m) => m.NotificationsComponent,
+      ),
+    canActivate: [authGuard],
+  },
+  {
     path: 'bank',
     title: 'Bank · Ferodha',
     loadComponent: () => import('./components/bank/bank.component').then((m) => m.BankComponent),

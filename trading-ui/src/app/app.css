@@ -170,3 +170,23 @@ nav {
   color: var(--brand-700);
   border-color: var(--brand-400);
 }
+
+/* LEAP-008: the bell's unread count. */
+.nav-bell {
+  position: relative;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--negative);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}
