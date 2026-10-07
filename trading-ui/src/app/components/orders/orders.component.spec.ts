@@ -24,6 +24,10 @@ function order(
     executedPrice: status === OrderStatus.FILLED ? 149.5 : null,
     status,
     createdOn,
+    instrumentCurrency: 'USD',
+    accountCurrency: 'USD',
+    filledQuantity: status === OrderStatus.FILLED ? 10 : 0,
+    estimatedValueAccountCurrency: 1500,
     ...extra,
   };
 }

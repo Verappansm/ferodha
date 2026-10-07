@@ -206,7 +206,7 @@ class OrderServiceTest {
     }
 
     @Test
-    @DisplayName("Cash remaining is left out when the account and the instrument use different currencies")
+    @DisplayName("Cross-currency review converts the total and cash remaining into the account currency")
     void reviewAcrossCurrencies() throws Exception {
         when(accountMapper.findById(1L)).thenReturn(Optional.of(new AccountRow(
                 1L, ACCOUNT_UUID, "ACC-000001", USER_UUID, "Test Holder", new BigDecimal("500000.00"),
@@ -217,7 +217,10 @@ class OrderServiceTest {
 
         assertEquals("USD", review.currency());
         assertEquals("INR", review.accountCurrency());
-        assertNull(review.cashRemaining());
+        assertEquals(0, new BigDecimal("180000.00").compareTo(review.estimatedCostAccountCurrency()));
+        assertEquals(0, new BigDecimal("180.00").compareTo(review.feeAccountCurrency()));
+        assertEquals(0, new BigDecimal("180180.00").compareTo(review.totalAccountCurrency()));
+        assertEquals(0, new BigDecimal("319820.00").compareTo(review.cashRemaining()));
     }
 
     @Test

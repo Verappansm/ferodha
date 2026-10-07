@@ -11,13 +11,20 @@ import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.DomainException;
 import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
+import com.trade.mapper.OrderHistoryRow;
 import com.trade.mapper.OrderMapper;
+import com.trade.mapper.OrderTradeFillRow;
 import com.trade.mapper.PositionMapper;
+import com.trade.service.currency.CurrencyConversion;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 // The four account read operations. These are pure projections of what is
 // already stored - there is no business rule to enforce, only ACC-404 and
@@ -76,19 +83,59 @@ public class AccountService {
             throws DomainException {
         loadAccessible(accountId, callerAccountId);
         String statusFilter = status == null ? null : status.name();
-        return orderMapper.findHistory(accountId, statusFilter, from, to).stream()
-                .map(row -> new OrderHistoryEntryDto(
+        List<OrderHistoryRow> rows = orderMapper.findHistory(accountId, statusFilter, from, to);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, List<OrderTradeFillRow>> fillsByOrder = orderMapper.findHistoryFills(
+                        rows.stream().map(OrderHistoryRow::orderId).toList()).stream()
+                .collect(Collectors.groupingBy(OrderTradeFillRow::orderId));
+        return rows.stream().map(row -> {
+                    List<OrderTradeFillRow> fills = fillsByOrder.getOrDefault(row.orderId(), List.of());
+                    BigDecimal instrumentValue = BigDecimal.ZERO;
+                    BigDecimal accountValue = BigDecimal.ZERO;
+                    BigDecimal instrumentFee = BigDecimal.ZERO;
+                    BigDecimal cashAmount = BigDecimal.ZERO;
+                    for (OrderTradeFillRow fill : fills) {
+                        BigDecimal fillValue = fill.executionPrice().multiply(fill.executionQuantity());
+                        BigDecimal fillAccountValue = CurrencyConversion.convert(
+                                fillValue, row.instrumentCurrency(), row.accountCurrency());
+                        instrumentValue = instrumentValue.add(fillValue);
+                        accountValue = accountValue.add(fillAccountValue);
+                        BigDecimal feeRate = row.feeRate() != null ? row.feeRate() : BigDecimal.ZERO;
+                        instrumentFee = instrumentFee.add(CurrencyConversion.money(fillValue.multiply(feeRate)));
+                        BigDecimal fillFee = CurrencyConversion.money(fillAccountValue.multiply(feeRate));
+                        boolean isBuySide = row.side() != null && row.side().equals("BUY");
+                        cashAmount = cashAmount.add(CurrencyConversion.money(
+                                isBuySide ? fillAccountValue.add(fillFee) : fillAccountValue.subtract(fillFee)));
+                    }
+                    BigDecimal estimatedValue = row.price() == null
+                            ? BigDecimal.ZERO
+                            : CurrencyConversion.convert(
+                                row.price().multiply(BigDecimal.valueOf(row.quantity())),
+                                row.instrumentCurrency(), row.accountCurrency());
+                    return new OrderHistoryEntryDto(
                         "ORD-" + row.orderId(),
                         row.accountId(),
                         row.symbol(),
-                        OrderSide.valueOf(row.side()),
+                        row.side() != null ? OrderSide.valueOf(row.side()) : OrderSide.BUY,
                         row.quantity(),
                         row.price(),
                         row.executedPrice(),
                         OrderStatus.valueOf(row.status()),
                         row.idempotencyKey(),
                         row.createdOn(),
-                        row.rejectionReason()))
+                        row.rejectionReason(),
+                        row.instrumentCurrency(),
+                        row.accountCurrency(),
+                        fills.stream().mapToInt(fill -> fill.executionQuantity().intValue()).sum(),
+                        fills.isEmpty() ? null : CurrencyConversion.money(instrumentValue),
+                        fills.isEmpty() ? null : CurrencyConversion.money(accountValue),
+                        fills.isEmpty() ? null : CurrencyConversion.money(instrumentFee),
+                        row.feeAmount(),
+                        fills.isEmpty() ? null : CurrencyConversion.money(cashAmount),
+                        CurrencyConversion.money(estimatedValue));
+                })
                 .toList();
     }
 

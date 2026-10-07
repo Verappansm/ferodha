@@ -25,6 +25,10 @@ function order(
     executedPrice: 149.5,
     status,
     createdOn,
+    instrumentCurrency: 'USD',
+    accountCurrency: 'USD',
+    filledQuantity: status === OrderStatus.FILLED ? 10 : 0,
+    estimatedValueAccountCurrency: 1500,
   };
 }
 

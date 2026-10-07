@@ -15,6 +15,10 @@ public record OrderHistoryRow(
         String status,
         String idempotencyKey,
         OffsetDateTime createdOn,
-        String rejectionReason
+        String rejectionReason,
+        String instrumentCurrency,
+        String accountCurrency,
+        BigDecimal feeAmount,
+        BigDecimal feeRate
 ) {
 }

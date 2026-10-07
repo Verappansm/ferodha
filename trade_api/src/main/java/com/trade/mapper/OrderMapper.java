@@ -62,4 +62,6 @@ public interface OrderMapper {
                                        @Param("status") String status,
                                        @Param("from") OffsetDateTime from,
                                        @Param("to") OffsetDateTime to);
+
+    List<OrderTradeFillRow> findHistoryFills(@Param("orderIds") List<UUID> orderIds);
 }

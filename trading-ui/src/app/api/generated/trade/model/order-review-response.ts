@@ -35,6 +35,12 @@ export interface OrderReviewResponse {
      * What a BUY pays (cost + fee) or a SELL receives (cost - fee).
      */
     total: number;
+    /** Estimated notional in account currency. */
+    estimatedCostAccountCurrency: number;
+    /** Estimated fee in account currency. */
+    feeAccountCurrency: number;
+    /** Estimated total in account currency. */
+    totalAccountCurrency: number;
     cashBalance: number;
     accountCurrency: string;
     /**

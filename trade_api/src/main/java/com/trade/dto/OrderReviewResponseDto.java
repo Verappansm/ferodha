@@ -18,6 +18,9 @@ public record OrderReviewResponseDto(
         BigDecimal feeRate,
         BigDecimal fee,
         BigDecimal total,
+        BigDecimal estimatedCostAccountCurrency,
+        BigDecimal feeAccountCurrency,
+        BigDecimal totalAccountCurrency,
         BigDecimal cashBalance,
         String accountCurrency,
         BigDecimal cashRemaining

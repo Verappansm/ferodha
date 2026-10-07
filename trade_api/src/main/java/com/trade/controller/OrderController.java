@@ -56,7 +56,8 @@ public class OrderController {
                 request.quantity(),
                 request.price(),
                 request.idempotencyKey(),
-                Instant.now());
+                Instant.now(),
+                orderService.instrumentToAccountRates(request.symbol()));
         orderPlacedPublisher.publish(orderPlacedPayload);
 
         // returns order with "NEW" here as per story 3
