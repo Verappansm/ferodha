@@ -1,21 +1,75 @@
 <app-auth-layout active="register">
   @if (submittedEmail(); as email) {
-    <section class="submitted" data-testid="register-success" aria-live="polite">
-      <div class="submitted-icon" aria-hidden="true">✓</div>
-      <h1>Application received</h1>
-      <p>
-        We have registered <strong>{{ email }}</strong> and sent your account request to our
-        operations team.
-      </p>
-      <ol class="steps">
-        <li class="done"><span>1</span> Registration complete</li>
-        <li class="current"><span>2</span> Account under review by an administrator</li>
-        <li><span>3</span> Sign in and start trading once approved</li>
-      </ol>
-      <a class="btn btn-primary btn-block" routerLink="/login" data-testid="register-to-signin"
-        >Back to sign in</a
-      >
-    </section>
+    @if (!verified()) {
+      <section class="submitted" data-testid="register-verify" aria-live="polite">
+        <h1>Check your email</h1>
+        <p>
+          We sent a 6-digit code to <strong>{{ email }}</strong
+          >. Entering it confirms the address is yours, which is how we know the bank account held
+          under it is yours too.
+        </p>
+        <form class="form" (submit)="$event.preventDefault(); verify()" novalidate>
+          <div class="field">
+            <label class="field-label" for="code">Verification code</label>
+            <input
+              id="code"
+              class="input"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              data-testid="register-code"
+              [value]="code()"
+              (input)="code.set($any($event.target).value)"
+              [attr.aria-invalid]="codeError() ? 'true' : null"
+              aria-describedby="code-error"
+            />
+            @if (codeError()) {
+              <p id="code-error" class="field-error" role="alert" data-testid="register-code-error">
+                {{ codeError() }}
+              </p>
+            }
+          </div>
+          <button
+            type="submit"
+            class="btn btn-primary btn-block"
+            data-testid="register-verify-submit"
+            [disabled]="codeBusy()"
+          >
+            Verify email
+          </button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-block"
+            data-testid="register-resend"
+            (click)="resend()"
+          >
+            Send a new code
+          </button>
+          @if (resent()) {
+            <p aria-live="polite" data-testid="register-resent">
+              If that address is registered, a new code is on its way.
+            </p>
+          }
+        </form>
+      </section>
+    } @else {
+      <section class="submitted" data-testid="register-success" aria-live="polite">
+        <div class="submitted-icon" aria-hidden="true">✓</div>
+        <h1>Application received</h1>
+        <p>
+          <strong>{{ email }}</strong> is verified, and your account request is with our operations
+          team. They link the bank account held under that email; they cannot create one.
+        </p>
+        <ol class="steps">
+          <li class="done"><span>1</span> Registration complete</li>
+          <li class="current"><span>2</span> Account under review by an administrator</li>
+          <li><span>3</span> Sign in and start trading once approved</li>
+        </ol>
+        <a class="btn btn-primary btn-block" routerLink="/login" data-testid="register-to-signin"
+          >Back to sign in</a
+        >
+      </section>
+    }
   } @else {
     <header class="form-header">
       <h1>Open an account</h1>

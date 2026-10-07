@@ -185,6 +185,50 @@ paths:
         '422':
           $ref: '#/components/responses/InvalidInput'
 
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      security: []
+      summary: Enter the six-digit code mailed at registration
+      description: |
+        Proves the address is the registrant's own. The bank holds the customer's account under that
+        address, so an administrator can open a trading account only after this. A code lives ten
+        minutes and is burned by five wrong guesses. A wrong, expired or used-up code and an unknown
+        address all return the same `VAL-422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '204':
+          description: Verified (also when it already was).
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/resend-code:
+    post:
+      tags: [Auth]
+      operationId: resendVerificationCode
+      security: []
+      summary: Mail a new verification code
+      description: |
+        At most one a minute per address. Always `204`, so it never reveals whether an address is
+        registered or already verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendCodeRequest'
+      responses:
+        '204':
+          description: Accepted.
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
   /auth/refresh:
     post:
       tags: [Auth]
@@ -341,6 +385,27 @@ components:
           minLength: 12
           maxLength: 128
           writeOnly: true
+
+    VerifyEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [username, code]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    ResendCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username:
+          type: string
+          maxLength: 64
 
     RefreshRequest:
       type: object

@@ -5,6 +5,8 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
+  Optional,
   Post,
   Req,
   UseGuards,
@@ -30,6 +32,7 @@ import {
   UserResponseDto,
 } from './dto/responses.dto';
 import { AuthService } from './auth.service';
+import { EmailVerificationService } from './email-verification.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginAttemptLimiter } from './login-attempt-limiter';
 import { clientIp, LoginThrottleGuard } from './login-throttle.guard';
@@ -47,9 +50,13 @@ import type { AccessTokenClaims } from './access-token-claims';
 })
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly loginAttempts: LoginAttemptLimiter,
+    @Optional()
+    private readonly emailVerification?: EmailVerificationService,
   ) {}
 
   @Post('register')
@@ -63,8 +70,18 @@ export class AuthController {
     description: 'The username is already taken.',
     type: ErrorResponseDto,
   })
-  register(@Body() body: RegisterRequestDto) {
-    return this.authService.register(body);
+  async register(@Body() body: RegisterRequestDto) {
+    const user = await this.authService.register(body);
+    // The code proves the email is theirs. If the mail server is down the user
+    // is still registered, and asks for another code from the verify page.
+    try {
+      await this.emailVerification?.issue(user.id, user.username);
+    } catch (error) {
+      this.logger.error(
+        `Verification code for user ${user.id} could not be sent: ${String(error)}`,
+      );
+    }
+    return user;
   }
 
   @Post('login')

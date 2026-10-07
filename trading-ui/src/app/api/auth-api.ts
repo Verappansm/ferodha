@@ -54,6 +54,16 @@ export class AuthApi {
     }) as Observable<void>;
   }
 
+  /** Enters the six-digit code mailed at registration: proves the email is theirs. */
+  verifyEmail(username: string, code: string): Observable<void> {
+    return this.auth.verifyEmail({ username, code }) as Observable<void>;
+  }
+
+  /** Mails a new code (the server allows one a minute and always answers 204). */
+  resendCode(username: string): Observable<void> {
+    return this.auth.resendVerificationCode({ username }) as Observable<void>;
+  }
+
   refresh(refreshToken: string): Observable<TokenResponse> {
     return this.auth.refresh({ refreshToken });
   }

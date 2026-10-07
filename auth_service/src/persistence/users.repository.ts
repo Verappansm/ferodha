@@ -149,6 +149,22 @@ export class UsersRepository {
     return result.rows[0] ? toAuthUser(result.rows[0]) : null;
   }
 
+  async isEmailVerified(id: string): Promise<boolean> {
+    const result = await this.pool.query<{ verified: boolean }>(
+      'SELECT email_verified_at IS NOT NULL AS verified FROM Users WHERE user_id = $1',
+      [id],
+    );
+    return result.rows[0]?.verified ?? false;
+  }
+
+  /** The user entered the code mailed to their address: the email is theirs. */
+  async markEmailVerified(id: string): Promise<void> {
+    await this.pool.query(
+      'UPDATE Users SET email_verified_at = NOW() WHERE user_id = $1 AND email_verified_at IS NULL',
+      [id],
+    );
+  }
+
   /** A new password hash; any forced reset is satisfied by it. */
   async updatePassword(id: string, passwordHash: string): Promise<void> {
     await this.pool.query(

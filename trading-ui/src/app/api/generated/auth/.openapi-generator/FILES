@@ -10,9 +10,11 @@ model/login-request.ts
 model/models.ts
 model/refresh-request.ts
 model/register-request.ts
+model/resend-code-request.ts
 model/role.ts
 model/token-response.ts
 model/user-response.ts
+model/verify-email-request.ts
 param.ts
 provide-api.ts
 query.params.ts
