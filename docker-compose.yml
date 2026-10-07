@@ -161,11 +161,12 @@ services:
       # applies if it is switched back on.
       EXECUTOR_MARKET_DATA_POLLER_ENABLED: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:-false}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
-      # The profile only changes how orders settle. Empty/unset = the
-      # spec-exact story (one real Fauxnance quote per order, fill-or-reject,
-      # no partial fills). market-sim = an order book at pricing-generator's
-      # prices, with partial fills and expiry - see TradesGeneratorQuoteSource
-      # / FauxnanceQuoteClient.
+      # Fills are priced at pricing-generator's live tick under every profile
+      # (TRADES_GENERATOR_URL below): a BUY at the ask, a SELL at the bid. The
+      # profile only changes how orders settle. Empty/unset = fill-or-reject
+      # against that tick, no partial fills. market-sim = an order book at the
+      # same prices, with partial fills and expiry. fauxnance-direct = the
+      # retired one-Fauxnance-quote-per-order path (needs the FAUXNANCE_* keys).
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
       TRADES_GENERATOR_URL: http://pricing-generator:8084
     healthcheck:

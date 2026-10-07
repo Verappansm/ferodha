@@ -744,6 +744,17 @@ describe('OrderingComponent price suggestion', () => {
     );
   });
 
+  it('says how the order fills: a buy at the current ask, a sell at the current bid', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'BUY' });
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current ask 230.30');
+    expect(text(fixture, 'order-fill-note')).toContain('never more than your price');
+
+    fixture.componentInstance.form.controls.side.setValue('SELL');
+    fixture.detectChanges();
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current bid 230.10');
+    expect(text(fixture, 'order-fill-note')).toContain('never less than your price');
+  });
+
   it('suggests a price from the quote when the link carries none (the market list)', async () => {
     const fixture = await open({ symbol: 'AAPL', side: 'SELL' });
     expect(fixture.componentInstance.form.controls.price.value).toBe(230.05);
