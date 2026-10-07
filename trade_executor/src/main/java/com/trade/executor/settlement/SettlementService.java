@@ -68,8 +68,8 @@ public class SettlementService {
     // cash on both sides, through the same guarded balance adjustment
     // settleFill already uses. restingCashDelta/incomingCashDelta arrive
     // already fee- and currency-converted for each side's own account
-    // currency - OrderBookMatcher computes those with FeeCalculator/
-    // CurrencyConverter, the same division of labour OrderExecutionService
+    // currency - OrderBookMatcher computes those with FeeCalculator and the
+    // API-supplied FX rate, the same division of labour OrderExecutionService
     // already has with this class for the non-matching path (this class
     // never touches either calculator directly). The incoming order's own
     // row is never written here - see finalizeIncomingOrder, called once

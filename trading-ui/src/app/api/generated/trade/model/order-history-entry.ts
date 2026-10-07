@@ -32,6 +32,17 @@ export interface OrderHistoryEntry {
      * Why the Trade Executor rejected the order. Null unless the order is REJECTED. One of INSTRUMENT_NOT_TRADABLE, ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, INSUFFICIENT_HOLDINGS, NOT_MARKETABLE, PRICE_UNAVAILABLE. 
      */
     rejectionReason?: string | null;
+    /** Currency used for prices and instrument values. */
+    instrumentCurrency: string;
+    /** Account cash currency. */
+    accountCurrency: string;
+    filledQuantity: number;
+    filledValue?: number | null;
+    filledValueAccountCurrency?: number | null;
+    feeAmountInstrumentCurrency?: number | null;
+    feeAmount?: number | null;
+    cashAmountAccountCurrency?: number | null;
+    estimatedValueAccountCurrency: number;
 }
 export namespace OrderHistoryEntry {
 }

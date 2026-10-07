@@ -34,5 +34,6 @@
     <include file="db/changelog/019-watchlist-display-order.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/019-bank-transfer-idempotency.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/020-bank-demo-pin-verifiers.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-indian-instruments.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>

@@ -74,6 +74,12 @@ th {
   font-variant-numeric: tabular-nums;
 }
 
+.currency-secondary {
+  display: block;
+  color: var(--ink-500);
+  font-size: 0.78rem;
+}
+
 .mono {
   font-family: var(--font-mono);
   font-size: 0.8rem;

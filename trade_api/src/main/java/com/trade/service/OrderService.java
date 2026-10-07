@@ -13,6 +13,7 @@ import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DomainException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
+import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
 import com.trade.mapper.AccountMapper;
@@ -21,6 +22,7 @@ import com.trade.mapper.InstrumentMapper;
 import com.trade.mapper.InstrumentRow;
 import com.trade.mapper.OrderMapper;
 import com.trade.mapper.OrderRow;
+import com.trade.service.currency.CurrencyConversion;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -76,6 +78,17 @@ public class OrderService {
                 .orElseThrow(() -> new IllegalStateException(
                         "Instrument " + request.symbol() + " passed evaluation but is missing at write time"));
 
+        if (order.getSide() == OrderSide.BUY) {
+            BigDecimal instrumentValue = order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
+            BigDecimal accountValue = CurrencyConversion.convert(
+                    instrumentValue, instrument.quoteCurrency(), account.currency());
+            BigDecimal fee = CurrencyConversion.money(accountValue.multiply(feeRate));
+            BigDecimal required = CurrencyConversion.money(accountValue.add(fee));
+            if (account.cashBalance().compareTo(required) < 0) {
+                throw new InsufficientFundsException(required, account.cashBalance());
+            }
+        }
+
         // pricing is done in executor
         // order persists as new until transaction is done and order is published
         UUID orderId = UUID.randomUUID();
@@ -118,13 +131,26 @@ public class OrderService {
         BigDecimal fee = cost.multiply(feeRate).setScale(2, RoundingMode.HALF_UP);
         boolean buy = request.side() == OrderSide.BUY;
         BigDecimal total = buy ? cost.add(fee) : cost.subtract(fee);
-        boolean sameCurrency = instrument.quoteCurrency().equals(account.currency());
-        BigDecimal cashRemaining = buy && sameCurrency ? account.cashBalance().subtract(total) : null;
+        BigDecimal convertedAccountValue = CurrencyConversion.convert(
+                cost, instrument.quoteCurrency(), account.currency());
+        BigDecimal accountCost = CurrencyConversion.money(convertedAccountValue);
+        BigDecimal accountFee = CurrencyConversion.money(convertedAccountValue.multiply(feeRate));
+        BigDecimal accountTotal = CurrencyConversion.money(buy
+                ? convertedAccountValue.add(accountFee) : convertedAccountValue.subtract(accountFee));
+        BigDecimal cashRemaining = buy ? account.cashBalance().subtract(accountTotal) : null;
 
         return new OrderReviewResponseDto(
                 symbol, request.side(), request.quantity(), request.price(),
                 instrument.quoteCurrency(), cost, feeRate, fee, total,
+                accountCost, accountFee, accountTotal,
                 account.cashBalance(), account.currency(), cashRemaining);
+    }
+
+    public java.util.Map<String, BigDecimal> instrumentToAccountRates(String symbol) throws DomainException {
+        String normalized = symbol.trim().toUpperCase();
+        InstrumentRow instrument = instrumentMapper.findBySymbol(normalized)
+                .orElseThrow(() -> new InstrumentNotFoundException(normalized));
+        return CurrencyConversion.ratesForInstrument(instrument.quoteCurrency());
     }
 
     @Transactional(rollbackFor = Exception.class)

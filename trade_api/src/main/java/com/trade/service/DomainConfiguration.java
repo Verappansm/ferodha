@@ -5,11 +5,9 @@ import com.trade.domain.IdempotencyKeyStore;
 import com.trade.domain.InstrumentRepository;
 import com.trade.domain.OrderLogic;
 import com.trade.domain.PositionRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.math.BigDecimal;
 
 // OrderLogic is plain Sprint 5 domain code and deliberately carries no
 // Spring annotation of its own - the domain package must stay free of any
@@ -22,9 +20,7 @@ public class DomainConfiguration {
     public OrderLogic orderLogic(AccountRepository accountRepository,
                                   InstrumentRepository instrumentRepository,
                                   PositionRepository positionRepository,
-                                  IdempotencyKeyStore idempotencyKeyStore,
-                                  @Value("${fee.rate}") BigDecimal feeRate) {
-        return new OrderLogic(accountRepository, instrumentRepository, positionRepository, idempotencyKeyStore,
-                feeRate);
+                                  IdempotencyKeyStore idempotencyKeyStore) {
+        return new OrderLogic(accountRepository, instrumentRepository, positionRepository, idempotencyKeyStore);
     }
 }

@@ -15,7 +15,6 @@ import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.DomainException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
-import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
 import com.trade.exception.InvalidOrderException;
 
@@ -198,39 +197,13 @@ class OrderLogicTest {
         assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
 
-    // ---------------- Rule 6: BUY must be affordable ----------------
-
-    @Test
-    @DisplayName("Rule 6: should reject BUY when funds are insufficient")
-    void buyInsufficientFunds() {
-        // Order costs 10 * 100.00 = 1000.00, account only has 50.00.
-        givenActiveAccount(new BigDecimal("50.00"));
-
-        InsufficientFundsException exception = assertThrows(
-                InsufficientFundsException.class,
-                () -> orderLogic.evaluate(validBuyOrder())
-        );
-
-        assertEquals("ORD-400", exception.getCode());
-    }
+    // Buy affordability is checked in trade_api after currency conversion.
 
     @Test
     @DisplayName("Rule 6: should not fire when funds are sufficient")
     void buySufficientFunds() {
         givenActiveAccount(new BigDecimal("5000.00"));
 
-        assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
-    }
-
-    @Test
-    @DisplayName("Rule 6: the fee counts towards what a BUY must afford")
-    void buyMustAffordTheFeeToo() {
-        // 10 * 100.00 = 1000.00, plus 0.1% = 1.00 fee: 1001.00 needed.
-        orderLogic = orderLogicCharging(new BigDecimal("0.001"));
-        givenActiveAccount(new BigDecimal("1000.50"));
-        assertThrows(InsufficientFundsException.class, () -> orderLogic.evaluate(validBuyOrder()));
-
-        givenActiveAccount(new BigDecimal("1001.00"));
         assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
 
@@ -288,10 +261,7 @@ class OrderLogicTest {
     @Test
     @DisplayName("A request breaking two rules gets the code of the first one")
     void evaluationOrder() {
-        // A SUSPENDED account with no cash breaks both rule 2 (not active)
-        // and rule 6 (cannot afford the buy). It must fail with rule 2's
-        // code, ACC-403 - not rule 6's ORD-400 - because the order the rules
-        // run in is itself part of what is being tested here.
+        // A suspended account is refused before later order checks can run.
         givenSuspendedAccount();
 
         DomainException exception = assertThrows(

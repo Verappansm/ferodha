@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,7 +44,8 @@ class OrderPlacedPublisherTest {
 
     private static OrderPlacedPayload payload() {
         return new OrderPlacedPayload("ORD-" + ORDER_UUID, 1L, "ACME", OrderSide.BUY, 100,
-                new BigDecimal("25.50"), "idem-1", Instant.parse("2026-09-28T10:00:00Z"));
+                new BigDecimal("25.50"), "idem-1", Instant.parse("2026-09-28T10:00:00Z"),
+                Map.of("USD", BigDecimal.ONE, "INR", new BigDecimal("90")));
     }
 
     @Test

@@ -20,6 +20,15 @@ public record OrderHistoryEntryDto(
         OrderStatus status,
         String idempotencyKey,
         OffsetDateTime createdOn,
-        String rejectionReason
+        String rejectionReason,
+        String instrumentCurrency,
+        String accountCurrency,
+        Integer filledQuantity,
+        BigDecimal filledValue,
+        BigDecimal filledValueAccountCurrency,
+        BigDecimal feeAmountInstrumentCurrency,
+        BigDecimal feeAmount,
+        BigDecimal cashAmountAccountCurrency,
+        BigDecimal estimatedValueAccountCurrency
 ) {
 }

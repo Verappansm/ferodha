@@ -215,6 +215,7 @@ class OrderControllerWebTest {
         when(orderService.reviewOrder(any(), eq(1L))).thenReturn(new OrderReviewResponseDto(
                 "ACME", OrderSide.BUY, 100, new BigDecimal("25.50"), "USD",
                 new BigDecimal("2550.00"), new BigDecimal("0.001"), new BigDecimal("2.55"),
+                new BigDecimal("2552.55"), new BigDecimal("2550.00"), new BigDecimal("2.55"),
                 new BigDecimal("2552.55"), new BigDecimal("10000.00"), "USD", new BigDecimal("7447.45")));
 
         mockMvc.perform(post("/api/v1/orders/review")

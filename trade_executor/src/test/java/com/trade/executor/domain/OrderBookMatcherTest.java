@@ -1,6 +1,5 @@
 package com.trade.executor.domain;
 
-import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.event.TradeEventPublisher;
 import com.trade.executor.fee.FeeCalculator;
 import com.trade.executor.mapper.AccountMapper;
@@ -18,6 +17,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -32,12 +32,11 @@ import static org.mockito.Mockito.when;
 
 // Orchestration only - mocked mappers/SettlementService, the same style
 // OrderExecutionServiceTest/SettlementServiceTest already use. Real
-// FeeCalculator/CurrencyConverter instances at 0% and same-currency (USD)
-// throughout, the same reason OrderExecutionServiceTest wires them for
-// real rather than mocking: fee/currency math itself is already covered
-// by FeeCalculatorTest/CurrencyConverterTest, this class only needs to
-// prove the walk's own logic (candidate order, contention handling,
-// affordability/holdings re-checks, quantity accounting). Real
+// FeeCalculator instance at 0% and API-supplied same-currency rates (USD)
+// throughout, the same reason OrderExecutionServiceTest wires it for
+// real rather than mocking: fee math itself is already covered by
+// FeeCalculatorTest, this class only needs to prove the walk's own logic
+// (candidate order, contention handling, holdings re-checks, quantity accounting). Real
 // transactional proof (does the DB actually roll back atomically, does a
 // concurrent match against a real Postgres row really lose the race)
 // needs Testcontainers and is out of reach in this environment (no
@@ -58,12 +57,13 @@ class OrderBookMatcherTest {
     private final AccountMapper accountMapper = mock(AccountMapper.class);
     private final PositionMapper positionMapper = mock(PositionMapper.class);
     private final SettlementService settlementService = mock(SettlementService.class);
-    private final CurrencyConverter currencyConverter = new CurrencyConverter();
     private final FeeCalculator feeCalculator = new FeeCalculator();
     private final TradeEventPublisher tradeEventPublisher = mock(TradeEventPublisher.class);
     private final OrderBookMatcher matcher = new OrderBookMatcher(
-            orderMapper, accountMapper, positionMapper, settlementService, currencyConverter, feeCalculator,
+            orderMapper, accountMapper, positionMapper, settlementService, feeCalculator,
             tradeEventPublisher);
+    private static final Map<String, BigDecimal> USD_INSTRUMENT_RATES =
+            Map.of("USD", BigDecimal.ONE, "INR", new BigDecimal("90"));
 
     private static OrderRow order(UUID id, long accountId, String side, int quantity, BigDecimal price, int filled) {
         return new OrderRow(id, accountId, INSTRUMENT_ID, "AAPL", side, quantity, price, "NEW", filled, OffsetDateTime.now(),
@@ -95,7 +95,7 @@ class OrderBookMatcherTest {
         when(settlementService.settleMatch(any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 eq(10), any(), eq("FILLED"))).thenReturn(MatchOutcome.matched());
 
-        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, INSTRUMENT);
+        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, USD_INSTRUMENT_RATES);
 
         assertEquals(10, result.totalMatched());
         assertEquals(new BigDecimal("119.50"), result.lastExecutionPrice());
@@ -125,7 +125,7 @@ class OrderBookMatcherTest {
         when(settlementService.settleMatch(any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 eq(3), any(), eq("FILLED"))).thenReturn(MatchOutcome.matched());
 
-        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, INSTRUMENT);
+        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, USD_INSTRUMENT_RATES);
 
         // Only 3 of the incoming order's 5 shares found a counterparty - the
         // other 2 rest, which is what OrderExecutionService turns into
@@ -143,7 +143,7 @@ class OrderBookMatcherTest {
         when(orderMapper.findRestingOpposite(INSTRUMENT_ID, "SELL", incoming.limitPrice(), INCOMING_ID))
                 .thenReturn(List.of());
 
-        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, INSTRUMENT);
+        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, USD_INSTRUMENT_RATES);
 
         assertEquals(0, result.totalMatched());
         assertNull(result.lastExecutionPrice());
@@ -171,7 +171,7 @@ class OrderBookMatcherTest {
         when(settlementService.settleMatch(eq(next), any(), any(), any(), any(), any(), any(), any(), any(),
                 anyInt(), any(), any())).thenReturn(MatchOutcome.matched());
 
-        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, INSTRUMENT);
+        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, USD_INSTRUMENT_RATES);
 
         assertEquals(10, result.totalMatched());
         assertEquals(new BigDecimal("119.50"), result.lastExecutionPrice());
@@ -200,7 +200,7 @@ class OrderBookMatcherTest {
         when(settlementService.settleMatch(eq(ableSeller), any(), any(), any(), any(), any(), any(), any(), any(),
                 anyInt(), any(), any())).thenReturn(MatchOutcome.matched());
 
-        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, INSTRUMENT);
+        OrderBookMatcher.Result result = matcher.match(incoming, incomingAccount, USD_INSTRUMENT_RATES);
 
         assertEquals(5, result.totalMatched());
         assertEquals(new BigDecimal("119.50"), result.lastExecutionPrice());

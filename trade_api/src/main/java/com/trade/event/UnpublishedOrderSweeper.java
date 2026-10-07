@@ -3,6 +3,7 @@ package com.trade.event;
 import com.trade.enums.OrderSide;
 import com.trade.mapper.OrderMapper;
 import com.trade.mapper.UnpublishedOrderRow;
+import com.trade.service.currency.CurrencyConversion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +60,8 @@ public class UnpublishedOrderSweeper {
                         row.quantity(),
                         row.price(),
                         row.idempotencyKey(),
-                        row.placedAt().toInstant()));
+                        row.placedAt().toInstant(),
+                        CurrencyConversion.ratesForInstrument(row.instrumentCurrency())));
             }
         } catch (RuntimeException e) {
             // A failed sweep (database or broker down) is retried next cycle;

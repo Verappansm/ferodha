@@ -49,7 +49,8 @@ class AccountServiceTest {
                 new PositionRow(1L, "AAPL", 20L, new BigDecimal("150.00"))));
         when(orderMapper.findHistory(1L, null, null, null)).thenReturn(List.of(
                 new OrderHistoryRow(UUID.randomUUID(), 1L, "AAPL", "BUY", 20,
-                        new BigDecimal("150.00"), new BigDecimal("150.00"), "FILLED", "KEY-1", OffsetDateTime.now(), null)));
+                        new BigDecimal("150.00"), new BigDecimal("150.00"), "FILLED", "KEY-1", OffsetDateTime.now(), null,
+                        "USD", "USD", new BigDecimal("3.00"), new BigDecimal("0.001"))));
 
         AccountResponseDto account = accountService.getAccount(1L, 1L);
         assertEquals("ACC-000001", account.accountId());

@@ -1,12 +1,11 @@
 package com.trade.executor.domain;
 
-import com.trade.executor.currency.CurrencyConverter;
+import com.trade.executor.currency.ApiSuppliedRates;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.TradeEventPublisher;
 import com.trade.executor.fee.FeeCalculator;
 import com.trade.executor.mapper.AccountMapper;
 import com.trade.executor.mapper.AccountRow;
-import com.trade.executor.mapper.InstrumentRow;
 import com.trade.executor.mapper.OrderMapper;
 import com.trade.executor.mapper.OrderRow;
 import com.trade.executor.mapper.PositionMapper;
@@ -20,13 +19,14 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 
 // Only ever consulted when executor.matching.enabled is true. Walks
 // resting opposite-side liquidity on the incoming order's instrument,
 // price-then-time priority, matching as much as is available at each
 // price level before moving to the next. Every individual match is its
 // own small transaction (SettlementService.settleMatch) - this class
-// coordinates the walk and does the fee/currency-conversion math (the
+// coordinates the walk and applies API-supplied FX rates to fee math (the
 // same division of labour OrderExecutionService already has with
 // SettlementService for the non-matching path), it never touches the
 // database directly beyond the read-only candidate/position queries.
@@ -47,18 +47,16 @@ public class OrderBookMatcher {
     private final AccountMapper accountMapper;
     private final PositionMapper positionMapper;
     private final SettlementService settlementService;
-    private final CurrencyConverter currencyConverter;
     private final FeeCalculator feeCalculator;
     private final TradeEventPublisher tradeEventPublisher;
 
     public OrderBookMatcher(OrderMapper orderMapper, AccountMapper accountMapper, PositionMapper positionMapper,
-                             SettlementService settlementService, CurrencyConverter currencyConverter,
+                             SettlementService settlementService,
                              FeeCalculator feeCalculator, TradeEventPublisher tradeEventPublisher) {
         this.orderMapper = orderMapper;
         this.accountMapper = accountMapper;
         this.positionMapper = positionMapper;
         this.settlementService = settlementService;
-        this.currencyConverter = currencyConverter;
         this.feeCalculator = feeCalculator;
         this.tradeEventPublisher = tradeEventPublisher;
     }
@@ -69,7 +67,8 @@ public class OrderBookMatcher {
         }
     }
 
-    public Result match(OrderRow incoming, AccountRow incomingAccount, InstrumentRow instrument) {
+    public Result match(OrderRow incoming, AccountRow incomingAccount,
+                        Map<String, BigDecimal> instrumentToAccountRates) {
         OrderSide incomingSide = OrderSide.valueOf(incoming.side());
         String oppositeSide = incomingSide == OrderSide.BUY ? "SELL" : "BUY";
 
@@ -105,25 +104,23 @@ public class OrderBookMatcher {
                         .orElseThrow(() -> new IllegalStateException(
                                 "Resting order " + resting.orderId() + " references unknown account " + resting.accountId()));
 
-                // Execution-time re-check for the resting side too - it was
-                // vetted when it was first placed, but time (and other
-                // fills) have passed since, same reasoning that already
-                // justifies re-checking the incoming side once, up front.
-                BigDecimal restingTradeValue = currencyConverter.convert(
-                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), restingAccount.currency());
+                // Holdings can change after placement, so verify a resting
+                // sell order still has enough shares before matching.
+                BigDecimal restingTradeValue = ApiSuppliedRates.apply(
+                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), restingAccount.currency(), instrumentToAccountRates);
                 BigDecimal restingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(restingTradeValue, resting.feeRate()));
-                Optional<RejectionReason> restingCheck = restingSide == OrderSide.BUY
-                        ? ExecutionRuleCheck.checkAffordable(restingAccount, MoneyRounding.toMoneyScale(restingTradeValue.add(restingFee)))
-                        : ExecutionRuleCheck.checkHoldingsSufficient(
-                                positionMapper.findHeldQuantity(restingAccount.accountUuid(), resting.instrumentId()), matchQuantity);
+                Optional<RejectionReason> restingCheck = restingSide == OrderSide.SELL
+                        ? ExecutionRuleCheck.checkHoldingsSufficient(
+                                positionMapper.findHeldQuantity(restingAccount.accountUuid(), resting.instrumentId()), matchQuantity)
+                        : Optional.empty();
                 if (restingCheck.isPresent()) {
                     log.info("Resting order {} can no longer be honoured ({}) - skipping",
                             resting.orderId(), restingCheck.get());
                     continue;
                 }
 
-                BigDecimal incomingTradeValue = currencyConverter.convert(
-                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), instrument.currency(), incomingAccount.currency());
+                BigDecimal incomingTradeValue = ApiSuppliedRates.apply(
+                        executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), incomingAccount.currency(), instrumentToAccountRates);
                 BigDecimal incomingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(incomingTradeValue, incoming.feeRate()));
 
                 BigDecimal restingCashDelta = MoneyRounding.toMoneyScale(restingSide == OrderSide.BUY
@@ -171,4 +168,5 @@ public class OrderBookMatcher {
 
         return new Result(totalMatched, lastExecutionPrice, MoneyRounding.toMoneyScale(totalIncomingFee));
     }
+
 }

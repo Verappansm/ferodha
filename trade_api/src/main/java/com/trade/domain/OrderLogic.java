@@ -6,7 +6,6 @@ import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.DomainException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
-import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
 import com.trade.exception.InvalidOrderException;
 
@@ -21,23 +20,18 @@ public class OrderLogic {
     private final InstrumentRepository instruments;
     private final PositionRepository positions;
     private final IdempotencyKeyStore idempotencyKeys;
-    // The executor's commission (fee = value x rate), so rule 6 refuses at
-    // placement a BUY the executor would only refuse at settlement.
-    private final BigDecimal feeRate;
-
     public OrderLogic(AccountRepository accounts, InstrumentRepository instruments,
                        PositionRepository positions, IdempotencyKeyStore idempotencyKeys) {
-        this(accounts, instruments, positions, idempotencyKeys, BigDecimal.ZERO);
-    }
-
-    public OrderLogic(AccountRepository accounts, InstrumentRepository instruments,
-                       PositionRepository positions, IdempotencyKeyStore idempotencyKeys,
-                       BigDecimal feeRate) {
         this.accounts = accounts;
         this.instruments = instruments;
         this.positions = positions;
         this.idempotencyKeys = idempotencyKeys;
-        this.feeRate = feeRate;
+    }
+
+    /** Kept for callers compiled against the old constructor; affordability is now checked by trade_api. */
+    public OrderLogic(AccountRepository accounts, InstrumentRepository instruments,
+                       PositionRepository positions, IdempotencyKeyStore idempotencyKeys, BigDecimal ignoredFeeRate) {
+        this(accounts, instruments, positions, idempotencyKeys);
     }
 
     public void evaluate(Order order) throws DomainException {
@@ -66,15 +60,8 @@ public class OrderLogic {
             throw new InvalidOrderException("price");
         }
 
-        // rule 6 balance should be enough to buy, fee included
-        // (quantity * price * (1 + fee rate) <= cash balance)
-        if (order.getSide() == OrderSide.BUY) {
-            BigDecimal value = order.getPrice().multiply(BigDecimal.valueOf(order.getQuantity()));
-            BigDecimal cost = value.add(value.multiply(feeRate));
-            if (!account.isAffordable(cost)) {
-                throw new InsufficientFundsException(cost, account.getBalance());
-            }
-        }
+        // Affordability belongs to trade_api, which has both persisted
+        // currencies and can convert to account currency before comparing.
 
         // rule 7 a SELL must not exceed the current holdings
         if (order.getSide() == OrderSide.SELL) {
