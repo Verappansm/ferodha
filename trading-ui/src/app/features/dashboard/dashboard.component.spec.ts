@@ -117,7 +117,7 @@ describe('DashboardComponent', () => {
       open();
       const today = new Date().toISOString().slice(0, 10);
       expect(pnl).toHaveBeenCalledWith(3, { from: today, to: today });
-      expect(text('pnl-total')).toBe('+24.50USD');
+      expect(text('pnl-total')).toBe('+24.50 USD');
       expect(text('pnl-word')).toBe('Gain');
       expect(text('pnl-realised')).toBe('+40.00 Gain');
       expect(text('pnl-unrealised')).toBe('−15.50 Loss');
@@ -195,7 +195,7 @@ describe('DashboardComponent', () => {
       balance.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
       open();
       expect(text('cash-error')).toContain('could not be reached');
-      expect(text('pnl-total')).toBe('+24.50USD');
+      expect(text('pnl-total')).toBe('+24.50 USD');
 
       const retry: HTMLButtonElement = fixture.nativeElement.querySelector(
         '[data-testid="cash-panel"] .retry',
