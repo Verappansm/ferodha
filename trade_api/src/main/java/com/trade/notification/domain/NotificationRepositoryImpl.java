@@ -44,4 +44,9 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     public void update(Notification notification) {
         mapper.update(notification);
     }
+
+    @Override
+    public List<Notification> findByStatus(com.trade.notification.enums.NotificationStatus status, int limit) {
+        return mapper.findByStatus(status.name(), limit);
+    }
 }

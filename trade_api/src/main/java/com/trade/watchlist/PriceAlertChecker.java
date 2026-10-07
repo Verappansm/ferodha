@@ -21,14 +21,14 @@ public class PriceAlertChecker {
 
     private final WatchlistService watchlistService;
     private final MarketDataService marketDataService;
-    private final NotificationService notificationService;
+    private final PriceAlertNotifier notifier;
 
     public PriceAlertChecker(WatchlistService watchlistService,
                              MarketDataService marketDataService,
-                             NotificationService notificationService) {
+                             PriceAlertNotifier notifier) {
         this.watchlistService = watchlistService;
         this.marketDataService = marketDataService;
-        this.notificationService = notificationService;
+        this.notifier = notifier;
     }
 
     /**
@@ -41,25 +41,26 @@ public class PriceAlertChecker {
         try {
             // Get all watchlists with items that have alerts
             List<PriceAlertDtos.PriceAlertCheckResult> results = watchlistService.checkPriceAlertsForAllUsers();
-            
+
             // Group by user to send notifications
             Map<UUID, List<PriceAlertDtos.PriceAlertCheckResult>> byUser = results.stream()
                     .filter(r -> r.triggered())
                     .collect(Collectors.groupingBy(PriceAlertDtos.PriceAlertCheckResult::userId));
-            
+
             for (Map.Entry<UUID, List<PriceAlertDtos.PriceAlertCheckResult>> entry : byUser.entrySet()) {
                 UUID userId = entry.getKey();
                 List<PriceAlertDtos.PriceAlertCheckResult> triggered = entry.getValue();
-                
+
                 for (PriceAlertDtos.PriceAlertCheckResult alert : triggered) {
                     String directionText = "ABOVE".equals(alert.alertDirection()) ? "above" : "below";
-                    String message = String.format("Price alert: %s (%s) has gone %s $%.2f (current: $%.2f)",
+                    String message = String.format("Price alert: %s (%s) has gone %s %.2f (now %.2f)",
                             alert.name(), alert.symbol(), directionText, alert.alertPrice(), alert.currentPrice());
-                    
-                    notificationService.createInAppNotification(userId, message, alert.itemId().toString());
+
+                    String key = alert.itemId() + ":" + alert.alertPrice().toPlainString() + ":" + alert.alertDirection();
+                    notifier.notifyTriggered(userId, alert.symbol(), message, key);
                 }
             }
-            
+
             if (!results.isEmpty()) {
                 long triggeredCount = results.stream().filter(PriceAlertDtos.PriceAlertCheckResult::triggered).count();
                 log.debug("Checked {} price alerts, {} triggered", results.size(), triggeredCount);

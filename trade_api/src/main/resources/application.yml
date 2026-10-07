@@ -71,6 +71,18 @@ fee:
 
 # Automated strategies (com.trade.strategy). The group id is fixed: the engine
 # only needs quotes from now on, and a stale one is ignored (max-quote-age).
+notification:
+  listen: ${NOTIFICATION_LISTEN:true}
+  group-id: notification-consumer
+  # EMAIL notifications go out over this SMTP server; leave SMTP_HOST empty and they are
+  # marked FAILED ("no mail server") instead of being silently dropped.
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    from: ${MAIL_FROM:Ferodha <no-reply@ferodha.local>}
+
 strategy:
   listen: ${STRATEGY_LISTEN:true}
   group-id: strategy-service

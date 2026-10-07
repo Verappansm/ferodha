@@ -11,4 +11,7 @@ public interface NotificationRepository {
     long countByAccountId(Long accountId);
     void save(Notification notification);
     void update(Notification notification);
+
+    // The oldest first, for the delivery retry.
+    List<Notification> findByStatus(com.trade.notification.enums.NotificationStatus status, int limit);
 }

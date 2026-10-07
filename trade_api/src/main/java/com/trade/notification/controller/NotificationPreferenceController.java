@@ -30,7 +30,8 @@ public class NotificationPreferenceController {
 
     @GetMapping
     public ResponseEntity<NotificationPreferencesResponseDto> getNotificationPreferences(
-            @RequestHeader("Authorization") String authHeader) {
+            @RequestHeader("Authorization") String authHeader)
+            throws com.trade.exception.AccountNotActiveException {
 
         Long accountId = extractAccountIdFromToken(authHeader);
         NotificationPreference preference = service.getPreference(accountId);
@@ -46,7 +47,8 @@ public class NotificationPreferenceController {
     @PatchMapping
     public ResponseEntity<NotificationPreferencesResponseDto> updateNotificationPreferences(
             @RequestHeader("Authorization") String authHeader,
-            @Valid @RequestBody UpdateNotificationPreferencesRequestDto request) {
+            @Valid @RequestBody UpdateNotificationPreferencesRequestDto request)
+            throws com.trade.exception.AccountNotActiveException {
 
         Long accountId = extractAccountIdFromToken(authHeader);
         NotificationPreference preference = service.updatePreference(accountId, request.getNotificationChannel());

@@ -74,6 +74,26 @@ public interface NotificationMapper {
                                                           @Param("limit") int limit,
                                                           @Param("offset") int offset);
 
+    @Select("SELECT notification_id, account_id, event_id, event_type, order_id, symbol, " +
+            "resolved_channel, message, status, error_message, created_at, updated_at " +
+            "FROM notifications WHERE status = #{status}::notification_status_enum " +
+            "ORDER BY created_at LIMIT #{limit}")
+    @Results({
+        @Result(property = "notificationId", column = "notification_id"),
+        @Result(property = "accountId", column = "account_id"),
+        @Result(property = "eventId", column = "event_id"),
+        @Result(property = "eventType", column = "event_type"),
+        @Result(property = "orderId", column = "order_id"),
+        @Result(property = "symbol", column = "symbol"),
+        @Result(property = "resolvedChannel", column = "resolved_channel"),
+        @Result(property = "message", column = "message"),
+        @Result(property = "status", column = "status"),
+        @Result(property = "errorMessage", column = "error_message"),
+        @Result(property = "createdAt", column = "created_at"),
+        @Result(property = "updatedAt", column = "updated_at")
+    })
+    List<Notification> findByStatus(@Param("status") String status, @Param("limit") int limit);
+
     @Select("SELECT COUNT(*) FROM notifications WHERE account_id = #{accountId}")
     long countByAccountId(@Param("accountId") Long accountId);
 

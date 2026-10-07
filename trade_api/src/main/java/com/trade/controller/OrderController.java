@@ -5,6 +5,8 @@ import com.trade.dto.OrderReviewRequestDto;
 import com.trade.dto.OrderReviewResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.event.OrderPlacedPayload;
+import com.trade.notification.enums.NotificationEventType;
+import com.trade.notification.service.NotificationService;
 import com.trade.event.OrderPlacedPublisher;
 import com.trade.exception.DomainException;
 import com.trade.exception.InvalidOrderException;
@@ -32,10 +34,13 @@ public class OrderController {
 
     private final OrderService orderService;
     private final OrderPlacedPublisher orderPlacedPublisher;
+    private final NotificationService notifications;
 
-    public OrderController(OrderService orderService, OrderPlacedPublisher orderPlacedPublisher) {
+    public OrderController(OrderService orderService, OrderPlacedPublisher orderPlacedPublisher,
+                           NotificationService notifications) {
         this.orderService = orderService;
         this.orderPlacedPublisher = orderPlacedPublisher;
+        this.notifications = notifications;
     }
 
     @PostMapping
@@ -77,7 +82,16 @@ public class OrderController {
     public OrderResponseDto cancelOrder(@PathVariable String id,
                                          @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
-        return orderService.cancelOrder(parseOrderId(id), principal.accountId());
+        UUID orderId = parseOrderId(id);
+        OrderResponseDto cancelled = orderService.cancelOrder(orderId, principal.accountId());
+
+        // After the cancel has committed, and never able to undo it. The executor never sees a
+        // cancel (only trade_api cancels), so this is the only place it can be announced. The
+        // event id is derived from the order, so a repeated request cannot notify twice.
+        notifications.notify(principal.accountId(),
+                UUID.nameUUIDFromBytes(("order-cancelled:" + orderId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                NotificationEventType.ORDER_CANCELLED, cancelled.orderId(), cancelled.symbol(), null);
+        return cancelled;
     }
 
     private UUID parseOrderId(String id) throws InvalidOrderException {

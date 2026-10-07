@@ -27,7 +27,9 @@ import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,6 +69,10 @@ class OrderControllerWebTest {
     // acknowledgement) is covered by OrderPlacedPublisherTest.
     @MockitoBean
     private OrderPlacedPublisher orderPlacedPublisher;
+
+    // A cancel is announced through the notifications module once it has committed.
+    @MockitoBean
+    private com.trade.notification.service.NotificationService notifications;
 
     @Test
     void placingAnOrderWithAValidTokenReturnsTheContractShapedResponse() throws Exception {
@@ -208,6 +214,34 @@ class OrderControllerWebTest {
                 .andExpect(content().json("""
                         {"errorCode":"VAL-422","message":"Invalid input"}
                         """));
+    }
+
+    private static final java.util.UUID CANCELLED_ID = java.util.UUID.fromString("6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e");
+
+    @Test
+    void aCancelledOrderIsAnnouncedToItsOwner() throws Exception {
+        when(orderService.cancelOrder(CANCELLED_ID, 1L)).thenReturn(new OrderResponseDto(
+                "ORD-" + CANCELLED_ID, OrderStatus.CANCELLED, "Order cancelled",
+                "ACME", OrderSide.BUY, 100, new BigDecimal("25.50")));
+
+        mockMvc.perform(delete("/api/v1/orders/" + CANCELLED_ID)
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L)))
+                .andExpect(status().isOk());
+
+        verify(notifications).notify(eq(1L), any(), eq(com.trade.notification.enums.NotificationEventType.ORDER_CANCELLED),
+                eq("ORD-" + CANCELLED_ID), eq("ACME"), isNull());
+    }
+
+    @Test
+    void aCancelThatIsRefusedAnnouncesNothing() throws Exception {
+        when(orderService.cancelOrder(CANCELLED_ID, 1L))
+                .thenThrow(new com.trade.exception.OrderNotCancellableException(CANCELLED_ID.toString(), OrderStatus.FILLED));
+
+        mockMvc.perform(delete("/api/v1/orders/" + CANCELLED_ID)
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L)))
+                .andExpect(status().isConflict());
+
+        verify(notifications, never()).notify(anyLong(), any(), any(), any(), any(), any());
     }
 
     @Test

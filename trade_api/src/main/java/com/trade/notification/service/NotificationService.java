@@ -7,23 +7,35 @@ import com.trade.notification.enums.NotificationChannel;
 import com.trade.notification.enums.NotificationEventType;
 import com.trade.notification.enums.NotificationStatus;
 import com.trade.notification.exception.PreferencesNotFoundException;
+import com.trade.preferences.PreferenceDtos.AlertType;
+import com.trade.preferences.PreferenceDtos.ChannelRoute;
+import com.trade.preferences.PreferencesService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
 
-    private final NotificationRepository repository;
-    private final NotificationPreferenceService preferenceService;
+    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
-    public NotificationService(NotificationRepository repository, NotificationPreferenceService preferenceService) {
+    private final NotificationRepository repository;
+    private final PreferencesService preferences;
+    private final NotificationDispatcher dispatcher;
+
+    public NotificationService(NotificationRepository repository, PreferencesService preferences,
+                               NotificationDispatcher dispatcher) {
         this.repository = repository;
-        this.preferenceService = preferenceService;
+        this.preferences = preferences;
+        this.dispatcher = dispatcher;
     }
 
     /**
@@ -53,37 +65,67 @@ public class NotificationService {
     }
 
     /**
-     * Record a notification from a trade event (Kafka consumer entry point).
-     * Idempotent on eventId: returns 409 if already recorded.
+     * The one way an order outcome or a price alert becomes a notification: the customer's own
+     * settings decide whether they hear about it and on which channel, the row is stored once
+     * per {@code eventId} (a replay is ignored), and then it is delivered. Empty when the
+     * customer turned that type off, or the event was already recorded.
+     * Never throws, so a notification problem can never undo the trade that caused it.
+     *
+     * @param message the text to show, or null for the standard sentence of the event type
+     */
+    public Optional<NotificationResponseDto> notify(long accountId, UUID eventId, NotificationEventType type,
+                                                   String orderId, String symbol, String message) {
+        try {
+            ChannelRoute route = preferences.resolveChannel(accountId, AlertType.valueOf(type.name()));
+            if (!route.deliver()) {
+                log.debug("Account {} turned {} alerts off - no notification for event {}", accountId, type, eventId);
+                return Optional.empty();
+            }
+            NotificationChannel channel = NotificationChannel.valueOf(route.channel().name());
+            Notification stored = store(accountId, eventId, type, orderId, symbol, channel, message);
+            dispatcher.deliver(stored);
+            return Optional.of(toDto(stored));
+        } catch (IllegalArgumentException duplicate) {
+            if (duplicate.getMessage() != null && duplicate.getMessage().contains("already recorded")) {
+                log.debug("Notification already recorded for event {}", eventId);
+                return Optional.empty();
+            }
+            log.error("Could not notify account {} of {}", accountId, type, duplicate);
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            log.error("Could not notify account {} of {}", accountId, type, e);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Records (without delivering) a notification for an order event, on the channel in the
+     * customer's settings. Idempotent on eventId: a repeat raises "already recorded".
      */
     @Transactional(rollbackFor = Exception.class)
     public NotificationResponseDto recordNotification(Long accountId, UUID eventId,
                                                       NotificationEventType eventType,
                                                       String orderId, String symbol)
             throws PreferencesNotFoundException {
+        ChannelRoute route = preferences.resolveChannel(accountId, AlertType.valueOf(eventType.name()));
+        NotificationChannel channel = NotificationChannel.valueOf(route.channel().name());
+        return toDto(store(accountId, eventId, eventType, orderId, symbol, channel, null));
+    }
 
-        // Check if already recorded (idempotency)
+    private Notification store(Long accountId, UUID eventId, NotificationEventType eventType,
+                               String orderId, String symbol, NotificationChannel channel, String message) {
         if (repository.findByEventId(eventId).isPresent()) {
             throw new IllegalArgumentException("Notification already recorded for this event");
         }
-
-        // Resolve channel from preferences
-        NotificationChannel channel = preferenceService.getPreference(accountId).getNotificationChannel();
-
-        // Generate message based on event type
-        String message = generateMessage(eventType, orderId, symbol);
-
-        // Create and save notification
-        Notification notification = new Notification(accountId, eventId, eventType, orderId, symbol, channel, message);
-
+        Notification notification = new Notification(accountId, eventId, eventType, orderId, symbol, channel,
+                message != null ? message : generateMessage(eventType, orderId, symbol));
         try {
             repository.save(notification);
         } catch (DataIntegrityViolationException e) {
-            // Handle unique constraint on eventId
+            // The unique index on event_id: a concurrent delivery of the same event won.
             throw new IllegalArgumentException("Notification already recorded for this event");
         }
-
-        return toDto(notification);
+        return notification;
     }
 
     /**
@@ -93,35 +135,21 @@ public class NotificationService {
     public NotificationResponseDto updateNotificationStatus(UUID notificationId, NotificationStatus status, String errorMessage) {
         Notification notification = repository.findById(notificationId)
                 .orElseThrow(() -> new IllegalArgumentException("Notification not found"));
-
         notification.setStatus(status);
         notification.setErrorMessage(errorMessage);
         notification.setUpdatedAt(Instant.now());
         repository.update(notification);
-
         return toDto(notification);
     }
 
     /**
-     * Send a watchlist alert notification.
+     * A customer's own watchlist alert, for their own account.
      */
-    @Transactional
     public NotificationResponseDto sendWatchlistAlert(Long accountId, String symbol, String message) throws PreferencesNotFoundException {
-        // Resolve channel from preferences
-        NotificationChannel channel = preferenceService.getPreference(accountId).getNotificationChannel();
-
-        // Create notification with a unique event ID (watchlist events aren't from Kafka)
-        Notification notification = new Notification(accountId, UUID.randomUUID(),
-                NotificationEventType.ORDER_FILLED, // Use a generic event type
-                null, symbol, channel, message);
-
-        repository.save(notification);
-        return toDto(notification);
+        return notify(accountId, UUID.randomUUID(), NotificationEventType.PRICE_ALERT, null, symbol, message)
+                .orElseThrow(() -> new PreferencesNotFoundException("Price alerts are switched off for account " + accountId));
     }
 
-    /**
-     * Convert domain model to DTO.
-     */
     private NotificationResponseDto toDto(Notification notification) {
         return new NotificationResponseDto(
                 notification.getNotificationId(),
@@ -146,7 +174,7 @@ public class NotificationService {
             case ORDER_FILLED -> String.format("Your order %s for %s has been filled.", orderId, symbol);
             case ORDER_REJECTED -> String.format("Your order %s for %s has been rejected.", orderId, symbol);
             case ORDER_CANCELLED -> String.format("Your order %s for %s has been cancelled.", orderId, symbol);
-            default -> "Your order has been updated.";
+            case PRICE_ALERT -> String.format("Price alert for %s.", symbol);
         };
     }
 }
