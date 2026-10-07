@@ -33,6 +33,7 @@ export class ShellComponent {
   protected readonly markets: NavItem[] = [
     { path: '/instruments', label: 'Instruments' },
     { path: '/orders', label: 'All orders' },
+    { path: '/fees', label: 'Fees' },
   ];
   protected readonly system: NavItem[] = [
     { path: '/health', label: 'System health' },
