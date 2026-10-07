@@ -28,7 +28,7 @@ import {
   OrderReviewResponse,
 } from '../../api/trade-api';
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe } from '@angular/common';
 import { MoneyPipe } from '../../core/format/money.pipe';
 import { errorMessage } from '../../core/errors/error-message';
 import { rejectionText } from '../../core/format/rejection-reason';
@@ -100,7 +100,7 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-ordering',
-  imports: [ReactiveFormsModule, DatePipe, MoneyPipe],
+  imports: [ReactiveFormsModule, DatePipe, DecimalPipe, MoneyPipe],
   templateUrl: './ordering.component.html',
   styleUrls: ['./ordering.component.css'],
 })
