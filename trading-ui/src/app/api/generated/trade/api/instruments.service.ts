@@ -315,6 +315,10 @@ export class InstrumentsService extends BaseService {
      * @endpoint get /api/v1/instruments
      * @param pageSize Number of instruments per page (default 20).
      * @param offset Zero-based offset for pagination (default 0).
+<<<<<<< Updated upstream
+=======
+     * @param search Case-insensitive ticker or instrument-name search.
+>>>>>>> Stashed changes
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
@@ -343,6 +347,18 @@ export class InstrumentsService extends BaseService {
             true,
         );
 
+<<<<<<< Updated upstream
+=======
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'search',
+            <any>search,
+            QueryParamStyle.Form,
+            true,
+        );
+
+>>>>>>> Stashed changes
 
         let localVarHeaders = this.defaultHeaders;
 

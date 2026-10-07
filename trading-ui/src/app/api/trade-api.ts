@@ -166,6 +166,25 @@ export interface UpdateWatchlistRequest {
   displayOrder?: number;
 }
 
+export type BankTransferType = 'DEPOSIT' | 'WITHDRAWAL';
+
+/** Balances of the current user's database-linked external bank account and trading account. */
+export interface BankFundsResponse {
+  accountId: number;
+  bankAccountNumber: string;
+  tradingBalance: number;
+  bankBalance: number;
+  currency: string;
+  asOf: string;
+}
+
+export interface BankTransferRequest {
+  amount: number;
+  /** Bcrypt client proof computed from the PIN in the browser; never the raw PIN. */
+  pinHash: string;
+  idempotencyKey: string;
+}
+
 /** The chart ranges the Trade REST API serves: minute bars for 1D, daily candles otherwise. */
 export type ChartRange = PriceHistory.RangeEnum;
 
@@ -187,6 +206,15 @@ export class TradeApi {
 
   balance(accountId: number): Observable<BalanceResponse> {
     return this.accounts.getBalance(accountId);
+  }
+
+  bankFunds(accountId: number): Observable<BankFundsResponse> {
+    return this.http.get<BankFundsResponse>(`${this.baseUrl}/api/v1/accounts/${accountId}/bank-funds`);
+  }
+
+  bankTransfer(accountId: number, type: BankTransferType, request: BankTransferRequest): Observable<BankFundsResponse> {
+    const path = type === 'DEPOSIT' ? 'deposits' : 'withdrawals';
+    return this.http.post<BankFundsResponse>(`${this.baseUrl}/api/v1/accounts/${accountId}/bank-funds/${path}`, request);
   }
 
   positions(accountId: number): Observable<PositionResponse[]> {

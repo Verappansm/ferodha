@@ -2,6 +2,8 @@ package com.trade.web;
 
 import com.trade.dto.ErrorResponseDto;
 import com.trade.exception.AccountNotActiveException;
+import com.trade.exception.BankTransferException;
+import com.trade.exception.DuplicateBankTransferException;
 import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DomainException;
@@ -48,6 +50,8 @@ public class GlobalExceptionHandler {
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_TYPE = Map.ofEntries(
             Map.entry(AccountNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(AccountNotActiveException.class, HttpStatus.FORBIDDEN),
+            Map.entry(BankTransferException.class, HttpStatus.BAD_REQUEST),
+            Map.entry(DuplicateBankTransferException.class, HttpStatus.CONFLICT),
             Map.entry(InstrumentNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(InsufficientFundsException.class, HttpStatus.BAD_REQUEST),
             Map.entry(InsufficientHoldingsException.class, HttpStatus.CONFLICT),

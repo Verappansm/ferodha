@@ -8,7 +8,9 @@ export type ErrorCode =
   | AuthErrorResponse.ErrorCodeEnum
   | TradeErrorResponse.ErrorCodeEnum
   | PortfolioErrorResponse.ErrorCodeEnum
-  | ProfileErrorResponse.ErrorCodeEnum;
+  | ProfileErrorResponse.ErrorCodeEnum
+  | 'BNK-400'
+  | 'BNK-409';
 
 // One sentence per code. Typed as a full Record over `ErrorCode`, so a code must have a corresponding message.
 export const ERROR_MESSAGES: Record<ErrorCode, string> = {
@@ -26,6 +28,8 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   // or an order that is no longer cancellable.
   'ORD-409':
     'This order cannot go ahead. If you are selling, check you hold enough units. If you were cancelling, the order may already be filled or cancelled, so refresh your orders.',
+  'BNK-400': 'Transfer could not be completed. Check the amount, available funds, and PIN.',
+  'BNK-409': 'This transfer has already been submitted.',
   'MKT-503':
     'Prices are unavailable right now, so your holdings cannot be valued. Trading is not affected. Try again in a few minutes.',
 };

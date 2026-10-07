@@ -1,20 +1,22 @@
 <div class="bank-container">
-  <div class="coming-soon-banner">
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="banner-icon"
-    >
-      <path
-        d="M12 9v2m0 4v2m7.5-12H4.5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"
-      ></path>
-    </svg>
-    <h1>To Be Released</h1>
-    <p>This feature is coming soon. Stay tuned for updates!</p>
-  </div>
+  <section class="bank-heading">
+    <div><p class="eyebrow">Linked bank</p><h1>Move money securely</h1><p>Transfer funds between your verified bank account and your trading account.</p></div>
+    <button type="button" class="secondary" (click)="loadFunds()" [disabled]="isLoading()">{{ isLoading() ? 'Refreshing…' : 'Refresh balances' }}</button>
+  </section>
+  @if (error()) { <p class="message error" role="alert">{{ error() }}</p> }
+  @if (success()) { <p class="message success" role="status">{{ success() }}</p> }
+  @if (isLoading() && !funds()) { <p class="loading">Loading your linked funds…</p> } @else if (funds(); as current) {
+    <section class="balances" aria-label="Account balances">
+      <article><span>Trading balance</span><strong>{{ current.tradingBalance | money: '1.2-2' : 'balance' }} {{ current.currency }}</strong></article>
+    </section>
+    <section class="transfer-card" aria-labelledby="transfer-title">
+      <div><h2 id="transfer-title">Transfer funds</h2><p>Your PIN is bcrypt-hashed in this browser before it is sent.</p></div>
+      <form (ngSubmit)="submit()"><fieldset [disabled]="isSubmitting()">
+        <label>Direction<select [ngModel]="transactionType()" (ngModelChange)="transactionType.set($event)" name="transactionType"><option value="DEPOSIT">Add Funds</option><option value="WITHDRAWAL">Withdraw Funds</option></select></label>
+        <label>Amount ({{ current.currency }})<input type="number" min="0.01" step="0.01" inputmode="decimal" [ngModel]="amount()" (ngModelChange)="amount.set($event === '' ? null : +$event)" name="amount" required /></label>
+        <label>Bank PIN<input type="password" inputmode="numeric" autocomplete="one-time-code" [ngModel]="pin()" (ngModelChange)="pin.set($event)" name="pin" required /></label>
+        <button type="submit" class="primary">{{ isSubmitting() ? 'Processing…' : transactionType() === 'DEPOSIT' ? 'Deposit funds' : 'Withdraw funds' }}</button>
+      </fieldset></form>
+    </section>
+  }
 </div>
