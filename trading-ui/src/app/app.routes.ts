@@ -7,7 +7,6 @@ import { PortfolioComponent } from './components/portfolio/portfolio.component';
 import { InstrumentsComponent } from './components/instruments/instruments.component';
 import { OrderingComponent } from './components/ordering/ordering.component';
 import { OrdersComponent } from './components/orders/orders.component';
-import { WatchlistComponent } from './components/watchlist/watchlist.component';
 import { StrategiesComponent } from './components/strategies/strategies.component';
 import { BankComponent } from './components/bank/bank.component';
 import {
@@ -35,7 +34,13 @@ export const routes: Routes = [
   },
   { path: 'order', component: OrderingComponent, canActivate: [authGuard] },
   { path: 'orders', component: OrdersComponent, canActivate: [authGuard] },
-  { path: 'watchlist', component: WatchlistComponent, canActivate: [authGuard] },
+  {
+    path: 'watchlist',
+    // Lazy: ag-grid is large, and only this screen uses it.
+    loadComponent: () =>
+      import('./components/watchlist/watchlist.component').then((m) => m.WatchlistComponent),
+    canActivate: [authGuard],
+  },
   { path: 'strategies', component: StrategiesComponent, canActivate: [authGuard] },
   { path: 'bank', component: BankComponent, canActivate: [authGuard] },
   {

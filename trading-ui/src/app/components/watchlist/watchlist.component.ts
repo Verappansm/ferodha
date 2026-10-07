@@ -30,6 +30,7 @@ import {
   CellValueChangedEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
+import { AgGridThemeComponent } from './ag-grid-theme.component';
 
 const WATCHLIST_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
@@ -52,7 +53,7 @@ interface WatchlistRow {
 @Component({
   selector: 'app-watchlist',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular],
+  imports: [CommonModule, FormsModule, AgGridAngular, AgGridThemeComponent],
   templateUrl: './watchlist.component.html',
   styleUrls: ['./watchlist.component.css'],
 })
@@ -140,7 +141,7 @@ export class WatchlistComponent implements OnDestroy {
   readonly columnDefs = computed<ColDef<WatchlistRow>[]>(() => {
     const isEditing = this.isEditing();
     const editingAlertId = this.editingAlertItemId();
-    
+
     const defs: any[] = [
       {
         field: 'symbol',
@@ -244,8 +245,8 @@ export class WatchlistComponent implements OnDestroy {
         maxWidth: 85,
         suppressAutoSize: true,
         suppressMovable: true,
-        cellStyle: { 
-          textAlign: 'center', 
+        cellStyle: {
+          textAlign: 'center',
           padding: '0 8px',
         },
         hide: !isEditing,
@@ -272,8 +273,8 @@ export class WatchlistComponent implements OnDestroy {
         maxWidth: 100,
         suppressAutoSize: true,
         suppressMovable: true,
-        cellStyle: { 
-          textAlign: 'center', 
+        cellStyle: {
+          textAlign: 'center',
           padding: '0 8px',
         },
         hide: isEditing,
@@ -282,7 +283,7 @@ export class WatchlistComponent implements OnDestroy {
           container.style.display = 'flex';
           container.style.gap = '4px';
           container.style.justifyContent = 'center';
-          
+
           // Edit alert button
           const editBtn = document.createElement('button');
           editBtn.className = 'alert-edit-btn';
@@ -296,7 +297,7 @@ export class WatchlistComponent implements OnDestroy {
             e.stopPropagation();
             this.openCreateAlertModal(params.data!);
           };
-          
+
           // Delete alert button (only show if alert exists)
           if (params.data?.alertPrice !== null) {
             const deleteBtn = document.createElement('button');
@@ -317,7 +318,7 @@ export class WatchlistComponent implements OnDestroy {
             };
             container.appendChild(deleteBtn);
           }
-          
+
           container.appendChild(editBtn);
           return container;
         },
@@ -426,12 +427,12 @@ export class WatchlistComponent implements OnDestroy {
 
   private enrichItemsWithPricesAndChart(rows: WatchlistRow[]): void {
     if (rows.length === 0) return;
-    
+
     const symbols = rows.map((r: WatchlistRow) => r.symbol);
-    
+
     // Load real-time prices for display (matching instruments component pattern)
     this.loadRealTimePrices(symbols);
-    
+
     // Fetch intraday chart data for each symbol
     symbols.forEach((symbol: string) => {
       this.tradeApi.history(symbol, PriceHistory.RangeEnum._1D).subscribe({
@@ -456,7 +457,7 @@ export class WatchlistComponent implements OnDestroy {
   /** Fetch real-time prices for all symbols - matches instruments component pattern */
   private loadRealTimePrices(symbols: string[]): void {
     if (symbols.length === 0) return;
-    
+
     this.tradeApi.prices(symbols).subscribe({
       next: (prices) => {
         this.priceMap.update((current) => {
@@ -568,10 +569,10 @@ export class WatchlistComponent implements OnDestroy {
       next: () => {
         this.showAddDropdown.set(false);
         this.clearSearch();
-        
+
         // Always reload watchlist sidebar counts
         this.loadWatchlists();
-        
+
         // If the item was added to the currently selected watchlist, also reload the grid
         const currentWatchlistId = this.selectedWatchlistId();
         if (currentWatchlistId && watchlistIds.includes(currentWatchlistId)) {
@@ -637,7 +638,7 @@ export class WatchlistComponent implements OnDestroy {
 
     // Remove from local state immediately for UI feedback
     this.editRows.update(rows => rows.filter(r => r.itemId !== itemId));
-    
+
     // Delete from backend
     this.tradeApi.removeWatchlistItem(id, itemId).subscribe({
       next: () => {
@@ -751,7 +752,7 @@ export class WatchlistComponent implements OnDestroy {
     const row = event.data;
     const newPrice = event.newValue as number | null;
     const watchlistId = this.selectedWatchlistId();
-    
+
     if (!watchlistId || !row) return;
 
     // Validate: if price is set but direction is not, don't save yet
@@ -781,7 +782,7 @@ export class WatchlistComponent implements OnDestroy {
     const row = event.data;
     const newDirection = event.newValue as string | null;
     const watchlistId = this.selectedWatchlistId();
-    
+
     if (!watchlistId || !row) return;
 
     // If direction is null but price exists, clear both
@@ -799,9 +800,9 @@ export class WatchlistComponent implements OnDestroy {
     if (!watchlistId) return;
 
     // Type assertion for alertDirection to match the expected type
-    const request: UpdatePriceAlertRequest = { 
-      alertPrice, 
-      alertDirection: alertDirection as 'ABOVE' | 'BELOW' | null 
+    const request: UpdatePriceAlertRequest = {
+      alertPrice,
+      alertDirection: alertDirection as 'ABOVE' | 'BELOW' | null
     };
     this.tradeApi.updatePriceAlert(watchlistId, itemId, request).subscribe({
       next: (response) => {
@@ -838,7 +839,7 @@ export class WatchlistComponent implements OnDestroy {
   private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
     const id = ++this.notificationCounter;
     this.notifications.update(list => [...list, { id, message, type }]);
-    
+
     // Auto-remove after 5 seconds
     setTimeout(() => {
       this.notifications.update(list => list.filter(n => n.id !== id));

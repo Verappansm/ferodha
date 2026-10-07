@@ -31,5 +31,6 @@
     <include file="db/changelog/016-strategy-last-checked.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/017-preferences.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/018-price-alerts.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-watchlist-display-order.sql" relativeToChangelogFile="false"/>
 
 </databaseChangeLog>
