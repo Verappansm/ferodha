@@ -41,6 +41,24 @@
   color: var(--ink-500);
 }
 
+.hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-500);
+}
+
+.price-now {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--ink-500);
+}
+
+.watching small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-500);
+}
+
 .muted {
   color: var(--ink-500);
 }

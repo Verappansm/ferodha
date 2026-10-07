@@ -65,6 +65,9 @@ export interface StrategyResponse {
   consecutiveFailures: number;
   expiresAt: string | null;
   createdAt: string;
+  /** The price it last watched (the ask for a BUY, the bid for a SELL) and when. */
+  lastPrice: number | null;
+  lastCheckedAt: string | null;
 }
 
 export interface StrategyEventResponse {

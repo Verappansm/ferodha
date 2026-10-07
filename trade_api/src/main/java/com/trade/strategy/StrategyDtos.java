@@ -52,12 +52,16 @@ public final class StrategyDtos {
             Integer ordersPlaced,
             Integer consecutiveFailures,
             OffsetDateTime expiresAt,
-            OffsetDateTime createdAt
+            OffsetDateTime createdAt,
+            // the price it last watched (the ask for a BUY, the bid for a SELL) and when
+            BigDecimal lastPrice,
+            OffsetDateTime lastCheckedAt
     ) {
         static StrategyResponse from(Strategy s) {
             return new StrategyResponse(s.strategyId(), s.name(), s.symbol(), s.side(), s.triggerPrice(),
                     s.quantity(), s.maxSpend(), s.maxPosition(), s.maxOrders(), s.maxFailures(), s.dryRun(),
-                    s.status(), s.ordersPlaced(), s.consecutiveFailures(), s.expiresAt(), s.createdAt());
+                    s.status(), s.ordersPlaced(), s.consecutiveFailures(), s.expiresAt(), s.createdAt(),
+                    s.lastPrice(), s.lastCheckedAt());
         }
     }
 

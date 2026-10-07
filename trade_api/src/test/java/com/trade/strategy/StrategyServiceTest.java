@@ -9,6 +9,9 @@ import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
 import com.trade.mapper.InstrumentMapper;
 import com.trade.mapper.InstrumentRow;
+import com.trade.mapper.PositionMapper;
+import com.trade.mapper.PositionRow;
+import com.trade.exception.InsufficientHoldingsException;
 import com.trade.service.AccountAccessGuard;
 import com.trade.service.OrderService;
 import com.trade.strategy.StrategyDtos.CreateStrategyRequest;
@@ -42,12 +45,13 @@ class StrategyServiceTest {
     private final StrategyMapper mapper = mock(StrategyMapper.class);
     private final AccountMapper accounts = mock(AccountMapper.class);
     private final InstrumentMapper instruments = mock(InstrumentMapper.class);
+    private final PositionMapper positions = mock(PositionMapper.class);
     private final OrderService orders = mock(OrderService.class);
     private StrategyService service;
 
     @BeforeEach
     void setUp() {
-        service = new StrategyService(mapper, accounts, instruments, new AccountAccessGuard(), orders,
+        service = new StrategyService(mapper, accounts, instruments, positions, new AccountAccessGuard(), orders,
                 new BigDecimal("0.001"));
         when(accounts.findById(1L)).thenReturn(Optional.of(new AccountRow(1L, UUID.randomUUID(), "ACC-1",
                 UUID.randomUUID(), "John", new BigDecimal("50000"), "ACTIVE", 0, null, "USD")));
@@ -84,6 +88,29 @@ class StrategyServiceTest {
         assertThrows(InvalidParameterException.class, () -> service.create(buy("5000.00", 100), USER, 1L));
         assertThrows(InvalidParameterException.class, () -> service.create(buy("10000.00", 10), USER, 1L));
         assertThrows(InvalidParameterException.class, () -> service.create(buy("10000.00", null), USER, 1L));
+    }
+
+    private static CreateStrategyRequest sell() {
+        return new CreateStrategyRequest("exit", "AAPL", OrderSide.SELL, new BigDecimal("120.00"), 50,
+                null, null, null, null, null, null);
+    }
+
+    @Test
+    @DisplayName("A SELL strategy needs the stock in the account: no stock, no sell")
+    void sellNeedsHoldings() {
+        when(positions.find(1L, "AAPL")).thenReturn(Optional.empty());
+        assertThrows(InsufficientHoldingsException.class, () -> service.create(sell(), USER, 1L));
+        when(positions.find(1L, "AAPL")).thenReturn(Optional.of(new PositionRow(1L, "AAPL", 30L, BigDecimal.TEN)));
+        assertThrows(InsufficientHoldingsException.class, () -> service.create(sell(), USER, 1L));
+    }
+
+    @Test
+    @DisplayName("A SELL strategy is created when enough units are held")
+    void sellWithHoldingsIsCreated() throws DomainException {
+        when(positions.find(1L, "AAPL")).thenReturn(Optional.of(new PositionRow(1L, "AAPL", 80L, BigDecimal.TEN)));
+        service.create(sell(), USER, 1L);
+        verify(mapper).insert(eq(USER), eq(1L), eq("exit"), eq("AAPL"), eq("SELL"), any(), eq(50), any(), any(),
+                eq(1), eq(3), eq(false), any());
     }
 
     @Test

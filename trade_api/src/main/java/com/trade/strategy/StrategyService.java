@@ -4,12 +4,15 @@ import com.trade.enums.OrderSide;
 import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.DomainException;
 import com.trade.exception.InstrumentNotFoundException;
+import com.trade.exception.InsufficientHoldingsException;
 import com.trade.exception.InvalidParameterException;
 import com.trade.exception.StrategyNotFoundException;
 import com.trade.exception.StrategyStateException;
 import com.trade.mapper.AccountMapper;
 import com.trade.mapper.AccountRow;
 import com.trade.mapper.InstrumentMapper;
+import com.trade.mapper.PositionMapper;
+import com.trade.mapper.PositionRow;
 import com.trade.service.AccountAccessGuard;
 import com.trade.service.OrderService;
 import com.trade.strategy.StrategyDtos.CreateStrategyRequest;
@@ -36,16 +39,18 @@ public class StrategyService {
     private final StrategyMapper mapper;
     private final AccountMapper accountMapper;
     private final InstrumentMapper instrumentMapper;
+    private final PositionMapper positionMapper;
     private final AccountAccessGuard accessGuard;
     private final OrderService orderService;
     private final BigDecimal feeRate;
 
     public StrategyService(StrategyMapper mapper, AccountMapper accountMapper, InstrumentMapper instrumentMapper,
-                           AccountAccessGuard accessGuard, OrderService orderService,
+                           PositionMapper positionMapper, AccountAccessGuard accessGuard, OrderService orderService,
                            @Value("${fee.rate}") BigDecimal feeRate) {
         this.mapper = mapper;
         this.accountMapper = accountMapper;
         this.instrumentMapper = instrumentMapper;
+        this.positionMapper = positionMapper;
         this.accessGuard = accessGuard;
         this.orderService = orderService;
         this.feeRate = feeRate;
@@ -73,6 +78,14 @@ public class StrategyService {
             }
             if (maxPosition == null || maxPosition < quantity) {
                 throw new InvalidParameterException("maxPosition");
+            }
+        }
+        if (!buy) {
+            // There is no selling what is not held: a SELL strategy needs the
+            // units in the account now (the engine checks again at every order).
+            long held = positionMapper.find(account.id(), symbol).map(PositionRow::quantity).orElse(0L);
+            if (held < quantity) {
+                throw new InsufficientHoldingsException(quantity, held);
             }
         }
         if (request.expiresAt() != null && !request.expiresAt().isAfter(OffsetDateTime.now())) {

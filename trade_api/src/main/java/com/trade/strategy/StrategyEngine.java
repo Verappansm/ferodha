@@ -21,7 +21,8 @@ import java.util.Optional;
 // order if it does. Every guard sits at the point of decision:
 //
 //   stale quote   ignored: a delayed price is not a reason to spend money
-//   crossing      TriggerRule: edge-triggered, never a repeat on a held level
+//   trigger       TriggerRule: at once if already met when watching starts,
+//                 then only on a crossing, never a repeat on a held level
 //   risk limits   RiskLimits: max spend, max position, units to sell
 //   dry run       logged as WOULD_FIRE and never placed
 //   claim         one guarded UPDATE that only succeeds while the strategy is
@@ -106,7 +107,13 @@ public class StrategyEngine {
         if (price == null) {
             return;
         }
-        if (!TriggerRule.crossed(s.side(), s.triggerPrice(), s.lastPrice(), price)) {
+        if (!TriggerRule.shouldFire(s.side(), s.triggerPrice(), s.lastPrice(), price)) {
+            if (s.lastPrice() == null) {
+                // The first price seen after enabling: say what it is waiting for.
+                event(id, "WATCHING", (s.isBuy() ? "Ask " : "Bid ") + price.toPlainString() + ": will "
+                        + (s.isBuy() ? "buy when the ask falls to " : "sell when the bid rises to ")
+                        + s.triggerPrice().toPlainString());
+            }
             mapper.setLastPrice(id, price);
             return;
         }
