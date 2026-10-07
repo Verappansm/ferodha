@@ -321,7 +321,7 @@ describe('OrdersComponent', () => {
       const confirmRow = byTestId('cancel-confirm')!;
       expect(confirmRow.tagName).toBe('TR');
       expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('9');
-      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00?');
+      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00 USD?');
 
       orderHistory.mockReturnValue(
         of([order('ORD-abc', OrderStatus.CANCELLED, '2026-09-30T09:00:00Z')]),

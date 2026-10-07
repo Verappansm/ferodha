@@ -113,15 +113,16 @@ public class OrderBookMatcher {
                     continue;
                 }
 
-                // Holdings can change after placement, so verify a resting
-                // sell order still has enough shares before matching.
+                // Cash and holdings can change after placement, so verify a
+                // resting buy can still pay, or a resting sell still has its
+                // shares, before matching.
                 BigDecimal restingTradeValue = ApiSuppliedRates.apply(
                         executionPrice.multiply(BigDecimal.valueOf(matchQuantity)), restingAccount.currency(), instrumentToAccountRates);
                 BigDecimal restingFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(restingTradeValue, resting.feeRate()));
-                Optional<RejectionReason> restingCheck = restingSide == OrderSide.SELL
-                        ? ExecutionRuleCheck.checkHoldingsSufficient(
-                                positionMapper.findHeldQuantity(restingAccount.accountUuid(), resting.instrumentId()), matchQuantity)
-                        : Optional.empty();
+                Optional<RejectionReason> restingCheck = restingSide == OrderSide.BUY
+                        ? ExecutionRuleCheck.checkAffordable(restingAccount, MoneyRounding.toMoneyScale(restingTradeValue.add(restingFee)))
+                        : ExecutionRuleCheck.checkHoldingsSufficient(
+                                positionMapper.findHeldQuantity(restingAccount.accountUuid(), resting.instrumentId()), matchQuantity);
                 if (restingCheck.isPresent()) {
                     log.info("Resting order {} can no longer be honoured ({}) - skipping",
                             resting.orderId(), restingCheck.get());

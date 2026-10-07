@@ -2,6 +2,7 @@ package com.trade.generator.orders;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 
 // Identical shape to trade_api's com.trade.event.OrderPlacedPayload (side as
 // a plain String rather than trade_api's OrderSide enum - same JSON either
@@ -15,6 +16,9 @@ public record OrderPlacedPayload(
         Integer quantity,
         BigDecimal price,
         String idempotencyKey,
-        Instant createdOn
+        Instant createdOn,
+        // instrument currency -> account currency, as trade_api puts on its own
+        // messages; the executor refuses a message without the account's rate
+        Map<String, BigDecimal> instrumentToAccountRates
 ) {
 }

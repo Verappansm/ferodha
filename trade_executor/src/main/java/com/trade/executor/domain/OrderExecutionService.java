@@ -151,11 +151,11 @@ public class OrderExecutionService {
                 ? tradeValueAccountCcy.add(fee)
                 : tradeValueAccountCcy.subtract(fee));
 
-        Optional<RejectionReason> postCheck = side == OrderSide.SELL
-                ? ExecutionRuleCheck.checkHoldingsSufficient(
+        Optional<RejectionReason> postCheck = side == OrderSide.BUY
+                ? ExecutionRuleCheck.checkAffordable(account, totalCashDelta)
+                : ExecutionRuleCheck.checkHoldingsSufficient(
                         positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()),
-                        order.quantity())
-                : Optional.empty();
+                        order.quantity());
         if (postCheck.isPresent()) {
             settleAndPublishReject(order, postCheck.get());
             return;
@@ -187,14 +187,24 @@ public class OrderExecutionService {
     // book does with one too: nothing happens until something crosses it.
     private void processWithMatching(OrderRow order, AccountRow account,
                                      Map<String, BigDecimal> instrumentToAccountRates) {
-        // Re-check SELL holdings before matching. Buy affordability was
-        // checked in trade_api before this order was accepted.
+        // Re-check before matching: a BUY against the cash as it is now, at the
+        // limit price (the most it can cost, since a match can only do better),
+        // fee included; a SELL against the holdings.
         OrderSide side = OrderSide.valueOf(order.side());
         int remainingQuantity = order.remainingQuantity();
-        Optional<RejectionReason> preCheck = side == OrderSide.SELL
-                ? ExecutionRuleCheck.checkHoldingsSufficient(
-                        positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()), remainingQuantity)
-                : Optional.empty();
+        Optional<RejectionReason> preCheck;
+        if (side == OrderSide.BUY) {
+            BigDecimal worstCaseValue = ApiSuppliedRates.apply(
+                    order.limitPrice().multiply(BigDecimal.valueOf(remainingQuantity)),
+                    account.currency(), instrumentToAccountRates);
+            BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(
+                    feeCalculator.calculateFee(worstCaseValue, order.feeRate()));
+            preCheck = ExecutionRuleCheck.checkAffordable(
+                    account, MoneyRounding.toMoneyScale(worstCaseValue.add(worstCaseFee)));
+        } else {
+            preCheck = ExecutionRuleCheck.checkHoldingsSufficient(
+                    positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()), remainingQuantity);
+        }
         if (preCheck.isPresent()) {
             settleAndPublishReject(order, preCheck.get());
             return;

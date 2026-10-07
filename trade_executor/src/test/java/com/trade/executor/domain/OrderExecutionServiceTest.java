@@ -136,6 +136,42 @@ class OrderExecutionServiceTest {
     }
 
     @Test
+    @DisplayName("a buy the account can no longer pay for at fill time is rejected INSUFFICIENT_FUNDS, not settled")
+    void buyThatNoLongerFitsTheCashIsRejected() {
+        // 10 x 10.00 = 100.00 plus the fee, but only 99.00 is left: two buys that each fitted when placed.
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("99.00"), "USD");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(settlementService, never()).settleFill(any(), any(), any(), any(), any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
+    @DisplayName("an INR account buying a USD instrument is checked in INR: the same buy that fits in dollars may not fit")
+    void affordabilityIsCheckedInTheAccountCurrency() {
+        // 100.00 USD x 90 = 9,000.00 INR plus the fee against 8,000.00 INR of cash.
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("8000.00"), "INR");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(settlementService, never()).settleFill(any(), any(), any(), any(), any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
     @DisplayName("Story 7: an order id not in Postgres is poison, not retried as transient")
     void unknownOrderIdIsPoison() {
         when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.empty());

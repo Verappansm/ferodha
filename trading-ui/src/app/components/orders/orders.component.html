@@ -112,8 +112,9 @@
                 <tr class="confirm-row" data-testid="cancel-confirm">
                   <td colspan="9">
                     <span class="confirm-text">
-                      Cancel {{ order.side }} {{ order.quantity | number }} {{ order.symbol }} at
-                      {{ order.price | number: '1.2-2' }} {{ order.instrumentCurrency }}? Nothing is sent until you confirm.
+                      Cancel {{ order.side }} {{ order.quantity | money }} {{ order.symbol }} at
+                      {{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}? Nothing is
+                      sent until you confirm.
                     </span>
                     <span class="confirm-actions">
                       <button
@@ -171,34 +172,49 @@
                 <td>{{ order.symbol }}</td>
                 <td>{{ order.side }}</td>
                 <td class="num">{{ order.quantity | money }}</td>
-                <td class="num">{{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}</td>
                 <td class="num">
-                  {{ order.executedPrice != null ? (order.executedPrice | number: '1.2-2') + ' ' + order.instrumentCurrency : '—' }}
+                  {{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}
+                </td>
+                <td class="num">
+                  {{
+                    order.executedPrice != null
+                      ? (order.executedPrice | money: '1.2-2') + ' ' + order.instrumentCurrency
+                      : '—'
+                  }}
                 </td>
                 <td class="num">
                   @if (order.filledValue != null) {
-                    {{ order.filledValue | number: '1.2-2' }} {{ order.instrumentCurrency }}
-                    @if (order.instrumentCurrency !== order.accountCurrency && order.filledValueAccountCurrency != null) {
+                    {{ order.filledValue | money: '1.2-2' }} {{ order.instrumentCurrency }}
+                    @if (
+                      order.instrumentCurrency !== order.accountCurrency &&
+                      order.filledValueAccountCurrency != null
+                    ) {
                       <small class="currency-secondary">
-                        {{ order.filledValueAccountCurrency | number: '1.2-2' }} {{ order.accountCurrency }}
+                        {{ order.filledValueAccountCurrency | money: '1.2-2' }}
+                        {{ order.accountCurrency }}
                       </small>
                     }
-                  } @else { — }
+                  } @else {
+                    —
+                  }
                 </td>
                 <td class="num">
                   @if (order.feeAmount != null) {
-                    {{ order.feeAmountInstrumentCurrency | number: '1.2-2' }} {{ order.instrumentCurrency }}
+                    {{ order.feeAmountInstrumentCurrency | money: '1.2-2' }}
+                    {{ order.instrumentCurrency }}
                     @if (order.instrumentCurrency !== order.accountCurrency) {
                       <small class="currency-secondary">
-                        {{ order.feeAmount | number: '1.2-2' }} {{ order.accountCurrency }}
+                        {{ order.feeAmount | money: '1.2-2' }} {{ order.accountCurrency }}
                       </small>
                     }
-                  } @else { — }
+                  } @else {
+                    —
+                  }
                 </td>
                 <td class="num">
-                  {{ order.executedPrice != null ? (order.executedPrice | number: '1.2-2') : '—' }}
+                  {{ order.executedPrice != null ? (order.executedPrice | money: '1.2-2') : '—' }}
                 </td>
-                <td class="num">{{ value(order) | number: '1.2-2' }}</td>
+                <td class="num">{{ value(order) | money: '1.2-2' }}</td>
                 <td>
                   <app-order-status-badge [status]="order.status" />
                   @if (rejectionLabel(order.rejectionReason); as reason) {

@@ -16,7 +16,9 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
@@ -107,6 +109,13 @@ public class OrderGenerator {
             return;
         }
 
+        // The executor needs the instrument-to-account rate on the message; an
+        // instrument priced in a currency there is no rate for is left alone.
+        Optional<Map<String, BigDecimal>> rates = FxRates.forInstrument(instrument.get().currency());
+        if (rates.isEmpty()) {
+            return;
+        }
+
         boolean isBuy = random.nextBoolean();
         String side = isBuy ? "BUY" : "SELL";
         var price = isBuy ? tick.get().bid() : tick.get().ask();
@@ -118,7 +127,8 @@ public class OrderGenerator {
                 instrument.get().instrumentId(), side, quantity, price, idempotencyKey);
 
         OrderPlacedPayload payload = new OrderPlacedPayload(
-                "ORD-" + orderId, account.accountId(), symbol, side, quantity, price, idempotencyKey, Instant.now());
+                "ORD-" + orderId, account.accountId(), symbol, side, quantity, price, idempotencyKey, Instant.now(),
+                rates.get());
         EventEnvelope<OrderPlacedPayload> envelope = EventEnvelope.of("ORDER_PLACED", "trades-generator", payload);
         try {
             String json = objectMapper.writeValueAsString(envelope);

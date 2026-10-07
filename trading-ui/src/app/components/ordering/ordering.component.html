@@ -64,7 +64,12 @@
 
       <!-- Price -->
       <div class="form-group">
-        <label for="price">Price @if (quote(); as q) { ({{ q.currency }}) }</label>
+        <label for="price"
+          >Price
+          @if (quote(); as q) {
+            ({{ q.currency }})
+          }
+        </label>
         <input
           id="price"
           type="number"
@@ -153,9 +158,9 @@
           @if (r.currency !== r.accountCurrency) {
             <dt>Estimated in {{ r.accountCurrency }}</dt>
             <dd data-testid="order-review-account-total">
-              Value {{ r.estimatedCostAccountCurrency | number: '1.2-2' }} {{ r.accountCurrency }}
-              + fee {{ r.feeAccountCurrency | number: '1.2-2' }} {{ r.accountCurrency }}
-              = <strong>{{ r.totalAccountCurrency | number: '1.2-2' }} {{ r.accountCurrency }}</strong>
+              Value {{ r.estimatedCostAccountCurrency | money: '1.2-2' }} {{ r.accountCurrency }} +
+              fee {{ r.feeAccountCurrency | money: '1.2-2' }} {{ r.accountCurrency }} =
+              <strong>{{ r.totalAccountCurrency | money: '1.2-2' }} {{ r.accountCurrency }}</strong>
             </dd>
           }
 

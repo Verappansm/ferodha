@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -124,6 +125,50 @@ class OrderGeneratorTest {
         generator.generate();
 
         verify(orderPlacementMapper, never()).insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    @DisplayName("every ORDER_PLACED carries the FX rates the executor needs for the account currency")
+    void messageCarriesFxRates() throws Exception {
+        when(symbolMapper.findPollableSymbols()).thenReturn(List.of("AAPL"));
+        generator(1.0).generate();
+
+        org.mockito.ArgumentCaptor<String> json = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(eq("orders"), anyString(), json.capture());
+        var rates = objectMapper.readTree(json.getValue()).path("payload").path("instrumentToAccountRates");
+        assertEquals(0, new BigDecimal("1").compareTo(rates.path("USD").decimalValue()));
+        assertEquals(0, new BigDecimal("90").compareTo(rates.path("INR").decimalValue()));
+    }
+
+    @Test
+    @DisplayName("an INR instrument carries 1 for INR and 1/90 for USD")
+    void inrInstrumentRates() throws Exception {
+        when(symbolMapper.findPollableSymbols()).thenReturn(List.of("INFY.NS"));
+        when(orderPlacementMapper.findInstrumentBySymbol("INFY.NS")).thenReturn(
+                Optional.of(new InstrumentRow(INSTRUMENT_ID, "INR")));
+        when(quoteClient.fetchQuote("INFY.NS")).thenReturn(Optional.of(
+                new Quote("INFY.NS", new BigDecimal("1500.00"), new BigDecimal("1501.00"), "INR")));
+        generator(1.0).generate();
+
+        org.mockito.ArgumentCaptor<String> json = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(kafkaTemplate).send(eq("orders"), anyString(), json.capture());
+        var rates = objectMapper.readTree(json.getValue()).path("payload").path("instrumentToAccountRates");
+        assertEquals(0, BigDecimal.ONE.compareTo(rates.path("INR").decimalValue()));
+        assertEquals(1.0 / 90, rates.path("USD").asDouble(), 1e-12);
+    }
+
+    @Test
+    @DisplayName("an instrument priced in a currency with no rate is left alone: no order, no message")
+    void unsupportedCurrencySkipped() {
+        when(symbolMapper.findPollableSymbols()).thenReturn(List.of("SAP.DE"));
+        when(orderPlacementMapper.findInstrumentBySymbol("SAP.DE")).thenReturn(
+                Optional.of(new InstrumentRow(INSTRUMENT_ID, "EUR")));
+        when(quoteClient.fetchQuote("SAP.DE")).thenReturn(Optional.of(
+                new Quote("SAP.DE", new BigDecimal("100"), new BigDecimal("101"), "EUR")));
+        generator(1.0).generate();
+
+        verify(orderPlacementMapper, never()).insertOrder(any(), any(), any(), any(), any(), anyInt(), any(), any());
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), anyString());
     }
 
     @Test
