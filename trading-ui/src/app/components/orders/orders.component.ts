@@ -1,5 +1,6 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { OrderFilter, OrderHistoryEntry, OrderStatus, TradeApi } from '../../api/trade-api';
@@ -33,7 +34,7 @@ export const STATUS_FILTERS: OrderStatus[] = [
 
 @Component({
   selector: 'app-orders',
-  imports: [DatePipe, DecimalPipe, FormsModule, OrderStatusBadgeComponent],
+  imports: [DatePipe, MoneyPipe, FormsModule, OrderStatusBadgeComponent],
   templateUrl: './orders.component.html',
   styleUrls: ['./orders.component.css'],
 })

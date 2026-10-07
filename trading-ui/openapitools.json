@@ -56,6 +56,19 @@
           "enumPropertyNaming": "original"
         }
       },
+      "preferences-api": {
+        "generatorName": "typescript-angular",
+        "inputSpec": "../design/preferences-api.yaml",
+        "output": "src/app/api/generated/preferences",
+        "skipValidateSpec": true,
+        "openapiGeneratorIgnoreList": "api.module.ts,index.ts,git_push.sh,.gitignore,README.md",
+        "additionalProperties": {
+          "ngVersion": "21.0.0",
+          "providedIn": "root",
+          "fileNaming": "kebab-case",
+          "enumPropertyNaming": "original"
+        }
+      },
       "admin-trade-api": {
         "generatorName": "typescript-angular",
         "inputSpec": "../design/admin-trade-api.yaml",

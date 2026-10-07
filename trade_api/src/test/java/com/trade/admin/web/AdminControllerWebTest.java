@@ -59,6 +59,8 @@ class AdminControllerWebTest {
     private AdminInstrumentService instruments;
     @MockitoBean
     private SystemHealthService health;
+    @MockitoBean
+    private com.trade.admin.service.AdminFeeService fees;
 
     private static String bearer(String token) {
         return "Bearer " + token;

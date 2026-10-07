@@ -6,6 +6,7 @@ import com.trade.enums.AccountStatus;
 import com.trade.exception.AccountNotFoundException;
 import com.trade.security.JwtService;
 import com.trade.service.AccountService;
+import com.trade.service.BankFundsService;
 import com.trade.testsupport.JwtTestFixture;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +40,9 @@ class AccountControllerWebTest {
 
     @MockitoBean
     private AccountService accountService;
+
+    @MockitoBean
+    private BankFundsService bankFundsService;
 
     @Test
     void getAccountWithAValidTokenReturnsTheContractShapedResponse() throws Exception {

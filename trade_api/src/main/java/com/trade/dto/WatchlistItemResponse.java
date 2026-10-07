@@ -1,5 +1,6 @@
 package com.trade.dto;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +19,8 @@ public record WatchlistItemResponse(
         OffsetDateTime lastUpdated,
         OffsetDateTime addedAt,
         int displayOrder,
-        List<IntradayPricePoint> intradayData
+        List<IntradayPricePoint> intradayData,
+        BigDecimal alertPrice,
+        String alertDirection
 ) {
 }

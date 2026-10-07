@@ -6,18 +6,24 @@ import com.trade.dto.AddWatchlistItemRequest;
 import com.trade.dto.BulkAddWatchlistItemsRequest;
 import com.trade.dto.CreateWatchlistRequest;
 import com.trade.dto.IntradayPricePoint;
+import com.trade.dto.PriceAlertDtos;
 import com.trade.dto.ReorderWatchlistItemsRequest;
 import com.trade.dto.UpdateWatchlistRequest;
 import com.trade.dto.WatchlistItemResponse;
 import com.trade.dto.WatchlistResponse;
 import com.trade.exception.InstrumentNotFoundException;
+import com.trade.exception.InvalidRequestException;
 import com.trade.exception.WatchlistConflictException;
 import com.trade.exception.WatchlistItemNotFoundException;
 import com.trade.exception.WatchlistNotFoundException;
 import com.trade.mapper.InstrumentRow;
+import com.trade.service.MarketDataService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -31,16 +37,21 @@ import java.util.stream.Collectors;
 @Service
 public class WatchlistService {
 
+    private static final Logger log = LoggerFactory.getLogger(WatchlistService.class);
+
     private final WatchlistRepository watchlistRepository;
     private final WatchlistItemRepository watchlistItemRepository;
     private final InstrumentRepository instrumentRepository;
+    private final MarketDataService marketDataService;
 
     public WatchlistService(WatchlistRepository watchlistRepository,
                             WatchlistItemRepository watchlistItemRepository,
-                            InstrumentRepository instrumentRepository) {
+                            InstrumentRepository instrumentRepository,
+                            MarketDataService marketDataService) {
         this.watchlistRepository = watchlistRepository;
         this.watchlistItemRepository = watchlistItemRepository;
         this.instrumentRepository = instrumentRepository;
+        this.marketDataService = marketDataService;
     }
 
     // Watchlist CRUD operations
@@ -122,7 +133,9 @@ public class WatchlistService {
                 watchlistId,
                 instrument.getInstrumentId(),
                 displayOrder,
-                OffsetDateTime.now()
+                OffsetDateTime.now(),
+                null,
+                null
         );
         watchlistItemRepository.save(item);
 
@@ -182,6 +195,200 @@ public class WatchlistService {
         watchlistItemRepository.updateDisplayOrders(watchlistId, request.itemOrderMap());
     }
 
+    // Price Alert operations
+
+    @Transactional
+    public PriceAlertDtos.PriceAlertResponse createPriceAlert(UUID userId, PriceAlertDtos.CreatePriceAlertRequest request)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException, InvalidRequestException {
+        if (!request.isValid()) {
+            throw new InvalidRequestException("Invalid price alert request: itemId, alertPrice (>=0), and alertDirection (ABOVE/BELOW) are required");
+        }
+
+        WatchlistItem item = watchlistItemRepository.findById(request.itemId())
+                .orElseThrow(() -> new WatchlistItemNotFoundException(request.itemId().toString()));
+
+        // Verify the item belongs to a watchlist owned by the user
+        Watchlist watchlist = watchlistRepository.findById(item.getWatchlistId())
+                .filter(w -> w.getUserId().equals(userId))
+                .orElseThrow(() -> new WatchlistNotFoundException(item.getWatchlistId().toString()));
+
+        // Update the alert
+        watchlistItemRepository.updateAlert(item.getItemId(), request.alertPrice(), request.alertDirection());
+
+        // Fetch updated item with instrument
+        WatchlistItem updatedItem = watchlistItemRepository.findById(item.getItemId()).orElseThrow();
+        Instrument instrument = instrumentRepository.findByInstrumentId(updatedItem.getInstrumentId()).orElse(null);
+
+        return new PriceAlertDtos.PriceAlertResponse(
+                updatedItem.getItemId(),
+                instrument != null ? instrument.getSymbol() : updatedItem.getInstrumentId().toString(),
+                instrument != null ? instrument.getDisplayName() : "Unknown",
+                updatedItem.getAlertPrice(),
+                updatedItem.getAlertDirection()
+        );
+    }
+
+    @Transactional
+    public PriceAlertDtos.PriceAlertResponse updatePriceAlert(UUID userId, UUID itemId, PriceAlertDtos.UpdatePriceAlertRequest request)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException, InvalidRequestException {
+        if (!request.isValid()) {
+            throw new InvalidRequestException("Invalid price alert update: alertPrice must be >=0 and alertDirection must be ABOVE or BELOW");
+        }
+
+        WatchlistItem item = watchlistItemRepository.findById(itemId)
+                .orElseThrow(() -> new WatchlistItemNotFoundException(itemId.toString()));
+
+        // Verify the item belongs to a watchlist owned by the user
+        Watchlist watchlist = watchlistRepository.findById(item.getWatchlistId())
+                .filter(w -> w.getUserId().equals(userId))
+                .orElseThrow(() -> new WatchlistNotFoundException(item.getWatchlistId().toString()));
+
+        // Update the alert (null values will clear the alert)
+        BigDecimal alertPrice = request.alertPrice();
+        String alertDirection = request.alertDirection();
+        
+        watchlistItemRepository.updateAlert(itemId, alertPrice, alertDirection);
+
+        // Fetch updated item with instrument
+        WatchlistItem updatedItem = watchlistItemRepository.findById(itemId).orElseThrow();
+        Instrument instrument = instrumentRepository.findByInstrumentId(updatedItem.getInstrumentId()).orElse(null);
+
+        return new PriceAlertDtos.PriceAlertResponse(
+                updatedItem.getItemId(),
+                instrument != null ? instrument.getSymbol() : updatedItem.getInstrumentId().toString(),
+                instrument != null ? instrument.getDisplayName() : "Unknown",
+                updatedItem.getAlertPrice(),
+                updatedItem.getAlertDirection()
+        );
+    }
+
+    @Transactional
+    public void deletePriceAlert(UUID userId, UUID itemId)
+            throws WatchlistNotFoundException, WatchlistItemNotFoundException {
+        WatchlistItem item = watchlistItemRepository.findById(itemId)
+                .orElseThrow(() -> new WatchlistItemNotFoundException(itemId.toString()));
+
+        // Verify the item belongs to a watchlist owned by the user
+        Watchlist watchlist = watchlistRepository.findById(item.getWatchlistId())
+                .filter(w -> w.getUserId().equals(userId))
+                .orElseThrow(() -> new WatchlistNotFoundException(item.getWatchlistId().toString()));
+
+        // Clear the alert by setting to null
+        watchlistItemRepository.updateAlert(itemId, null, null);
+    }
+
+    public List<PriceAlertDtos.PriceAlertCheckResult> checkPriceAlerts(UUID userId) {
+        List<WatchlistResponse> watchlists = getWatchlists(userId);
+        List<PriceAlertDtos.PriceAlertCheckResult> results = new ArrayList<>();
+
+        for (WatchlistResponse watchlist : watchlists) {
+            for (WatchlistItemResponse item : watchlist.items()) {
+                if (item.alertPrice() != null && item.alertDirection() != null) {
+                    BigDecimal currentPrice = BigDecimal.valueOf(item.lastPrice());
+                    boolean triggered = false;
+
+                    if ("ABOVE".equals(item.alertDirection()) && currentPrice.compareTo(item.alertPrice()) > 0) {
+                        triggered = true;
+                    } else if ("BELOW".equals(item.alertDirection()) && currentPrice.compareTo(item.alertPrice()) < 0) {
+                        triggered = true;
+                    }
+
+                    results.add(new PriceAlertDtos.PriceAlertCheckResult(
+                            item.itemId(),
+                            userId,
+                            item.symbol(),
+                            item.name(),
+                            item.alertPrice(),
+                            item.alertDirection(),
+                            currentPrice,
+                            triggered
+                    ));
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /**
+     * Check price alerts for all users (used by scheduled task).
+     * Fetches real-time prices from MarketDataService for accurate checking.
+     */
+    public List<PriceAlertDtos.PriceAlertCheckResult> checkPriceAlertsForAllUsers() {
+        List<Watchlist> allWatchlists = watchlistRepository.findAll();
+        List<PriceAlertDtos.PriceAlertCheckResult> results = new ArrayList<>();
+
+        // Collect all symbols that have alerts
+        List<String> symbolsWithAlerts = new ArrayList<>();
+        for (Watchlist watchlist : allWatchlists) {
+            List<WatchlistItem> items = watchlistItemRepository.findByWatchlistId(watchlist.getWatchlistId());
+            for (WatchlistItem item : items) {
+                if (item.getAlertPrice() != null && item.getAlertDirection() != null) {
+                    Instrument instrument = instrumentRepository.findByInstrumentId(item.getInstrumentId()).orElse(null);
+                    if (instrument != null) {
+                        symbolsWithAlerts.add(instrument.getSymbol());
+                    }
+                }
+            }
+        }
+
+        // Fetch real-time prices for all symbols with alerts
+        Map<String, BigDecimal> currentPrices = new HashMap<>();
+        if (!symbolsWithAlerts.isEmpty()) {
+            try {
+                currentPrices = marketDataService.getLatestPrices(symbolsWithAlerts);
+            } catch (Exception e) {
+                log.warn("Failed to fetch real-time prices for alert checking, using stored prices", e);
+            }
+        }
+
+        // Check each alert
+        for (Watchlist watchlist : allWatchlists) {
+            UUID userId = watchlist.getUserId();
+            List<WatchlistItem> items = watchlistItemRepository.findByWatchlistId(watchlist.getWatchlistId());
+            
+            for (WatchlistItem item : items) {
+                if (item.getAlertPrice() != null && item.getAlertDirection() != null) {
+                    Instrument instrument = instrumentRepository.findByInstrumentId(item.getInstrumentId()).orElse(null);
+                    if (instrument == null) continue;
+
+                    String symbol = instrument.getSymbol();
+                    BigDecimal currentPrice = currentPrices.get(symbol);
+                    
+                    // Fallback to stored price if real-time not available
+                    if (currentPrice == null) {
+                        WatchlistItemResponse itemResponse = toWatchlistItemResponse(item, instrument);
+                        currentPrice = BigDecimal.valueOf(itemResponse.lastPrice());
+                    }
+                    
+                    if (currentPrice == null || currentPrice.signum() == 0) {
+                        continue; // Skip if no price available
+                    }
+
+                    boolean triggered = false;
+                    if ("ABOVE".equals(item.getAlertDirection()) && currentPrice.compareTo(item.getAlertPrice()) > 0) {
+                        triggered = true;
+                    } else if ("BELOW".equals(item.getAlertDirection()) && currentPrice.compareTo(item.getAlertPrice()) < 0) {
+                        triggered = true;
+                    }
+
+                    results.add(new PriceAlertDtos.PriceAlertCheckResult(
+                            item.getItemId(),
+                            userId,
+                            symbol,
+                            instrument.getDisplayName(),
+                            item.getAlertPrice(),
+                            item.getAlertDirection(),
+                            currentPrice,
+                            triggered
+                    ));
+                }
+            }
+        }
+
+        return results;
+    }
+
     // Helper methods
 
     private WatchlistResponse toWatchlistResponse(Watchlist watchlist) {
@@ -212,7 +419,9 @@ public class WatchlistService {
                     null,
                     item.getAddedAt(),
                     item.getDisplayOrder(),
-                    List.of()
+                    List.of(),
+                    item.getAlertPrice(),
+                    item.getAlertDirection()
             );
         }
 
@@ -238,7 +447,9 @@ public class WatchlistService {
                 lastUpdated,
                 item.getAddedAt(),
                 item.getDisplayOrder(),
-                intradayData
+                intradayData,
+                item.getAlertPrice(),
+                item.getAlertDirection()
         );
     }
 

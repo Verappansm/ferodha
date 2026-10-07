@@ -357,6 +357,72 @@ paths:
         '404':
           $ref: '#/components/responses/AccountNotFound'
 
+  /api/v1/accounts/{id}/bank-funds:
+    get:
+      tags: [Accounts]
+      operationId: getBankFunds
+      summary: Get the authenticated customer's linked bank and trading balances
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: The balances of the account and its verified, linked third-party bank account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankFundsResponse'
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+
+  /api/v1/accounts/{id}/bank-funds/deposits:
+    post:
+      tags: [Accounts]
+      operationId: depositBankFunds
+      summary: Deposit from the linked third-party bank account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankTransferRequest' }
+      responses:
+        '200':
+          description: The atomic transfer completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankFundsResponse' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '409': { $ref: '#/components/responses/InvalidInput' }
+
+  /api/v1/accounts/{id}/bank-funds/withdrawals:
+    post:
+      tags: [Accounts]
+      operationId: withdrawBankFunds
+      summary: Withdraw from the trading account to the linked third-party bank account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankTransferRequest' }
+      responses:
+        '200':
+          description: The atomic transfer completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankFundsResponse' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '409': { $ref: '#/components/responses/InvalidInput' }
+
   /api/v1/accounts/{id}/orders:
     get:
       tags: [Accounts]
@@ -431,6 +497,13 @@ paths:
             format: int64
             default: 0
             minimum: 0
+        - name: search
+          in: query
+          required: false
+          description: Case-insensitive ticker or instrument-name search.
+          schema:
+            type: string
+            maxLength: 100
       responses:
         '200':
           description: Paginated list of tradable instruments.
@@ -836,6 +909,37 @@ components:
           type: string
           format: date-time
           example: '2026-09-28T09:14:22Z'
+
+    BankTransferRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, pinHash, idempotencyKey]
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          maximum: 99999999999999.9999
+        pinHash:
+          type: string
+          minLength: 60
+          maxLength: 60
+          description: Bcrypt client proof of the PIN, computed by the client; the raw PIN is never transmitted.
+        idempotencyKey:
+          type: string
+          format: uuid
+
+    BankFundsResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, bankAccountNumber, tradingBalance, bankBalance, currency, asOf]
+      properties:
+        accountId: { type: integer, format: int64 }
+        bankAccountNumber: { type: string }
+        tradingBalance: { type: number, format: double }
+        bankBalance: { type: number, format: double }
+        currency: { type: string }
+        asOf: { type: string, format: date-time }
 
     BalanceResponse:
       type: object

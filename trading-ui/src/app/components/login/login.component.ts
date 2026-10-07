@@ -11,6 +11,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthApi } from '../../api/auth-api';
 import { errorMessage } from '../../core/errors/error-message';
+import { PreferencesStore } from '../../core/preferences/preferences.store';
 import { Session } from '../../core/session/session';
 import { AuthLayoutComponent } from '../auth-layout/auth-layout.component';
 import { PASSWORD_MAX, PASSWORD_MIN } from '../registration/registration.component';
@@ -52,6 +53,7 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly authApi = inject(AuthApi);
+  private readonly preferences = inject(PreferencesStore);
 
   // The limits are the contract's LoginRequest maxLength values. The
   // username is an email address (story_docs/contract-breach.md, B01).
@@ -97,9 +99,7 @@ export class LoginComponent {
     const { username, password } = this.form.getRawValue();
     try {
       await this.session.signIn(username, password);
-      // Land the user where they were going, or at the dashboard if no return address.
-      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-      await this.router.navigateByUrl(returnUrl || '/dashboard');
+      await this.enter();
     } catch (error) {
       if (isPasswordChangeRequired(error)) {
         this.heldPassword = password;
@@ -131,13 +131,22 @@ export class LoginComponent {
       await firstValueFrom(this.authApi.changePassword(username, this.heldPassword, newPassword));
       this.heldPassword = '';
       await this.session.signIn(username, newPassword);
-      const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-      await this.router.navigateByUrl(returnUrl || '/dashboard');
+      await this.enter();
     } catch (error) {
       this.error.set(errorMessage(error, CHANGE_MESSAGES));
     } finally {
       this.isLoading.set(false);
     }
+  }
+
+  /**
+   * Applies the customer's saved preferences before the first screen shows,
+   * then lands where they were going, or on their chosen start page.
+   */
+  private async enter(): Promise<void> {
+    await this.preferences.load();
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+    await this.router.navigateByUrl(returnUrl || this.preferences.startPath());
   }
 
   /** Back to the sign-in form; nothing was changed. */

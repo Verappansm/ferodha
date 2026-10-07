@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.preferences.mapper.PreferencesMapper">
+
+    <resultMap id="preferenceRow" type="com.trade.preferences.mapper.PreferenceRow">
+        <constructor>
+            <idArg column="account_id" javaType="java.lang.Long"/>
+            <arg column="default_account_id" javaType="java.lang.Long"/>
+            <arg column="notification_channel" javaType="java.lang.String"/>
+            <arg column="notify_order_filled" javaType="java.lang.Boolean"/>
+            <arg column="notify_order_rejected" javaType="java.lang.Boolean"/>
+            <arg column="notify_order_cancelled" javaType="java.lang.Boolean"/>
+            <arg column="notify_price_alerts" javaType="java.lang.Boolean"/>
+            <arg column="theme" javaType="java.lang.String"/>
+            <arg column="number_format" javaType="java.lang.String"/>
+            <arg column="compact_tables" javaType="java.lang.Boolean"/>
+            <arg column="hide_balances" javaType="java.lang.Boolean"/>
+            <arg column="start_page" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByAccountId" resultMap="preferenceRow">
+        SELECT account_id, default_account_id, notification_channel,
+               notify_order_filled, notify_order_rejected, notify_order_cancelled, notify_price_alerts,
+               theme, number_format, compact_tables, hide_balances, start_page
+        FROM pref_customer_preference
+        WHERE account_id = #{accountId}
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO pref_customer_preference (
+            account_id, default_account_id, notification_channel,
+            notify_order_filled, notify_order_rejected, notify_order_cancelled, notify_price_alerts,
+            theme, number_format, compact_tables, hide_balances, start_page)
+        VALUES (
+            #{accountId}, #{defaultAccountId}, #{notificationChannel},
+            #{notifyOrderFilled}, #{notifyOrderRejected}, #{notifyOrderCancelled}, #{notifyPriceAlerts},
+            #{theme}, #{numberFormat}, #{compactTables}, #{hideBalances}, #{startPage})
+        ON CONFLICT (account_id) DO UPDATE SET
+            notification_channel   = COALESCE(EXCLUDED.notification_channel, pref_customer_preference.notification_channel),
+            notify_order_filled    = COALESCE(EXCLUDED.notify_order_filled, pref_customer_preference.notify_order_filled),
+            notify_order_rejected  = COALESCE(EXCLUDED.notify_order_rejected, pref_customer_preference.notify_order_rejected),
+            notify_order_cancelled = COALESCE(EXCLUDED.notify_order_cancelled, pref_customer_preference.notify_order_cancelled),
+            notify_price_alerts    = COALESCE(EXCLUDED.notify_price_alerts, pref_customer_preference.notify_price_alerts),
+            theme                  = COALESCE(EXCLUDED.theme, pref_customer_preference.theme),
+            number_format          = COALESCE(EXCLUDED.number_format, pref_customer_preference.number_format),
+            compact_tables         = COALESCE(EXCLUDED.compact_tables, pref_customer_preference.compact_tables),
+            hide_balances          = COALESCE(EXCLUDED.hide_balances, pref_customer_preference.hide_balances),
+            start_page             = COALESCE(EXCLUDED.start_page, pref_customer_preference.start_page),
+            updated_at             = now()
+    </insert>
+
+    <delete id="deleteByAccountId">
+        DELETE FROM pref_customer_preference
+        WHERE account_id = #{accountId}
+    </delete>
+
+    <select id="findContactEmail" resultType="java.lang.String">
+        SELECT u.email
+        FROM Accounts a
+        JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{accountId}
+    </select>
+
+</mapper>

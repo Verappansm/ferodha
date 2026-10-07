@@ -28,6 +28,11 @@
     <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/014-order-fee-rate.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/015-strategies.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/016-strategy-last-checked.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/017-preferences.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-price-alerts.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-watchlist-display-order.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-bank-transfer-idempotency.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/016-notifications.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
 

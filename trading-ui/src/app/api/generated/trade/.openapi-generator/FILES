@@ -8,6 +8,8 @@ encoder.ts
 model/account-response.ts
 model/account-status.ts
 model/balance-response.ts
+model/bank-funds-response.ts
+model/bank-transfer-request.ts
 model/error-response.ts
 model/instrument-quote.ts
 model/instrument-response.ts

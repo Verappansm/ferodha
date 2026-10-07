@@ -1,6 +1,7 @@
 import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { AccountsService } from './generated/trade/api/accounts.service';
 import { OrdersService } from './generated/trade/api/orders.service';
 import { InstrumentsService } from './generated/trade/api/instruments.service';
@@ -65,6 +66,9 @@ export interface StrategyResponse {
   consecutiveFailures: number;
   expiresAt: string | null;
   createdAt: string;
+  /** The price it last watched (the ask for a BUY, the bid for a SELL) and when. */
+  lastPrice: number | null;
+  lastCheckedAt: string | null;
 }
 
 export interface StrategyEventResponse {
@@ -110,11 +114,33 @@ export interface WatchlistItemResponse {
   addedAt: string;
   displayOrder: number;
   intradayData: IntradayPricePoint[];
+  alertPrice: number | null;
+  alertDirection: string | null;
 }
 
 export interface IntradayPricePoint {
   timestamp: string;
   price: number;
+}
+
+/** Price Alert DTOs */
+export interface CreatePriceAlertRequest {
+  itemId: string;
+  alertPrice: number;
+  alertDirection: 'ABOVE' | 'BELOW';
+}
+
+export interface UpdatePriceAlertRequest {
+  alertPrice: number | null;
+  alertDirection: 'ABOVE' | 'BELOW' | null;
+}
+
+export interface PriceAlertResponse {
+  itemId: string;
+  symbol: string;
+  name: string;
+  alertPrice: number | null;
+  alertDirection: string | null;
 }
 
 export interface CreateWatchlistRequest {
@@ -140,6 +166,25 @@ export interface UpdateWatchlistRequest {
   displayOrder?: number;
 }
 
+export type BankTransferType = 'DEPOSIT' | 'WITHDRAWAL';
+
+/** Balances of the current user's database-linked external bank account and trading account. */
+export interface BankFundsResponse {
+  accountId: number;
+  bankAccountNumber: string;
+  tradingBalance: number;
+  bankBalance: number;
+  currency: string;
+  asOf: string;
+}
+
+export interface BankTransferRequest {
+  amount: number;
+  /** Bcrypt client proof computed from the PIN in the browser; never the raw PIN. */
+  pinHash: string;
+  idempotencyKey: string;
+}
+
 /** The chart ranges the Trade REST API serves: minute bars for 1D, daily candles otherwise. */
 export type ChartRange = PriceHistory.RangeEnum;
 
@@ -161,6 +206,15 @@ export class TradeApi {
 
   balance(accountId: number): Observable<BalanceResponse> {
     return this.accounts.getBalance(accountId);
+  }
+
+  bankFunds(accountId: number): Observable<BankFundsResponse> {
+    return this.http.get<BankFundsResponse>(`${this.baseUrl}/api/v1/accounts/${accountId}/bank-funds`);
+  }
+
+  bankTransfer(accountId: number, type: BankTransferType, request: BankTransferRequest): Observable<BankFundsResponse> {
+    const path = type === 'DEPOSIT' ? 'deposits' : 'withdrawals';
+    return this.http.post<BankFundsResponse>(`${this.baseUrl}/api/v1/accounts/${accountId}/bank-funds/${path}`, request);
   }
 
   positions(accountId: number): Observable<PositionResponse[]> {
@@ -191,7 +245,26 @@ export class TradeApi {
     offset?: number,
     search?: string,
   ): Observable<PaginatedInstrumentsResponse> {
-    return this.instruments.getInstruments(pageSize, offset, search);
+    const query = search?.trim().toLowerCase();
+    if (!query) {
+      return this.instruments.getInstruments(pageSize, offset);
+    }
+
+    return this.instruments.getInstruments(pageSize, offset).pipe(
+      map((response) => {
+        const instruments = response.instruments.filter(
+          (instrument) =>
+            instrument.symbol.toLowerCase().includes(query) ||
+            instrument.name.toLowerCase().includes(query),
+        );
+        return {
+          ...response,
+          instruments,
+          total: instruments.length,
+          pageSize: instruments.length,
+        };
+      }),
+    );
   }
 
   instrument(symbol: string): Observable<InstrumentResponse> {
@@ -219,6 +292,14 @@ export class TradeApi {
 
   createStrategy(request: CreateStrategyRequest): Observable<StrategyResponse> {
     return this.http.post<StrategyResponse>(`${this.baseUrl}/api/v1/strategies`, request);
+  }
+
+  /** Rewrites a strategy that is not running (disabled or stopped); a running one answers STR-409. */
+  updateStrategy(strategyId: string, request: CreateStrategyRequest): Observable<StrategyResponse> {
+    return this.http.put<StrategyResponse>(
+      `${this.baseUrl}/api/v1/strategies/${strategyId}`,
+      request,
+    );
   }
 
   enableStrategy(strategyId: string): Observable<StrategyResponse> {
@@ -317,6 +398,39 @@ export class TradeApi {
     return this.http.patch<void>(
       `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/reorder`,
       request,
+    );
+  }
+
+  // ===== Price Alert API =====
+
+  /** Create a price alert for a watchlist item */
+  createPriceAlert(
+    watchlistId: string,
+    itemId: string,
+    request: CreatePriceAlertRequest,
+  ): Observable<PriceAlertResponse> {
+    return this.http.post<PriceAlertResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
+      request,
+    );
+  }
+
+  /** Update a price alert for a watchlist item */
+  updatePriceAlert(
+    watchlistId: string,
+    itemId: string,
+    request: UpdatePriceAlertRequest,
+  ): Observable<PriceAlertResponse> {
+    return this.http.patch<PriceAlertResponse>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
+      request,
+    );
+  }
+
+  /** Delete a price alert for a watchlist item */
+  deletePriceAlert(watchlistId: string, itemId: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.baseUrl}/api/v1/watchlists/${watchlistId}/items/${itemId}/alert`,
     );
   }
 

@@ -9,7 +9,7 @@ import java.util.Optional;
 // so the portfolio values a holding at the rate the trade was charged at.
 // Any other pair is unsupported: the holding is left out of the totals and
 // the summary is marked partial rather than summed unconverted.
-final class FixedFxRates {
+public final class FixedFxRates {
 
     private static final String USD = "USD";
     private static final String INR = "INR";
@@ -18,7 +18,12 @@ final class FixedFxRates {
     private FixedFxRates() {
     }
 
-    static Optional<BigDecimal> convert(BigDecimal amount, String fromCurrency, String toCurrency) {
+    // INR per USD, for SQL that has to order amounts across the two currencies.
+    public static BigDecimal inrPerUsd() {
+        return USD_TO_INR;
+    }
+
+    public static Optional<BigDecimal> convert(BigDecimal amount, String fromCurrency, String toCurrency) {
         if (amount == null) {
             return Optional.empty();
         }

@@ -16,14 +16,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-// The other QuoteSource implementation - active only under market-sim (see
-// FauxnanceQuoteClient's own @Profile for the other half of this pairing).
-// Calls trades_generator's own quote endpoint instead of Fauxnance
-// directly; that service is the one actually holding FAUXNANCE_API_KEY and
-// calibrating against real quotes/candles under this profile. This class
-// never talks to Fauxnance itself.
+// The live ticker as the executor's price source, under every profile: the
+// current tick pricing_generator is publishing to market-data (TRADES_GENERATOR_URL
+// points at it in docker-compose.yml and the Windows scripts). A BUY is priced
+// at the ticker's ask and a SELL at its bid by FillRule, the same numbers the
+// UI shows and the order ticket suggests, so a limit price chosen from what is
+// on screen fills. This class never talks to Fauxnance; with no tick yet (or
+// pricing_generator down) it answers empty and the order is rejected
+// PRICE_UNAVAILABLE. The retired direct-to-Fauxnance source is
+// FauxnanceQuoteClient (profile fauxnance-direct), which switches this off.
 @Component
-@Profile("market-sim")
+@Profile("!fauxnance-direct")
 public class TradesGeneratorQuoteSource implements QuoteSource {
 
     private static final Logger log = LoggerFactory.getLogger(TradesGeneratorQuoteSource.class);

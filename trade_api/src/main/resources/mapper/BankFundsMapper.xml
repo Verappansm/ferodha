@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.BankFundsMapper">
+    <resultMap id="bankFunds" type="com.trade.mapper.BankFundsRow">
+        <constructor>
+            <idArg column="id" javaType="long"/>
+            <arg column="account_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="bank_account_number" javaType="java.lang.String"/>
+            <arg column="pin_hash" javaType="java.lang.String"/>
+            <arg column="cash_balance" javaType="java.math.BigDecimal"/>
+            <arg column="bank_balance" javaType="java.math.BigDecimal"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="version" javaType="int"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="fundsColumns">
+        a.id, a.account_id, a.bank_account_number, b.pin_hash, a.cash_balance,
+        b.balance AS bank_balance, a.currency, a.status, a.version
+    </sql>
+
+    <!-- Email equality is intentional: an Accounts foreign key alone proves a bank row exists,
+         but this proves the linked external account is owned by the same user. -->
+    <select id="findByAccountId" resultMap="bankFunds">
+        SELECT <include refid="fundsColumns"/>
+        FROM Accounts a
+        JOIN Third_Party_Bank b ON b.bank_account_number = a.bank_account_number
+        JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{accountId} AND lower(b.email) = lower(u.email)
+    </select>
+
+    <select id="findAndLockByAccountId" resultMap="bankFunds">
+        SELECT <include refid="fundsColumns"/>
+        FROM Accounts a
+        JOIN Third_Party_Bank b ON b.bank_account_number = a.bank_account_number
+        JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{accountId} AND lower(b.email) = lower(u.email)
+        FOR UPDATE OF a, b
+    </select>
+
+    <update id="debitBank">
+        UPDATE Third_Party_Bank SET balance = balance - #{amount}
+        WHERE bank_account_number = #{bankAccountNumber} AND balance >= #{amount}
+    </update>
+    <update id="creditBank">
+        UPDATE Third_Party_Bank SET balance = balance + #{amount}
+        WHERE bank_account_number = #{bankAccountNumber}
+    </update>
+    <insert id="insertTransaction">
+        INSERT INTO Transactions (account_id, transaction_type, amount, metadata, idempotency_key)
+        VALUES (#{accountUuid}, CAST(#{type} AS transaction_type_enum), #{amount},
+                jsonb_build_object('source', 'linked_bank'), #{idempotencyKey}::text)
+    </insert>
+</mapper>

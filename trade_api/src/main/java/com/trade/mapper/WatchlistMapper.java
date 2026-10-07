@@ -14,6 +14,8 @@ public interface WatchlistMapper {
 
     List<WatchlistRow> findByUserId(@Param("userId") UUID userId);
 
+    List<WatchlistRow> findAll();
+
     void insert(WatchlistRow row);
 
     void deleteById(@Param("watchlistId") UUID watchlistId);

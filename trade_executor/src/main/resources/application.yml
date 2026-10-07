@@ -48,7 +48,9 @@ fauxnance:
   base-url: ${FAUXNANCE_API_URL}
   api-key: ${FAUXNANCE_API_KEY}
 
-# Only consulted under the market-sim profile - see TradesGeneratorQuoteSource.
+# The live ticker the executor prices fills against (pricing_generator's
+# current tick) - see TradesGeneratorQuoteSource. Read under every profile
+# except the retired fauxnance-direct.
 trades-generator:
   base-url: ${TRADES_GENERATOR_URL:http://trades-generator:8083}
 

@@ -1,7 +1,9 @@
-import { Component, computed, inject, signal, effect, OnDestroy } from '@angular/core';
+import { Component, computed, inject, signal, effect, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { formatNumber } from '../../core/format/number-format';
+import { PreferencesStore } from '../../core/preferences/preferences.store';
 import { Session } from '../../core/session/session';
 import {
   TradeApi,
@@ -13,6 +15,9 @@ import {
   PriceHistory,
   PricePoint,
   PriceSnapshot,
+  CreatePriceAlertRequest,
+  UpdatePriceAlertRequest,
+  PriceAlertResponse,
 } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
 import {
@@ -22,8 +27,10 @@ import {
   RowClassParams,
   ValueFormatterParams,
   ICellRendererParams,
+  CellValueChangedEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
+import { AgGridThemeComponent } from './ag-grid-theme.component';
 
 const WATCHLIST_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
@@ -39,17 +46,20 @@ interface WatchlistRow {
   dayChangePercent: number;
   intradayData: IntradayPricePoint[];
   displayOrder: number;
+  alertPrice: number | null;
+  alertDirection: string | null;
 }
 
 @Component({
   selector: 'app-watchlist',
   standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular],
+  imports: [CommonModule, FormsModule, AgGridAngular, AgGridThemeComponent],
   templateUrl: './watchlist.component.html',
   styleUrls: ['./watchlist.component.css'],
 })
 export class WatchlistComponent implements OnDestroy {
   private readonly session = inject(Session);
+  private readonly preferences = inject(PreferencesStore);
   private readonly tradeApi = inject(TradeApi);
   private readonly router = inject(Router);
 
@@ -77,6 +87,24 @@ export class WatchlistComponent implements OnDestroy {
   // Edit mode
   readonly isEditing = signal(false);
   readonly editRows = signal<WatchlistRow[]>([]);
+
+  // Price Alert modal
+  readonly showCreateAlertModal = signal(false);
+  readonly createAlertItemId = signal<string | null>(null);
+  readonly createAlertSymbol = signal<string>('');
+  readonly createAlertName = signal<string>('');
+  readonly createAlertPrice = signal<number | null>(null);
+  readonly createAlertDirection = signal<'ABOVE' | 'BELOW'>('ABOVE');
+  readonly isCreatingAlert = signal(false);
+  readonly createAlertError = signal('');
+  readonly createAlertAvailableItems = signal<WatchlistRow[]>([]);
+
+  // Edit alert state
+  readonly editingAlertItemId = signal<string | null>(null);
+
+  // Notifications
+  readonly notifications = signal<Array<{id: number; message: string; type: 'success' | 'error' | 'info'}>>([]);
+  private notificationCounter = 0;
 
   // Auto-refresh prices (every 15 seconds, similar to instruments component)
   private priceRefreshInterval: ReturnType<typeof setInterval> | null = null;
@@ -111,6 +139,9 @@ export class WatchlistComponent implements OnDestroy {
   readonly priceMap = signal<ReadonlyMap<string, PriceSnapshot>>(new Map());
 
   readonly columnDefs = computed<ColDef<WatchlistRow>[]>(() => {
+    const isEditing = this.isEditing();
+    const editingAlertId = this.editingAlertItemId();
+
     const defs: any[] = [
       {
         field: 'symbol',
@@ -136,7 +167,9 @@ export class WatchlistComponent implements OnDestroy {
           // Get real-time price from price map
           const realPrice = this.priceMap().get(p.data?.symbol || '')?.mid;
           const displayPrice = realPrice ?? p.value;
-          return displayPrice ? `$${displayPrice.toFixed(2)}` : '—';
+          return displayPrice
+            ? `${formatNumber(displayPrice, this.preferences.numberFormat(), '1.2-2')}`
+            : '—';
         },
         cellClass: (params: any) => {
           const changePercent = params.data?.dayChangePercent as number;
@@ -155,6 +188,56 @@ export class WatchlistComponent implements OnDestroy {
         cellStyle: { padding: '4px 8px' },
       },
       {
+        field: 'alertPrice',
+        headerName: 'Alert Price',
+        width: 120,
+        minWidth: 110,
+        valueFormatter: (p: ValueFormatterParams<WatchlistRow, number | null>) => {
+          return p.value != null ? `$${p.value.toFixed(2)}` : '—';
+        },
+        editable: isEditing,
+        cellEditor: 'agNumberCellEditor',
+        cellEditorParams: {
+          precision: 2,
+          step: 0.01,
+          min: 0,
+        },
+        cellClass: (params: any) => {
+          const row = params.data;
+          if (row && row.alertPrice !== null && row.alertDirection) {
+            const currentPrice = this.priceMap().get(row.symbol)?.mid ?? row.lastPrice;
+            if (row.alertDirection === 'ABOVE' && currentPrice > row.alertPrice) {
+              return 'alert-triggered';
+            }
+            if (row.alertDirection === 'BELOW' && currentPrice < row.alertPrice) {
+              return 'alert-triggered';
+            }
+          }
+          return '';
+        },
+        onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
+          this.onAlertPriceChanged(event);
+        },
+      },
+      {
+        field: 'alertDirection',
+        headerName: 'Alert When',
+        width: 120,
+        minWidth: 110,
+        valueFormatter: (p: ValueFormatterParams<WatchlistRow, string | null>) => {
+          if (!p.value) return '—';
+          return p.value === 'ABOVE' ? 'Goes Above' : 'Goes Below';
+        },
+        editable: isEditing,
+        cellEditor: 'agSelectCellEditor',
+        cellEditorParams: {
+          values: ['ABOVE', 'BELOW'],
+        },
+        onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
+          this.onAlertDirectionChanged(event);
+        },
+      },
+      {
         field: 'itemId',
         headerName: '',
         width: 85,
@@ -162,11 +245,11 @@ export class WatchlistComponent implements OnDestroy {
         maxWidth: 85,
         suppressAutoSize: true,
         suppressMovable: true,
-        cellStyle: { 
-          textAlign: 'center', 
+        cellStyle: {
+          textAlign: 'center',
           padding: '0 8px',
         },
-        hide: !this.isEditing(),
+        hide: !isEditing,
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const button = document.createElement('button');
           button.className = 'delete-row-btn';
@@ -180,6 +263,64 @@ export class WatchlistComponent implements OnDestroy {
             this.deleteRow(params.data!.itemId);
           };
           return button;
+        },
+      },
+      {
+        field: 'itemId',
+        headerName: '',
+        width: 100,
+        minWidth: 100,
+        maxWidth: 100,
+        suppressAutoSize: true,
+        suppressMovable: true,
+        cellStyle: {
+          textAlign: 'center',
+          padding: '0 8px',
+        },
+        hide: isEditing,
+        cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
+          const container = document.createElement('div');
+          container.style.display = 'flex';
+          container.style.gap = '4px';
+          container.style.justifyContent = 'center';
+
+          // Edit alert button
+          const editBtn = document.createElement('button');
+          editBtn.className = 'alert-edit-btn';
+          editBtn.innerHTML = params.data?.alertPrice ? 'Edit Alert' : 'Create Alert';
+          editBtn.title = params.data?.alertPrice ? 'Edit price alert' : 'Create price alert';
+          editBtn.type = 'button';
+          editBtn.style.whiteSpace = 'nowrap';
+          editBtn.style.fontSize = '11px';
+          editBtn.style.padding = '4px 8px';
+          editBtn.onclick = (e) => {
+            e.stopPropagation();
+            this.openCreateAlertModal(params.data!);
+          };
+
+          // Delete alert button (only show if alert exists)
+          if (params.data?.alertPrice !== null) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-alert-btn';
+            deleteBtn.innerHTML = 'Remove';
+            deleteBtn.title = 'Remove price alert';
+            deleteBtn.type = 'button';
+            deleteBtn.style.whiteSpace = 'nowrap';
+            deleteBtn.style.fontSize = '11px';
+            deleteBtn.style.padding = '4px 8px';
+            deleteBtn.style.background = '#fee2e2';
+            deleteBtn.style.color = '#dc2626';
+            deleteBtn.style.border = '1px solid #fecaca';
+            deleteBtn.style.borderRadius = '4px';
+            deleteBtn.onclick = (e) => {
+              e.stopPropagation();
+              this.deletePriceAlert(params.data!.itemId);
+            };
+            container.appendChild(deleteBtn);
+          }
+
+          container.appendChild(editBtn);
+          return container;
         },
       },
     ];
@@ -250,6 +391,8 @@ export class WatchlistComponent implements OnDestroy {
           dayChangePercent: i.dayChangePercent,
           intradayData: i.intradayData,
           displayOrder: i.displayOrder,
+          alertPrice: i.alertPrice,
+          alertDirection: i.alertDirection,
         }));
         this.editRows.set(rows);
         // Fetch real prices and intraday data
@@ -284,12 +427,12 @@ export class WatchlistComponent implements OnDestroy {
 
   private enrichItemsWithPricesAndChart(rows: WatchlistRow[]): void {
     if (rows.length === 0) return;
-    
+
     const symbols = rows.map((r: WatchlistRow) => r.symbol);
-    
+
     // Load real-time prices for display (matching instruments component pattern)
     this.loadRealTimePrices(symbols);
-    
+
     // Fetch intraday chart data for each symbol
     symbols.forEach((symbol: string) => {
       this.tradeApi.history(symbol, PriceHistory.RangeEnum._1D).subscribe({
@@ -314,7 +457,7 @@ export class WatchlistComponent implements OnDestroy {
   /** Fetch real-time prices for all symbols - matches instruments component pattern */
   private loadRealTimePrices(symbols: string[]): void {
     if (symbols.length === 0) return;
-    
+
     this.tradeApi.prices(symbols).subscribe({
       next: (prices) => {
         this.priceMap.update((current) => {
@@ -426,10 +569,10 @@ export class WatchlistComponent implements OnDestroy {
       next: () => {
         this.showAddDropdown.set(false);
         this.clearSearch();
-        
+
         // Always reload watchlist sidebar counts
         this.loadWatchlists();
-        
+
         // If the item was added to the currently selected watchlist, also reload the grid
         const currentWatchlistId = this.selectedWatchlistId();
         if (currentWatchlistId && watchlistIds.includes(currentWatchlistId)) {
@@ -495,7 +638,7 @@ export class WatchlistComponent implements OnDestroy {
 
     // Remove from local state immediately for UI feedback
     this.editRows.update(rows => rows.filter(r => r.itemId !== itemId));
-    
+
     // Delete from backend
     this.tradeApi.removeWatchlistItem(id, itemId).subscribe({
       next: () => {
@@ -513,6 +656,198 @@ export class WatchlistComponent implements OnDestroy {
   submitEdits(): void {
     // Exit edit mode (all deletions already persisted to backend in deleteRow())
     this.isEditing.set(false);
+    this.editingAlertItemId.set(null);
+  }
+
+  // ===== Price Alert Methods =====
+
+  openCreateAlertModal(row: WatchlistRow): void {
+    this.createAlertItemId.set(row.itemId);
+    this.createAlertSymbol.set(row.symbol);
+    this.createAlertName.set(row.name);
+    this.createAlertPrice.set(row.alertPrice);
+    this.createAlertDirection.set((row.alertDirection as 'ABOVE' | 'BELOW') || 'ABOVE');
+    this.createAlertError.set('');
+    this.showCreateAlertModal.set(true);
+  }
+
+  openCreateAlertModalFromSection(): void {
+    // Populate available items from current watchlist and open modal for user to select
+    const rows = this.editRows();
+    if (rows.length > 0) {
+      this.createAlertAvailableItems.set(rows);
+      this.createAlertItemId.set(null);
+      this.createAlertSymbol.set('');
+      this.createAlertName.set('');
+      this.createAlertPrice.set(null);
+      this.createAlertDirection.set('ABOVE');
+      this.createAlertError.set('');
+      this.showCreateAlertModal.set(true);
+    }
+  }
+
+  closeCreateAlertModal(): void {
+    this.showCreateAlertModal.set(false);
+    this.createAlertItemId.set(null);
+    this.createAlertSymbol.set('');
+    this.createAlertName.set('');
+    this.createAlertPrice.set(null);
+    this.createAlertDirection.set('ABOVE');
+    this.createAlertError.set('');
+    this.createAlertAvailableItems.set([]);
+  }
+
+  onAlertInstrumentChange(itemId: string): void {
+    const item = this.createAlertAvailableItems().find(i => i.itemId === itemId);
+    if (item) {
+      this.createAlertSymbol.set(item.symbol);
+      this.createAlertName.set(item.name);
+      // Pre-fill with existing alert values if any
+      this.createAlertPrice.set(item.alertPrice);
+      this.createAlertDirection.set((item.alertDirection as 'ABOVE' | 'BELOW') || 'ABOVE');
+    }
+  }
+
+  isCreateAlertValid(): boolean {
+    const isEditing = this.createAlertItemId() !== null;
+    // For editing, itemId is already set. For creating, we need available items loaded.
+    return this.createAlertItemId() !== null &&
+           this.createAlertPrice() !== null &&
+           this.createAlertPrice()! >= 0 &&
+           this.createAlertDirection() !== null &&
+           (isEditing || this.createAlertAvailableItems().length > 0);
+  }
+
+  createPriceAlert(): void {
+    const itemId = this.createAlertItemId();
+    const watchlistId = this.selectedWatchlistId();
+    const alertPrice = this.createAlertPrice();
+    const alertDirection = this.createAlertDirection();
+
+    if (!itemId || !watchlistId || alertPrice === null || alertPrice < 0 || !alertDirection) {
+      this.createAlertError.set('Please fill all fields with valid values');
+      return;
+    }
+
+    this.isCreatingAlert.set(true);
+    this.createAlertError.set('');
+
+    const request: CreatePriceAlertRequest = { itemId, alertPrice, alertDirection };
+    this.tradeApi.createPriceAlert(watchlistId, itemId, request).subscribe({
+      next: (response) => {
+        this.isCreatingAlert.set(false);
+        this.closeCreateAlertModal();
+        this.showNotification(`Price alert created for ${response.symbol}: ${alertDirection} $${alertPrice.toFixed(2)}`, 'success');
+        // Reload items to get updated alert info
+        this.loadItems(watchlistId);
+      },
+      error: (err) => {
+        this.isCreatingAlert.set(false);
+        this.createAlertError.set(errorMessage(err));
+      },
+    });
+  }
+
+  onAlertPriceChanged(event: CellValueChangedEvent<WatchlistRow>): void {
+    const row = event.data;
+    const newPrice = event.newValue as number | null;
+    const watchlistId = this.selectedWatchlistId();
+
+    if (!watchlistId || !row) return;
+
+    // Validate: if price is set but direction is not, don't save yet
+    if (newPrice !== null && newPrice < 0) {
+      this.showNotification('Alert price must be non-negative', 'error');
+      this.loadItems(watchlistId); // Revert
+      return;
+    }
+
+    // If both price and direction are null, delete the alert
+    if (newPrice === null && !row.alertDirection) {
+      this.deletePriceAlert(row.itemId);
+      return;
+    }
+
+    // If price is null but direction exists, clear both
+    if (newPrice === null) {
+      this.deletePriceAlert(row.itemId);
+      return;
+    }
+
+    // Update the alert
+    this.updatePriceAlert(row.itemId, newPrice, row.alertDirection);
+  }
+
+  onAlertDirectionChanged(event: CellValueChangedEvent<WatchlistRow>): void {
+    const row = event.data;
+    const newDirection = event.newValue as string | null;
+    const watchlistId = this.selectedWatchlistId();
+
+    if (!watchlistId || !row) return;
+
+    // If direction is null but price exists, clear both
+    if (!newDirection) {
+      this.deletePriceAlert(row.itemId);
+      return;
+    }
+
+    // Update the alert
+    this.updatePriceAlert(row.itemId, row.alertPrice, newDirection);
+  }
+
+  private updatePriceAlert(itemId: string, alertPrice: number | null, alertDirection: string | null): void {
+    const watchlistId = this.selectedWatchlistId();
+    if (!watchlistId) return;
+
+    // Type assertion for alertDirection to match the expected type
+    const request: UpdatePriceAlertRequest = {
+      alertPrice,
+      alertDirection: alertDirection as 'ABOVE' | 'BELOW' | null
+    };
+    this.tradeApi.updatePriceAlert(watchlistId, itemId, request).subscribe({
+      next: (response) => {
+        const directionText = alertDirection === 'ABOVE' ? 'above' : 'below';
+        const priceText = alertPrice !== null ? `$${alertPrice.toFixed(2)}` : 'removed';
+        this.showNotification(`Price alert updated for ${response.symbol}: ${directionText} ${priceText}`, 'success');
+        this.loadItems(watchlistId);
+      },
+      error: (err) => {
+        this.showNotification(`Failed to update alert: ${errorMessage(err)}`, 'error');
+        this.loadItems(watchlistId); // Revert on error
+      },
+    });
+  }
+
+  deletePriceAlert(itemId: string): void {
+    const watchlistId = this.selectedWatchlistId();
+    if (!watchlistId) return;
+
+    this.tradeApi.deletePriceAlert(watchlistId, itemId).subscribe({
+      next: () => {
+        this.showNotification('Price alert removed', 'success');
+        this.loadItems(watchlistId);
+      },
+      error: (err) => {
+        this.showNotification(`Failed to remove alert: ${errorMessage(err)}`, 'error');
+        this.loadItems(watchlistId);
+      },
+    });
+  }
+
+  // ===== Notification System =====
+
+  private showNotification(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+    const id = ++this.notificationCounter;
+    this.notifications.update(list => [...list, { id, message, type }]);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      this.notifications.update(list => list.filter(n => n.id !== id));
+    }, 5000);
+  }
+
+  dismissNotification(id: number): void {
+    this.notifications.update(list => list.filter(n => n.id !== id));
   }
 
   // ===== Helpers =====

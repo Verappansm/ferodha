@@ -24,8 +24,9 @@ stop immediately, not at the end of an evaluation cycle.
 ## Decision
 
 Before each order the engine, in this order: ignores a quote older than 15
-minutes; requires a real crossing (the tick that moves through the level, never
-a repeat on a held level, and never on the first observation); checks max spend
+minutes; fires like a limit order (at once when the level is already met on the
+first price seen after enabling, then only on a crossing, never a repeat on a
+held level); checks max spend
 (fee included, pending orders counted), max position (held plus pending buys)
 and, for a SELL, units free of pending sells; then claims the order with one
 guarded `UPDATE` that succeeds only while the strategy is ENABLED with orders
@@ -40,7 +41,10 @@ after saving the order (the broker was down when it published), the order is
 looked up by its key and counted as placed, so it cannot be placed twice.
 
 Disabling also cancels the strategy's working orders. A dry run logs
-WOULD_FIRE and places nothing.
+WOULD_FIRE and places nothing. A SELL strategy can only be created for stock
+the account holds, and the engine re-checks the free units at every order. The
+price a strategy last watched, and when, is kept on the row so the customer can
+see it is alive (a WATCHING event says what it is waiting for).
 
 ## Consequences
 

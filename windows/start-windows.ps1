@@ -410,8 +410,8 @@ Start-AppProcess 'pricing-generator' (Join-Path $RepoDir 'pricing_generator') 'j
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'pricing_generator'))) `
     $PricingEnv
 
-# Under market-sim the executor takes its quotes from pricing-generator (the
-# same wiring as TRADES_GENERATOR_URL in docker-compose.yml).
+# The executor prices every fill at pricing-generator's live tick, under both
+# profiles (the same wiring as TRADES_GENERATOR_URL in docker-compose.yml).
 Start-AppProcess 'trade-executor' (Join-Path $RepoDir 'trade_executor') 'java' `
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'trade_executor'))) `
     @{ SERVER_PORT = $ExecutorPort; TRADES_GENERATOR_URL = "http://localhost:$PricingGeneratorPort" }

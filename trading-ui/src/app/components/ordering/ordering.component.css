@@ -111,6 +111,12 @@ label {
   border-radius: var(--radius);
 }
 
+.fill-note {
+  margin: 4px 0 16px;
+  font-size: 0.85rem;
+  color: var(--ink-500);
+}
+
 .reject-reason {
   color: var(--negative);
 }

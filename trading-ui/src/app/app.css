@@ -156,3 +156,17 @@ nav {
 .sign-out:active {
   background: var(--ink-200);
 }
+
+/* Balance visibility and settings: same box as the profile icon. */
+.nav-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-icon.active,
+.nav-icon[aria-pressed='true'] {
+  color: var(--brand-700);
+  border-color: var(--brand-400);
+}

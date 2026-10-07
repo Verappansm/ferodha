@@ -7,6 +7,11 @@ import { of } from 'rxjs';
 import { Component, input } from '@angular/core';
 import { LoginComponent } from './login.component';
 import { AuthLayoutComponent } from '../auth-layout/auth-layout.component';
+import { PreferencesStore } from '../../core/preferences/preferences.store';
+import {
+  provideStubPreferences,
+  stubPreferences,
+} from '../../core/preferences/preferences.testing';
 
 /** The layout's tabs need a real router; these tests are about the form only. */
 @Component({ selector: 'app-auth-layout', template: '<ng-content />' })
@@ -30,6 +35,7 @@ describe('LoginComponent', () => {
       imports: [LoginComponent],
       providers: [
         { provide: Session, useValue: { signIn } },
+        provideStubPreferences(),
         { provide: AuthApi, useValue: { changePassword } },
         { provide: Router, useValue: { navigateByUrl } },
         {
@@ -78,6 +84,21 @@ describe('LoginComponent', () => {
     expect(signIn).toHaveBeenCalledWith('john.carter@example.com', 'seed-password-change-me');
     expect(navigateByUrl).toHaveBeenCalledWith('/dashboard');
     expect(byTestId('login-error')).toBeNull();
+  });
+
+  it('the stored preferences are loaded and their start page applied at sign-in', async () => {
+    const preferences = TestBed.inject(PreferencesStore) as unknown as ReturnType<
+      typeof stubPreferences
+    >;
+    const load = vi.spyOn(preferences, 'load');
+    preferences.startPath.set('/portfolio');
+    type('login-username', 'john.carter@example.com');
+    type('login-password', 'seed-password-change-me');
+
+    await submit();
+
+    expect(load).toHaveBeenCalled();
+    expect(navigateByUrl).toHaveBeenCalledWith('/portfolio');
   });
 
   it('valid credentials sign in and redirect to return URL if provided', async () => {

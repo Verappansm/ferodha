@@ -6,6 +6,7 @@ import { CANCEL_TOO_LATE, MAX_POLLS, OrdersComponent, POLL_INTERVAL_MS } from '.
 import { Session } from '../../core/session/session';
 import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 function order(
   orderId: string,
@@ -43,6 +44,7 @@ describe('OrdersComponent', () => {
       imports: [OrdersComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { orderHistory, placeOrder, cancelOrder } },
       ],
     }).compileComponents();

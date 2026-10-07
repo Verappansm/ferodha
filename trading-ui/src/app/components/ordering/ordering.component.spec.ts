@@ -14,6 +14,7 @@ import {
   OrderStatus,
   OrderSide,
 } from '../../api/trade-api';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 /** What trade_api's review answers for a ticket: a 0.1% fee and 100,000 USD of cash. */
 function reviewOf(order: OrderReviewRequest): OrderReviewResponse {
@@ -55,6 +56,7 @@ describe('OrderingComponent', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
+        provideStubPreferences(),
         {
           provide: TradeApi,
           useValue: {
@@ -704,6 +706,7 @@ describe('OrderingComponent price suggestion', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId: signal(3) } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
         { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
         { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
@@ -742,6 +745,17 @@ describe('OrderingComponent price suggestion', () => {
     expect(text(fixture, 'order-suggested-price')).toContain(
       'Suggested limit 230.35 (+0.02% past the ask)',
     );
+  });
+
+  it('says how the order fills: a buy at the current ask, a sell at the current bid', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'BUY' });
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current ask 230.30');
+    expect(text(fixture, 'order-fill-note')).toContain('never more than your price');
+
+    fixture.componentInstance.form.controls.side.setValue('SELL');
+    fixture.detectChanges();
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current bid 230.10');
+    expect(text(fixture, 'order-fill-note')).toContain('never less than your price');
   });
 
   it('suggests a price from the quote when the link carries none (the market list)', async () => {

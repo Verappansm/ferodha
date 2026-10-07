@@ -28,7 +28,8 @@ import {
   OrderReviewResponse,
 } from '../../api/trade-api';
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { errorMessage } from '../../core/errors/error-message';
 import { rejectionText } from '../../core/format/rejection-reason';
 
@@ -99,7 +100,7 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-ordering',
-  imports: [ReactiveFormsModule, DatePipe, DecimalPipe],
+  imports: [ReactiveFormsModule, DatePipe, MoneyPipe],
   templateUrl: './ordering.component.html',
   styleUrls: ['./ordering.component.css'],
 })
@@ -139,6 +140,21 @@ export class OrderingComponent {
   readonly suggestedPrice = computed(() => suggestedLimitPrice(this.quote(), this.side()));
   readonly bufferPercent = LIMIT_BUFFER * 100;
   private readonly side = signal<OrderSide>('BUY');
+  /**
+   * How the order will be filled, in the customer's terms. The executor prices
+   * a fill at the live ticker (the same quote shown here): a BUY at the ask if
+   * the limit is at or above it, a SELL at the bid if the limit is at or below
+   * it. Either way the customer gets their price or better, never worse.
+   */
+  readonly fillNote = computed(() => {
+    const quote = this.quote();
+    if (this.side() === 'BUY') {
+      const ask = quote?.ask != null ? ` ${quote.ask.toFixed(2)}` : '';
+      return `A buy fills at the current ask${ask} if your price is at or above it, so you pay that ask or less, never more than your price. If the ask is above your price, the order is rejected.`;
+    }
+    const bid = quote?.bid != null ? ` ${quote.bid.toFixed(2)}` : '';
+    return `A sell fills at the current bid${bid} if your price is at or below it, so you receive that bid or more, never less than your price. If the bid is below your price, the order is rejected.`;
+  });
 
   // Read-only account from session
   readonly account = computed(() => this.session.accountId());

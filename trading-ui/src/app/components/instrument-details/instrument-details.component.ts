@@ -9,7 +9,8 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ChartRange,
@@ -43,7 +44,7 @@ export const QUOTE_REFRESH_MS = 15_000;
  */
 @Component({
   selector: 'app-instrument-details',
-  imports: [DatePipe, DecimalPipe, RouterLink],
+  imports: [DatePipe, MoneyPipe, RouterLink],
   templateUrl: './instrument-details.component.html',
   styleUrl: './instrument-details.component.css',
 })
