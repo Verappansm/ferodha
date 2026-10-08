@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OrderBookMatcher - Match Function Cases Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 10px;
+            border-left: 4px solid #3498db;
+            font-size: 1.8em;
+        }
+
+        h3 {
+            color: #2c3e50;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .case-header {
+            background: #ecf0f1;
+            padding: 15px;
+            border-left: 5px solid #e74c3c;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .case-header h2 {
+            border: none;
+            padding: 0;
+            margin: 0;
+            color: #e74c3c;
+            font-size: 1.6em;
+        }
+
+        .scenario {
+            background: #e8f8f5;
+            padding: 15px;
+            border-left: 4px solid #27ae60;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .execution {
+            background: #fef9e7;
+            padding: 15px;
+            border-left: 4px solid #f39c12;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .post-state {
+            background: #fdeef4;
+            padding: 15px;
+            border-left: 4px solid #e91e63;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.4;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        tr:hover {
+            background: #ecf0f1;
+        }
+
+        .summary-table {
+            margin-top: 40px;
+            margin-bottom: 40px;
+        }
+
+        .summary-table th {
+            background: #2c3e50;
+            font-size: 0.95em;
+        }
+
+        .summary-table td {
+            font-size: 0.9em;
+        }
+
+        code {
+            background: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .highlight-green {
+            background: #d4edda;
+            color: #155724;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .highlight-red {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .highlight-yellow {
+            background: #fff3cd;
+            color: #856404;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .step-list {
+            list-style: none;
+            counter-reset: step-counter;
+        }
+
+        .step-list li {
+            counter-increment: step-counter;
+            margin-bottom: 15px;
+            padding-left: 40px;
+            position: relative;
+        }
+
+        .step-list li:before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background: #3498db;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .note {
+            background: #cfe9f3;
+            border-left: 4px solid #0288d1;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .page-break {
+            page-break-after: always;
+            margin: 40px 0;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 40px;
+        }
+
+        .toc {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 4px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+        }
+
+        .toc ol {
+            margin-left: 20px;
+        }
+
+        .toc li {
+            margin-bottom: 8px;
+        }
+
+        .toc a {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            pre {
+                page-break-inside: avoid;
+            }
+
+            table {
+                page-break-inside: avoid;
+            }
+
+            h2 {
+                page-break-before: always;
+            }
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 OrderBookMatcher - Match Function Cases Guide</h1>
+
+        <p style="text-align: center; color: #666; margin-bottom: 30px; font-style: italic;">
+            Comprehensive breakdown of all execution scenarios in the market-sim profile matching engine
+        </p>
+
+        <div class="toc">
+            <h3>📋 Table of Contents</h3>
+            <ol>
+                <li>Case 1: Full Match (Both Complete)</li>
+                <li>Case 2: Partial Match (Incoming Still Wants More)</li>
+                <li>Case 3: Multiple Matches (Split Across Orders)</li>
+                <li>Case 4: Partial Resting Order</li>
+                <li>Case 5: No Resting Orders (Silent Rest)</li>
+                <li>Case 6: Concurrent Contention (Race Condition)</li>
+                <li>Case 7: Affordability Failure</li>
+                <li>Summary Table</li>
+            </ol>
+        </div>
+
+        <!-- CASE 1 -->
+        <div class="case-header">
+            <h2>CASE 1: Full Match (Incoming + Resting Both Complete)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>BUY 5 NVDA @ 120.00</strong> incoming meets <strong>SELL 5 NVDA @ 120.00</strong> resting</p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>PRE-STATE:
+Orders Table:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│order_id │ side   │ quantity │ filled │ status   │
+├─────────┼────────┼──────────┼────────┼──────────┤
+│ R1-UUID │ SELL   │ 5        │ 0      │ NEW      │
+│ I1-UUID │ BUY    │ 5        │ 0      │ NEW      │
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Kafka In:
+→ ORDER_PLACED (I1: BUY 5 NVDA @ 120.00)</pre>
+
+            <h3>Step-by-Step Execution</h3>
+            <ul class="step-list">
+                <li><strong>Query for resting opposite:</strong>
+                    <pre>SQL: SELECT * FROM orders
+WHERE instrument_id = NVDA_ID
+  AND side = 'SELL'
+  AND status IN ('NEW', 'PARTIALLY_FILLED')
+  AND limit_price <= 120.00
+  AND order_id != 'I1-UUID'
+ORDER BY limit_price DESC, created_at ASC
+
+RESULT: [R1 {quantity: 5, filled_quantity: 0}]</pre>
+                </li>
+
+                <li><strong>Calculate match:</strong>
+                    <pre>remaining = 5 (I1 wants 5)
+restingRemaining = 5 (R1 has 5)
+matchQuantity = min(5, 5) = 5
+executionPrice = 120.00 (resting's limit price)
+restingNewStatus = "FILLED" (0 + 5 >= 5)</pre>
+                </li>
+
+                <li><strong>Re-check resting account:</strong>
+                    <pre>Does Account-1 still have 5 NVDA shares?
+SQL: SELECT held_quantity FROM positions_view
+     WHERE account = Acc-1 AND instrument = NVDA
+RESULT: 5 shares ✓</pre>
+                </li>
+
+                <li><strong>Settlement (SettlementService.settleMatch):</strong>
+                    <pre>@Transactional BEGIN
+
+Guard 1 - Update resting order:
+SQL: UPDATE orders
+     SET filled_quantity = 5,
+         status = 'FILLED',
+         executed_price = 120.00,
+         fee_amount = 2.50
+     WHERE order_id = 'R1-UUID'
+       AND filled_quantity = 0
+RESULT: 1 row affected ✓
+
+Guard 2 - Insert trade records (both sides):
+SQL: INSERT INTO trades (order_id, executed_price, quantity, created_at)
+     VALUES ('R1-UUID', 120.00, 5, NOW())
+
+SQL: INSERT INTO trades (order_id, executed_price, quantity, created_at)
+     VALUES ('I1-UUID', 120.00, 5, NOW())
+
+Guard 3 - Update Account-1 balance:
+newBalance = 1000.00 + 597.50 (5 × 120.00 - fee)
+SQL: UPDATE accounts
+     SET cash_balance = 1597.50, version = 2
+     WHERE id = 1 AND version = 1
+RESULT: 1 row affected ✓
+
+Guard 4 - Update Account-2 balance:
+newBalance = 650.00 - 627.50 (5 × 120.00 + fee)
+SQL: UPDATE accounts
+     SET cash_balance = 22.50, version = 6
+     WHERE id = 2 AND version = 5
+RESULT: 1 row affected ✓
+
+@Transactional COMMIT ✓</pre>
+                </li>
+
+                <li><strong>Finalize incoming order:</strong>
+                    <pre>SQL: UPDATE orders
+     SET filled_quantity = 5,
+         status = 'FILLED',
+         fee_amount = 2.75
+     WHERE order_id = 'I1-UUID' AND status = 'NEW'
+RESULT: 1 row affected ✓</pre>
+                </li>
+            </ul>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE</h3>
+            <pre>Orders Table:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│order_id │ side   │ quantity │ filled │ status   │
+├─────────┼────────┼──────────┼────────┼──────────┤
+│ R1-UUID │ SELL   │ 5        │ 5      │ FILLED   │
+│ I1-UUID │ BUY    │ 5        │ 5      │ FILLED   │
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Trades Table (NEW):
+┌───────────┬──────────┬────────────────┬──────────┐
+│trade_id   │order_id  │executed_price  │quantity  │
+├───────────┼──────────┼────────────────┼──────────┤
+│ T1-UUID   │ R1-UUID  │ 120.00         │ 5        │
+│ T2-UUID   │ I1-UUID  │ 120.00         │ 5        │
+└───────────┴──────────┴────────────────┴──────────┘
+
+Kafka Out:
+← ORDER_FILLED (R1): {orderId: R1, status: FILLED, filledQty: 5}
+← ORDER_FILLED (I1): {orderId: I1, status: FILLED, filledQty: 5}</pre>
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 2 -->
+        <div class="case-header">
+            <h2>CASE 2: Partial Match (Incoming Still Wants More)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>BUY 10 NVDA @ 120.00</strong> incoming meets <strong>SELL 5 NVDA @ 120.00</strong> resting</p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>Loop Iteration 1:
+─────────────────
+matchQuantity = min(10, 5) = 5
+executionPrice = 120.00
+restingNewStatus = "FILLED" (0 + 5 >= 5)
+
+SettlementService.settleMatch():
+SQL: UPDATE orders SET filled_quantity = 5, status = 'FILLED'
+     WHERE order_id = 'R1-UUID' AND filled_quantity = 0
+Result: 1 row affected ✓
+
+INSERT 2 trades (R1, I1)
+Update both account balances ✓
+Publish: ORDER_FILLED(R1) to Kafka
+
+Update counters:
+remaining = 10 - 5 = 5  ← I1 STILL WANTS 5 MORE!
+totalMatched = 5
+progressedThisPass = true
+
+Loop Iteration 2:
+─────────────────
+while (remaining > 0) → 5 > 0 → TRUE ✓
+Back to query for more resting orders
+
+SCENARIO A: No more resting orders
+  candidates = []
+  Break from loop
+  remaining = 5 (I1 still has 5 qty unmatched)
+
+SCENARIO B: Another resting order found (R2)
+  Repeat match process with R2...</pre>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE (if no more resting)</h3>
+            <pre>Orders Table:
+┌─────────┬────────┬──────────┬────────┬─────────────────┐
+│order_id │ side   │ quantity │ filled │ status          │
+├─────────┼────────┼──────────┼────────┼─────────────────┤
+│ R1-UUID │ SELL   │ 5        │ 5      │ FILLED          │
+│ I1-UUID │ BUY    │ 10       │ 5      │ PARTIALLY_FILLED│
+└─────────┴────────┴──────────┴────────┴─────────────────┘
+
+Trades Table (NEW):
+┌───────────┬──────────┬────────────────┬──────────┐
+│trade_id   │order_id  │executed_price  │quantity  │
+├───────────┼──────────┼────────────────┼──────────┤
+│ T1-UUID   │ R1-UUID  │ 120.00         │ 5        │
+│ T2-UUID   │ I1-UUID  │ 120.00         │ 5        │
+└───────────┴──────────┴────────────────┴──────────┘
+
+Kafka Out:
+← ORDER_FILLED (R1): {orderId: R1, status: FILLED, filledQty: 5}
+← ORDER_PARTIALLY_FILLED (I1): {orderId: I1, status: PARTIALLY_FILLED, filledQty: 5, totalQty: 10}
+
+⏳ I1 now RESTS on order book with 5 qty remaining!</pre>
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 3 -->
+        <div class="case-header">
+            <h2>CASE 3: Multiple Matches (Split Across Multiple Resting Orders)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>BUY 10 NVDA @ 120.50</strong> incoming meets <strong>TWO resting SELL orders</strong></p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>PRE-STATE:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│ R1-UUID │ SELL   │ 3        │ 0      │ NEW      │ price: 119.50
+│ R2-UUID │ SELL   │ 7        │ 0      │ NEW      │ price: 120.00
+│ I1-UUID │ BUY    │ 10       │ 0      │ NEW      │ limit: 120.50
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Loop Iteration 1:
+─────────────────
+Query: ... WHERE limit_price <= 120.50 ORDER BY limit_price DESC, created_at ASC
+RESULT: [R2 {qty: 7, price: 120.00}, R1 {qty: 3, price: 119.50}]
+(R2 first due to price-then-time priority)
+
+Process R2:
+  matchQuantity = min(10, 7) = 7
+  executionPrice = 120.00
+  restingNewStatus = "FILLED"
+  SettleMatch() → R2 FILLED
+  remaining = 10 - 7 = 3
+
+Process R1:
+  matchQuantity = min(3, 3) = 3
+  executionPrice = 119.50
+  restingNewStatus = "FILLED"
+  SettleMatch() → R1 FILLED
+  remaining = 3 - 3 = 0
+
+Loop Iteration 2:
+─────────────────
+while (remaining > 0) → 0 > 0 → FALSE
+Exit while loop</pre>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE</h3>
+            <pre>Orders Table:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│ R1-UUID │ SELL   │ 3        │ 3      │ FILLED   │
+│ R2-UUID │ SELL   │ 7        │ 7      │ FILLED   │
+│ I1-UUID │ BUY    │ 10       │ 10     │ FILLED   │
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Trades Table (4 NEW records):
+┌───────────┬──────────┬────────────────┬──────────┐
+│ T1-UUID   │ R2-UUID  │ 120.00         │ 7        │ (1st match)
+│ T2-UUID   │ I1-UUID  │ 120.00         │ 7        │ (1st match)
+│ T3-UUID   │ R1-UUID  │ 119.50         │ 3        │ (2nd match)
+│ T4-UUID   │ I1-UUID  │ 119.50         │ 3        │ (2nd match)
+└───────────┴──────────┴────────────────┴──────────┘
+
+Kafka Out (4 events):
+← ORDER_FILLED(R2): {orderId: R2, status: FILLED, filledQty: 7, avgPrice: 120.00}
+← ORDER_FILLED(R1): {orderId: R1, status: FILLED, filledQty: 3, avgPrice: 119.50}
+← ORDER_FILLED(I1): {orderId: I1, status: FILLED, filledQty: 10, avgPrice: 119.70}
+
+💰 Account-1 (I1 buyer):
+  Paid: (7 × 120.00) + (3 × 119.50) + fees = 1297.50</pre>
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 4 -->
+        <div class="case-header">
+            <h2>CASE 4: Partial Resting Order (Resting Has More Qty)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>BUY 3 NVDA @ 120.00</strong> incoming meets <strong>SELL 5 NVDA @ 120.00</strong> resting</p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>Calculate match:
+  remaining = 3
+  restingRemaining = 5
+  matchQuantity = min(3, 5) = 3
+
+Determine resting new status:
+  filled + match = 0 + 3 = 3
+  3 < 5 (total qty)
+  restingNewStatus = "PARTIALLY_FILLED"  ← Different!
+
+SettlementService.settleMatch():
+  SQL: UPDATE orders
+       SET filled_quantity = 0 + 3 = 3,
+           status = 'PARTIALLY_FILLED',  ← PARTIALLY_FILLED!
+           executed_price = 120.00
+       WHERE order_id = 'R1-UUID' AND filled_quantity = 0
+
+  Result: 1 row affected ✓
+
+  INSERT 2 trades (R1, I1)
+  Update both account balances ✓
+
+  Publish: ORDER_PARTIALLY_FILLED(R1) to Kafka  ← Different event!</pre>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE</h3>
+            <pre>Orders Table:
+┌─────────┬────────┬──────────┬────────┬─────────────────┐
+│ R1-UUID │ SELL   │ 5        │ 3      │ PARTIALLY_FILLED│
+│ I1-UUID │ BUY    │ 3        │ 3      │ FILLED          │
+└─────────┴────────┴──────────┴────────┴─────────────────┘
+
+Trades Table (NEW):
+┌───────────┬──────────┬────────────────┬──────────┐
+│ T1-UUID   │ R1-UUID  │ 120.00         │ 3        │
+│ T2-UUID   │ I1-UUID  │ 120.00         │ 3        │
+└───────────┴──────────┴────────────────┴──────────┘
+
+Kafka Out:
+← ORDER_PARTIALLY_FILLED(R1): {orderId: R1, status: PARTIALLY_FILLED, filledQty: 3, remainingQty: 2}
+← ORDER_FILLED(I1): {orderId: I1, status: FILLED, filledQty: 3}
+
+⏳ R1 CONTINUES RESTING with 2 qty waiting for next counterparty!</pre>
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 5 -->
+        <div class="case-header">
+            <h2>CASE 5: No Resting Orders (Silent Rest)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>BUY 5 NVDA @ 120.00</strong> incoming, but <strong>NO SELL orders on book</strong></p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>Step 1: Query for resting
+  SQL: SELECT * FROM orders
+       WHERE instrument_id = NVDA_ID
+         AND side = 'SELL'
+         AND status IN ('NEW', 'PARTIALLY_FILLED')
+         AND limit_price <= 120.00
+
+  RESULT: [] (empty - no resting SELL orders)
+
+Step 2: Check if empty
+  if (candidates.isEmpty()) {
+    break;  ← Exit immediately!
+  }
+
+Step 3: Return from match()
+  return Result(totalMatched=0, lastExecutionPrice=null, totalFee=0)
+
+Step 4: Back in OrderExecutionService
+  if (result.matchedAnything()) → 0 > 0 → FALSE
+
+  NO finalizeIncomingOrder() called!
+  NO events published!</pre>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE</h3>
+            <pre>Orders Table:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│ I1-UUID │ BUY    │ 5        │ 0      │ NEW      │ ← Silent rest!
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Trades Table: (No new trades)
+
+Kafka Out: (No events published!)
+
+⏳ I1 now RESTS silently on the order book
+   Client learns about this only by:
+   1. Polling GET /accounts/{id}/orders
+   2. Receiving ORDER_EXPIRED event (after 30 mins, Phase 3)</pre>
+        </div>
+
+        <div class="note">
+            <strong>📝 Note:</strong> This is intentional design. No counterparty means the order just waits. The client doesn't get an event notification because nothing happened yet - the order is just sitting on the book.
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 6 -->
+        <div class="case-header">
+            <h2>CASE 6: Concurrent Contention (Race Condition)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>TWO incoming orders (I1, I2)</strong> simultaneously try to match the <strong>SAME resting order R1</strong></p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>PRE-STATE:
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│ R1-UUID │ SELL   │ 10       │ 0      │ NEW      │
+│ I1-UUID │ BUY    │ 5        │ 0      │ NEW      │
+│ I2-UUID │ BUY    │ 6        │ 0      │ NEW      │
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+═══════════════════════════════════════════════════════
+
+THREAD 1 (processing I1) - Commits FIRST:
+─────────────────────────────────────────
+Query: candidates = [R1 {qty: 10, filled: 0}]
+Calculate: matchQuantity = 5
+Settle: UPDATE orders SET filled_quantity = 5
+        WHERE order_id = 'R1-UUID' AND filled_quantity = 0
+Result: 1 row affected ✓
+COMMIT
+→ R1 now: filled_qty = 5, status = PARTIALLY_FILLED
+
+═══════════════════════════════════════════════════════
+
+THREAD 2 (processing I2) - Starts AFTER Thread 1:
+──────────────────────────────────────────────────
+Query: SELECT ... FROM orders WHERE order_id = 'R1-UUID'
+Result: R1 {qty: 10, filled: 5, status: PARTIALLY_FILLED}
+        (filled_quantity changed from 0 to 5!)
+
+Calculate: restingRemaining = 10 - 5 = 5 (recalculated!)
+           matchQuantity = min(6, 5) = 5
+
+Settle: UPDATE orders
+        SET filled_quantity = 5 + 5 = 10,
+            status = 'FILLED'
+        WHERE order_id = 'R1-UUID' AND filled_quantity = 5  ← KEY!
+Result: 1 row affected ✓ (WHERE clause matched)
+COMMIT
+→ R1 now: filled_qty = 10, status = FILLED
+
+═══════════════════════════════════════════════════════
+
+SCENARIO: If Thread 2 runs BEFORE Thread 1:
+────────────────────────────────────────────
+THREAD 2 (runs first):
+  UPDATE ... SET filled_quantity = 5
+  WHERE filled_quantity = 0
+  Result: 1 row affected ✓
+
+THREAD 1 (runs second):
+  UPDATE ... SET filled_quantity = 5
+  WHERE filled_quantity = 0  ← WHERE doesn't match anymore!
+  Result: 0 rows affected ❌
+
+  if (rows == 0) {
+    return MatchOutcome.contended();  ← Contention detected!
+  }
+
+  Log: "Resting order R1 was matched by concurrent delivery first"
+  continue;  ← Skip to next candidate
+
+  I1 may partially match or rest waiting</pre>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Race Condition Handling:</strong> The optimistic lock (Guard 1) on <code>filled_quantity</code> ensures correctness. If two threads try to update the same resting order, only ONE succeeds, and the other gets <code>MatchOutcome.contended()</code> and retries with the next candidate. No data corruption occurs.
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- CASE 7 -->
+        <div class="case-header">
+            <h2>CASE 7: Affordability Failure (Account Can't Afford Re-Check)</h2>
+        </div>
+
+        <div class="scenario">
+            <h3>📌 Scenario</h3>
+            <p><strong>Resting order placed</strong>, but <strong>account balance now insufficient</strong> when incoming arrives</p>
+            <p style="margin-top: 10px;"><em>Between R1 placement and I1 arrival: Resting account withdrew $950, leaving only $50 (not enough for $1200 purchase).</em></p>
+        </div>
+
+        <div class="execution">
+            <h3>⚙️ Execution Flow</h3>
+            <pre>Step 1: Query resting
+  candidates = [R1]
+
+Step 2: Calculate match
+  matchQuantity = 10
+
+Step 3: Re-check resting account affordability
+  SQL: SELECT cash_balance, version FROM accounts
+       WHERE id = Resting_ID
+  Result: {cash_balance: 50.00, version: 10}
+
+  needToPay = 10 × 120 + fee = $1200
+  50.00 < 1200.00 ❌
+
+  ExecutionRuleCheck.checkAffordable()
+    → returns Optional.of(INSUFFICIENT_FUNDS)
+
+Step 4: Handle failure
+  if (restingCheck.isPresent()) {
+    log.info("Resting order {} can no longer be honoured (INSUFFICIENT_FUNDS) - skipping", R1);
+    continue;  ← Skip this resting order, try next!
+  }
+
+  ❌ R1 is SKIPPED
+  No settleMatch() called
+  No update to R1
+  No Kafka events
+
+Step 5: Try next resting order
+  Loop continues to find next candidate
+  (or exits if no more)</pre>
+        </div>
+
+        <div class="post-state">
+            <h3>📊 POST-STATE</h3>
+            <pre>Orders Table: (UNCHANGED)
+┌─────────┬────────┬──────────┬────────┬──────────┐
+│ R1-UUID │ BUY    │ 10       │ 0      │ NEW      │ ← Still waiting!
+│ I1-UUID │ SELL   │ 10       │ 0      │ NEW      │ ← Still waiting!
+└─────────┴────────┴──────────┴────────┴──────────┘
+
+Kafka Out: (No events)
+
+Both orders remain resting on the book, waiting for future opportunities
+or for the resting account to deposit more cash.</pre>
+        </div>
+
+        <div class="warning">
+            <strong>⚠️ Design Point:</strong> This is a rare but real scenario. The resting order WAS valid when placed (had sufficient funds), but circumstances changed. Rather than reject it retroactively, the system gracefully skips it and tries the next counterparty. The order remains "NEW" until either:
+            <ul style="margin-top: 10px;">
+                <li>Account deposits more cash and another incoming order crosses it</li>
+                <li>Order is cancelled by the owner</li>
+                <li>Order expires (Phase 3 feature)</li>
+            </ul>
+        </div>
+
+        <div class="page-break"></div>
+
+        <!-- SUMMARY TABLE -->
+        <h2>📋 Summary Table: All Cases at a Glance</h2>
+
+        <table class="summary-table">
+            <thead>
+                <tr>
+                    <th>Case</th>
+                    <th>Incoming Qty</th>
+                    <th>Resting Qty</th>
+                    <th>Matched Qty</th>
+                    <th>Incoming Status</th>
+                    <th>Resting Status</th>
+                    <th>Kafka Events</th>
+                    <th>Trades Inserted</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Case 1</strong><br>Full Match</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td><span class="highlight-green">FILLED</span></td>
+                    <td><span class="highlight-green">FILLED</span></td>
+                    <td>ORDER_FILLED (both)</td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 2</strong><br>Partial (Incoming)</td>
+                    <td>10</td>
+                    <td>5</td>
+                    <td>5</td>
+                    <td><span class="highlight-yellow">PARTIALLY_FILLED</span></td>
+                    <td><span class="highlight-green">FILLED</span></td>
+                    <td>ORDER_FILLED(resting)<br>ORDER_PARTIALLY_FILLED(incoming)</td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 3</strong><br>Multiple Matches</td>
+                    <td>10</td>
+                    <td>3+7</td>
+                    <td>10</td>
+                    <td><span class="highlight-green">FILLED</span></td>
+                    <td><span class="highlight-green">FILLED</span> (both)</td>
+                    <td>ORDER_FILLED (all 3)</td>
+                    <td>4</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 4</strong><br>Partial (Resting)</td>
+                    <td>3</td>
+                    <td>5</td>
+                    <td>3</td>
+                    <td><span class="highlight-green">FILLED</span></td>
+                    <td><span class="highlight-yellow">PARTIALLY_FILLED</span></td>
+                    <td>ORDER_PARTIALLY_FILLED(resting)<br>ORDER_FILLED(incoming)</td>
+                    <td>2</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 5</strong><br>Silent Rest</td>
+                    <td>5</td>
+                    <td>0 (none)</td>
+                    <td>0</td>
+                    <td><span class="highlight-yellow">NEW</span> (silent)</td>
+                    <td>N/A</td>
+                    <td><strong>None</strong></td>
+                    <td>0</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 6</strong><br>Race Condition</td>
+                    <td>5 & 6</td>
+                    <td>10</td>
+                    <td>Race</td>
+                    <td>Depends</td>
+                    <td>Depends</td>
+                    <td>Depends</td>
+                    <td>Depends</td>
+                </tr>
+                <tr>
+                    <td><strong>Case 7</strong><br>Affordability Fail</td>
+                    <td>10</td>
+                    <td>10</td>
+                    <td>0 (skipped)</td>
+                    <td>Varies</td>
+                    <td><span class="highlight-yellow">NEW</span></td>
+                    <td><strong>None</strong></td>
+                    <td>0</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="page-break"></div>
+
+        <!-- KEY INSIGHTS -->
+        <h2>🔑 Key Insights</h2>
+
+        <div class="note">
+            <h3>The Two Guards in SettleMatch()</h3>
+            <p><strong>Guard 1 (Conditional Status Update):</strong> Uses optimistic lock on <code>filled_quantity</code> to ensure only ONE thread updates a resting order per match. Prevents race conditions.</p>
+            <p><strong>Guard 2 (Version Lock on Accounts):</strong> Uses optimistic lock on <code>Accounts.version</code> to handle concurrent balance updates. Retried up to 3 times with exponential backoff.</p>
+        </div>
+
+        <div class="note">
+            <h3>Why Trades Table Has 2 Rows Per Match</h3>
+            <p>Each match creates TWO trade records (one per side) because:</p>
+            <ul>
+                <li><strong>Portfolio Visibility:</strong> Both accounts need to see their fill via Trades table</li>
+                <li><strong>Audit Trail:</strong> Complete record of who traded with whom</li>
+                <li><strong>Fee Tracking:</strong> Each side may pay different fees in their own currency</li>
+            </ul>
+        </div>
+
+        <div class="note">
+            <h3>Price-Time Priority</h3>
+            <p>Resting orders are matched by:</p>
+            <ol>
+                <li><strong>Price Priority:</strong> Best price first (highest for SELLs, lowest for BUYs)</li>
+                <li><strong>Time Priority:</strong> Within same price, oldest order first (FIFO)</li>
+                <li><strong>Execution Price:</strong> Always the resting order's limit price (price improvement for incoming)</li>
+            </ol>
+        </div>
+
+        <div class="note">
+            <h3>Silent Rest (Case 5)</h3>
+            <p>When an order rests with NO matching event, the client only learns about it through:</p>
+            <ul>
+                <li>Polling: <code>GET /accounts/{id}/orders</code></li>
+                <li>Future fill: When counterparty arrives and fills it</li>
+                <li>Expiration: <code>ORDER_EXPIRED</code> event after TTL (Phase 3)</li>
+            </ul>
+            <p><strong>This is intentional</strong> - no event = nothing happened.</p>
+        </div>
+
+        <div class="footer">
+            <p>OrderBookMatcher - Match Function Cases Guide | Generated for Chennai Capstone SE4 Team 2</p>
+            <p>Trade Executor | Market-Sim Profile | Kafka Integration</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.UserAccessMapper">
+
+    <!-- One primary-key lookup per request. JwtAuthFilter only passes an id
+         that parses as a UUID, so the cast never fails. -->
+    <select id="isCustomerBlocked" resultType="boolean">
+        SELECT NOT EXISTS (
+            SELECT 1
+            FROM Users
+            WHERE user_id = CAST(#{userId} AS uuid)
+              AND status = 'ACTIVE'
+              AND NOT must_change_password
+        )
+    </select>
+
+    <select id="isAdminBlocked" resultType="boolean">
+        SELECT NOT EXISTS (
+            SELECT 1
+            FROM Users u
+                     JOIN Roles r ON r.role_id = u.role_id
+            WHERE u.user_id = CAST(#{userId} AS uuid)
+              AND u.status = 'ACTIVE'
+              AND r.role_name = 'admin'
+        )
+    </select>
+
+    <select id="isStrategyTokenValid" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM strategies
+            WHERE strategy_id = CAST(#{strategyId} AS uuid)
+              AND user_id = CAST(#{userId} AS uuid)
+              AND status = 'ENABLED'
+        )
+    </select>
+
+</mapper>

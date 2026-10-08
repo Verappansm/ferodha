@@ -1,6 +1,7 @@
 api.base.service.ts
 api/admin-account-requests.service.ts
 api/admin-accounts.service.ts
+api/admin-fees.service.ts
 api/admin-instruments.service.ts
 api/admin-orders.service.ts
 api/admin-overview.service.ts
@@ -22,7 +23,13 @@ model/audit-entry.ts
 model/audit-page.ts
 model/component-health.ts
 model/component-status.ts
+model/create-instrument-request.ts
 model/error-response.ts
+model/fee-by-currency.ts
+model/fee-instrument.ts
+model/fee-summary.ts
+model/fee-user-page.ts
+model/fee-user.ts
 model/instrument-page.ts
 model/instrument-type.ts
 model/models.ts

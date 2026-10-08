@@ -1,5 +1,6 @@
 import { Component, input, output } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../../core/format/money.pipe';
 import { RouterLink } from '@angular/router';
 import { PricedPosition } from '../../../api/portfolio-api';
 import { pnlDirection, pnlSign, pnlWord } from '../../../core/format/pnl';
@@ -8,7 +9,7 @@ import { PanelState } from '../panel-state';
 /** The largest holdings by market value, priced; links to the portfolio page. */
 @Component({
   selector: 'app-top-positions-panel',
-  imports: [DatePipe, DecimalPipe, RouterLink],
+  imports: [DatePipe, MoneyPipe, RouterLink],
   templateUrl: './top-positions-panel.component.html',
   styleUrl: './panel.css',
 })

@@ -9,7 +9,7 @@ Each folder has a short README. Design write-ups are in `design/` (index:
 `story_docs/`.
 
 - `trade_api/` — Trade REST API (Java, Spring Boot). Places and cancels orders, account reads.
-- `trade_executor/` — Trade Executor (Java, Spring Boot). Consumes orders from Kafka, prices them, settles, publishes fills/rejections.
+- `trade_executor/` — Trade Executor (Java, Spring Boot). Consumes orders from Kafka, prices them at the live tick, settles, publishes fills/rejections. Also runs the platform's price feed (`com.trade.executor.ticker`) and, under `market-sim`, the market maker (`com.trade.executor.marketmaker`).
 - `auth_service/` — Auth service (NestJS). Register, login, refresh, `/auth/me`; issues the JWTs trade_api verifies.
 - `trading-ui/` — Trading UI (Angular 21). Sign-in, order ticket and order blotter, over clients generated from the contracts.
 - `java_module/` — Domain rules, frozen; copied into `trade_api` as source.
@@ -17,8 +17,6 @@ Each folder has a short README. Design write-ups are in `design/` (index:
 - `kafka_pipeline/` — Kafka topic and dead-letter-topic creation scripts.
 - `fact_trades_etl/` — Incremental batch load of orders into a DuckDB FACT_TRADES star schema.
 - `analytics_etl/` — Fauxnance candle ingestion and the claims dashboard (separate pipeline).
-- `pricing_generator/` — Simulated market data for the `market-sim` profile.
-- `trades_generator/` — Synthetic order liquidity for the `market-sim` profile.
 - `design/` — Contracts as implemented and design write-ups.
 - `story_docs/` — Extension stories (LEAP-001 onwards) and every departure from the Neueda contracts.
 - `bruno/` — Bruno collection exercising the auth service end to end.
@@ -41,14 +39,15 @@ UI. It works with either `docker compose` or the older `docker-compose`.
 Node 20.19+, 22.12+ or 24+ on the host.
 
 Without Docker on Windows (Kafka on a Linux machine), see
-`windows/windows-setup.md`; `windows/start-windows.ps1` starts both UIs and the two
-generators too (`-MarketSim` for the simulated market).
+`windows/windows-setup.md`; `windows/start-windows.ps1` starts both services, the
+auth service and both UIs (`-MarketSim` for the simulated market).
 
-pricing-generator is the live price feed under both profiles (`market-data`
-ticks, the instrument page's charts). `SPRING_PROFILES_ACTIVE=market-sim` only
-changes how trade-executor settles orders: on an order book at those prices,
-with trades-generator's counter-orders, instead of one real Fauxnance quote per
-order.
+Two Spring Boot services: trade-api and trade-executor. The executor also
+runs the live price feed under both profiles (`market-data` ticks, the
+instrument page's charts), and fills are priced at that tick.
+`SPRING_PROFILES_ACTIVE=market-sim` only changes how it settles orders: on an
+order book at those prices, with its market maker's synthetic counter-orders,
+instead of fill-or-reject at the tick.
 
 Sign in at http://localhost:4200 as `john.carter@example.com` with the
 password `seed-password-change-me`. A user who registers has no account until
@@ -69,8 +68,6 @@ the ones Neueda's contracts and `infra/README.md` use.
 | Trade REST API | 8080 |
 | Trade Executor | 8082 |
 | Auth service | 3000 |
-| Trades generator (`market-sim`) | 8083 |
-| Pricing generator (`market-sim`) | 8084 |
 | Trading UI (`ng serve`) | 4200 |
 | Admin console (`ng serve admin`) | 4300 |
 

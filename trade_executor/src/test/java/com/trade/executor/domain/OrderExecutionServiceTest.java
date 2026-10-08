@@ -1,7 +1,6 @@
 package com.trade.executor.domain;
 
 import com.trade.executor.consumer.PoisonMessageException;
-import com.trade.executor.currency.CurrencyConverter;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.OrderPlacedPayload;
 import com.trade.executor.event.TradeEventPublisher;
@@ -25,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -50,11 +50,9 @@ class OrderExecutionServiceTest {
     private final QuoteSource quoteSource = mock(QuoteSource.class);
     private final SettlementService settlementService = mock(SettlementService.class);
     private final TradeEventPublisher tradeEventPublisher = mock(TradeEventPublisher.class);
-    // Small, concrete, hardcoded-table collaborators - real instances are
-    // more meaningful here than mocks, same as OrderServiceTest wiring a
-    // real OrderLogic over mocked mappers.
-    private final CurrencyConverter currencyConverter = new CurrencyConverter();
-    private final FeeCalculator feeCalculator = new FeeCalculator(new BigDecimal("0.001"));
+    private final FeeCalculator feeCalculator = new FeeCalculator();
+    // The rate trade_api writes on a portal order; the executor charges it.
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.001");
 
     private OrderExecutionService orderExecutionService;
 
@@ -67,31 +65,8 @@ class OrderExecutionServiceTest {
         // and OrderExecutionServiceMatchingTest cover the matching-enabled
         // branch separately.
         orderExecutionService = new OrderExecutionService(orderMapper, accountMapper, instrumentMapper,
-                positionMapper, quoteSource, settlementService, tradeEventPublisher, currencyConverter,
+                positionMapper, quoteSource, settlementService, tradeEventPublisher,
                 feeCalculator, orderBookMatcher, false);
-    }
-
-    @Test
-    @DisplayName("an execution-time re-check rejects an order whose account can no longer afford it")
-    void executionTimeRecheckRejectsAccountThatCanNoLongerAffordFeeInclusiveCost() {
-        // 100 shares at an ask of 10.00 = 1000.00 trade value, + 0.1% fee
-        // (1.00) = 1001.00 total. A balance of 1000.50 would have been
-        // "affordable" against the bare trade value but is not once the fee
-        // is included - exactly the scenario design question 2/story unit
-        // test asks for.
-        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 100);
-        givenTradableInstrument("USD");
-        givenAccount("ACTIVE", new BigDecimal("1000.50"), "USD");
-        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
-                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
-        when(settlementService.settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS)))
-                .thenReturn(SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
-
-        orderExecutionService.process(placedEvent());
-
-        verify(settlementService).settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
-        verify(settlementService, never()).settleFill(any(), any(), any(), any(), any(), any(), any());
-        verify(tradeEventPublisher).publishRejected(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
     }
 
     @Test
@@ -109,32 +84,6 @@ class OrderExecutionServiceTest {
         verify(quoteSource, never()).fetchQuote(any());
         verify(settlementService).settleReject(any(), eq(RejectionReason.ACCOUNT_NOT_ACTIVE));
         verify(tradeEventPublisher).publishRejected(any(), eq(RejectionReason.ACCOUNT_NOT_ACTIVE));
-    }
-
-    @Test
-    @DisplayName("under matching, an order that can't afford its own worst-case cost is rejected before any match is attempted")
-    void matchingPathRejectsUnaffordableOrderBeforeConsultingTheBook() {
-        // 100 shares at the order's own limit of 10.00 = 1000.00, + 0.1% fee
-        // (1.00) = 1001.00 worst-case total. A balance of 500.00 can't cover
-        // that, so OrderBookMatcher.match(...) must never even be called -
-        // this is the same worst-case-ceiling re-check the non-matching path
-        // already does with the quote, just gated on the order's own limit
-        // price instead (there's no quote fetch on this path at all).
-        OrderExecutionService matchingEnabledService = new OrderExecutionService(orderMapper, accountMapper,
-                instrumentMapper, positionMapper, quoteSource, settlementService, tradeEventPublisher,
-                currencyConverter, feeCalculator, orderBookMatcher, true);
-
-        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 100);
-        givenTradableInstrument("USD");
-        givenAccount("ACTIVE", new BigDecimal("500.00"), "USD");
-        when(settlementService.settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS)))
-                .thenReturn(SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
-
-        matchingEnabledService.process(placedEvent());
-
-        verify(orderBookMatcher, never()).match(any(), any(), any());
-        verify(settlementService).settleReject(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
-        verify(tradeEventPublisher).publishRejected(any(), eq(RejectionReason.INSUFFICIENT_FUNDS));
     }
 
     @Test
@@ -187,6 +136,61 @@ class OrderExecutionServiceTest {
     }
 
     @Test
+    @DisplayName("a buy the account can no longer pay for at fill time is rejected INSUFFICIENT_FUNDS, not settled")
+    void buyThatNoLongerFitsTheCashIsRejected() {
+        // 10 x 10.00 = 100.00 plus the fee, but only 99.00 is left: two buys that each fitted when placed.
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("99.00"), "USD");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(settlementService, never()).settleFill(any(), any(), any(), any(), any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
+    @DisplayName("cash that went between the check and the write rejects the buy, it does not fail the message")
+    void cashGoneAtSettlementRejects() {
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("5000.00"), "USD");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleFill(any(), any(), any(), any(), any(), any(), any()))
+                .thenThrow(new com.trade.executor.settlement.InsufficientFundsAtSettlementException(1L));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(tradeEventPublisher, never()).publishFilled(any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
+    @DisplayName("an INR account buying a USD instrument is checked in INR: the same buy that fits in dollars may not fit")
+    void affordabilityIsCheckedInTheAccountCurrency() {
+        // 100.00 USD x 90 = 9,000.00 INR plus the fee against 8,000.00 INR of cash.
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("8000.00"), "INR");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(settlementService, never()).settleFill(any(), any(), any(), any(), any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
     @DisplayName("Story 7: an order id not in Postgres is poison, not retried as transient")
     void unknownOrderIdIsPoison() {
         when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.empty());
@@ -198,7 +202,7 @@ class OrderExecutionServiceTest {
     @DisplayName("Story 7: an unparseable order id is poison")
     void unparseableOrderIdIsPoison() {
         OrderPlacedPayload badEvent = new OrderPlacedPayload("not-a-valid-order-id", 1L, "AAPL",
-                OrderSide.BUY, 10, new BigDecimal("10.00"), "KEY-1", Instant.now());
+                OrderSide.BUY, 10, new BigDecimal("10.00"), "KEY-1", Instant.now(), usdInstrumentRates());
 
         assertThrows(PoisonMessageException.class, () -> orderExecutionService.process(badEvent));
     }
@@ -206,7 +210,7 @@ class OrderExecutionServiceTest {
     private void givenOrder(OrderSide side, BigDecimal limitPrice, int quantity) {
         when(orderMapper.findById(ORDER_ID)).thenReturn(Optional.of(
                 new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", side.name(), quantity, limitPrice, "NEW",
-                        0, java.time.OffsetDateTime.now())));
+                        0, java.time.OffsetDateTime.now(), FEE_RATE)));
     }
 
     private void givenTradableInstrument(String currency) {
@@ -225,6 +229,10 @@ class OrderExecutionServiceTest {
     // UPDATE treats as the source of truth.
     private OrderPlacedPayload placedEvent() {
         return new OrderPlacedPayload("ORD-" + ORDER_ID, 1L, "AAPL", OrderSide.BUY, 10,
-                new BigDecimal("10.00"), "KEY-1", Instant.now());
+                new BigDecimal("10.00"), "KEY-1", Instant.now(), usdInstrumentRates());
+    }
+
+    private static Map<String, BigDecimal> usdInstrumentRates() {
+        return Map.of("USD", BigDecimal.ONE, "INR", new BigDecimal("90"));
     }
 }

@@ -37,6 +37,10 @@
         WHERE a.id = #{id}
     </select>
 
+    <select id="findIdByUserId" resultType="long">
+        SELECT id FROM Accounts WHERE user_id = #{userId} ORDER BY id LIMIT 1
+    </select>
+
     <update id="updateBalanceWithVersion">
         UPDATE Accounts
         SET cash_balance = #{newBalance},

@@ -30,6 +30,12 @@ export function adminErrorMessage(error: unknown): string {
   const body: unknown = error.error;
   if (body && typeof body === 'object' && 'errorCode' in body) {
     const code = (body as { errorCode: unknown }).errorCode;
+    // A refusal by a business rule carries `reason`, a sentence written for the
+    // operator (why an approval cannot go ahead). `message` is never shown.
+    const reason = (body as { reason?: unknown }).reason;
+    if (code === 'ADM-409' && typeof reason === 'string' && reason.trim()) {
+      return reason;
+    }
     if (typeof code === 'string' && Object.hasOwn(ADMIN_ERROR_MESSAGES, code)) {
       return ADMIN_ERROR_MESSAGES[code as AdminErrorCode];
     }

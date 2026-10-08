@@ -28,13 +28,15 @@ import java.util.Optional;
 // resolves the order to PRICE_UNAVAILABLE instead of it ever propagating
 // into the Kafka listener's retry/dead-letter handling.
 //
-// @Profile("!market-sim"): the spec-exact story this repo was built against
-// - real Fauxnance, direct, no simulated market. TradesGeneratorQuoteSource
-// is the other QuoteSource implementation, active only under market-sim;
-// exactly one of the two is ever a candidate bean, so nothing downstream
-// (OrderExecutionService, MarketDataPoller) needs an @Qualifier to pick.
+// RETIRED from the default wiring, kept as code. Fills used to be priced with
+// one real Fauxnance quote fetched per order; they now use the live ticker
+// (the price feed's current tick) under every profile - see
+// LiveTickQuoteSource - so the price a customer sees and the price
+// their order is filled against are the same number. Switch this back on with
+// SPRING_PROFILES_ACTIVE=fauxnance-direct (it then also needs
+// FAUXNANCE_API_URL and FAUXNANCE_API_KEY, and the ticker source stands down).
 @Component
-@Profile("!market-sim")
+@Profile("fauxnance-direct")
 public class FauxnanceQuoteClient implements QuoteSource {
 
     private static final Logger log = LoggerFactory.getLogger(FauxnanceQuoteClient.class);

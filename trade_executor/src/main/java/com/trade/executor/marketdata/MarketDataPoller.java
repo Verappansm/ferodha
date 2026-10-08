@@ -29,11 +29,11 @@ import java.util.Map;
 // The poll schedule has nothing to do with order placement - this class
 // never touches Orders, Accounts, or the orders/trade-events topics.
 //
-// Off unless executor.market-data.poller-enabled=true. pricing_generator is
-// the platform's live price feed under every profile and publishes the
-// same market-data messages; two publishers would interleave real and
-// simulated prices on one topic and spend the Fauxnance quota twice. Kept
-// for a deployment without pricing_generator. Never under market-sim.
+// Off unless executor.market-data.poller-enabled=true. The price feed
+// (com.trade.executor.ticker) is the platform's live price feed under every
+// profile and publishes the same market-data messages; two publishers would
+// interleave real and simulated prices on one topic and spend the Fauxnance
+// quota twice. Kept for a deployment without the price feed. Never under market-sim.
 // (Order fills are not affected: under the default profile the executor
 // still prices each fill with its own Fauxnance quote.)
 @Component

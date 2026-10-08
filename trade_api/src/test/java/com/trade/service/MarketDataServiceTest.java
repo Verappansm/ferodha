@@ -26,6 +26,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,7 +60,7 @@ class MarketDataServiceTest {
         service = new MarketDataService(instruments, history, storedPrices, quotes, Duration.ofMinutes(5),
                 Clock.fixed(NOW.toInstant(), ZoneOffset.UTC));
         when(instruments.findBySymbol("AAPL")).thenReturn(Optional.of(
-                new Instrument("AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology")));
+                new Instrument(UUID.randomUUID(), "AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology")));
         when(history.findLatestMinuteBar(anyString())).thenReturn(Optional.empty());
         when(history.findCloseBefore(anyString(), any())).thenReturn(Optional.empty());
     }
@@ -158,7 +159,7 @@ class MarketDataServiceTest {
     @Test
     @DisplayName("a delisted or unknown instrument is INS-404")
     void delistedIsNotFound() {
-        Instrument delisted = new Instrument("OLD", "Old Co", InstrumentType.EQUITY, "USD", "NYSE", null);
+        Instrument delisted = new Instrument(UUID.randomUUID(), "OLD", "Old Co", InstrumentType.EQUITY, "USD", "NYSE", null);
         delisted.delist();
         when(instruments.findBySymbol("OLD")).thenReturn(Optional.of(delisted));
 

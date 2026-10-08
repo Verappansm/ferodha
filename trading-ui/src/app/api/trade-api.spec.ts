@@ -2,7 +2,12 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideApiClients } from './provide-api-clients';
-import { OrderSide, OrderStatus, TradeApi } from './trade-api';
+import {
+  InstrumentType,
+  OrderSide,
+  OrderStatus,
+  TradeApi,
+} from './trade-api';
 
 const TRADE = 'http://trade.test';
 
@@ -77,5 +82,21 @@ describe('TradeApi', () => {
     );
     expect(request.request.params.has('to')).toBe(false);
     request.flush([]);
+  });
+
+  it('sends the search and filters to the server as query parameters (LEAP-015)', () => {
+    api
+      .getInstruments(20, 40, { search: ' app ', exchange: 'NASDAQ', type: InstrumentType.EQUITY })
+      .subscribe();
+
+    const request = http.expectOne(
+      (r) => r.url === `${TRADE}/api/v1/instruments` && r.params.get('search') === 'app',
+    );
+    expect(request.request.params.get('pageSize')).toBe('20');
+    expect(request.request.params.get('offset')).toBe('40');
+    expect(request.request.params.get('exchange')).toBe('NASDAQ');
+    expect(request.request.params.get('type')).toBe('EQUITY');
+    expect(request.request.params.has('sector')).toBe(false);
+    request.flush({ instruments: [], total: 0, pageSize: 20, offset: 40 });
   });
 });

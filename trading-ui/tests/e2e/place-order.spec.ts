@@ -114,11 +114,14 @@ test.describe('Place Order Journey', () => {
     await page.fill('input[data-testid="order-symbol"]', 'AAPL');
     await page.selectOption('select[data-testid="order-side"]', 'BUY');
     await page.fill('input[data-testid="order-quantity"]', '1');
-    await page.fill('input[data-testid="order-price"]', '150.00');
+    // Above the market, so it is marketable and fills at the ask: a limit
+    // below the ask is rejected (NOT_MARKETABLE) and shows in order-error.
+    await page.fill('input[data-testid="order-price"]', '2000.00');
 
-    // Submit form
+    // Review, then confirm (LEAP-017)
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     // Wait for request to complete
     await page.waitForLoadState('networkidle');
@@ -130,13 +133,10 @@ test.describe('Place Order Journey', () => {
     const messageText = await successMessage.textContent();
     expect(messageText).toBeTruthy();
 
-    // Verify status is one of the expected values
-    expect(messageText).toMatch(/status (NEW|FILLED|REJECTED)/i);
-
-    // Extract and verify the status
-    const statusMatch = messageText!.match(/status (\w+)/i);
-    const status = statusMatch?.[1];
-    expect(['NEW', 'FILLED', 'REJECTED']).toContain(status);
+    // The message names the order: "Order ORD-... placed." while the executor
+    // works on it, then "Order ORD-... is filled." (a rejection shows in
+    // order-error instead, so it never reaches here).
+    expect(messageText).toMatch(/Order \S+ (placed|is (new|filled|partially_filled))\./i);
   });
 
   test('Placed order: successful order with NEW status', async ({ page }) => {
@@ -144,14 +144,17 @@ test.describe('Place Order Journey', () => {
     await page.goto('/order');
 
     // Fill in a valid order form
-    await page.fill('input[data-testid="order-symbol"]', 'TEST');
+    // A real, tradable symbol: the review refuses an unknown one before
+    // anything is sent, so Confirm would never be enabled.
+    await page.fill('input[data-testid="order-symbol"]', 'AAPL');
     await page.selectOption('select[data-testid="order-side"]', 'BUY');
     await page.fill('input[data-testid="order-quantity"]', '1');
     await page.fill('input[data-testid="order-price"]', '100.00');
 
-    // Submit form
+    // Review, then confirm (LEAP-017)
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     // Wait for response from server
     await page.waitForTimeout(1000);
@@ -182,13 +185,14 @@ test.describe('Place Order Journey', () => {
 
     // Place an order
     await page.goto('/order');
-    await page.fill('input[data-testid="order-symbol"]', 'ISOLATION-TEST');
+    await page.fill('input[data-testid="order-symbol"]', 'AAPL');
     await page.selectOption('select[data-testid="order-side"]', 'BUY');
     await page.fill('input[data-testid="order-quantity"]', '1');
     await page.fill('input[data-testid="order-price"]', '1.00');
 
     const submitButton = page.locator('button[data-testid="order-submit"]');
     await submitButton.click();
+    await page.locator('button[data-testid="order-review-confirm"]').click();
 
     await page.waitForTimeout(1000);
     await page.waitForLoadState('networkidle');

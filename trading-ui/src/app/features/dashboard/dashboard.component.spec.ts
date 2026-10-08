@@ -8,6 +8,7 @@ import { Session } from '../../core/session/session';
 import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
 import { PortfolioApi, PricedPosition } from '../../api/portfolio-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 function order(
   orderId: string,
@@ -24,6 +25,10 @@ function order(
     executedPrice: 149.5,
     status,
     createdOn,
+    instrumentCurrency: 'USD',
+    accountCurrency: 'USD',
+    filledQuantity: status === OrderStatus.FILLED ? 10 : 0,
+    estimatedValueAccountCurrency: 1500,
   };
 }
 
@@ -79,6 +84,7 @@ describe('DashboardComponent', () => {
       providers: [
         provideRouter([]),
         { provide: Session, useValue: { accountId: signal<number | null>(3) } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { balance, orderHistory } },
         { provide: PortfolioApi, useValue: { pnl, positions } },
       ],
@@ -111,7 +117,7 @@ describe('DashboardComponent', () => {
       open();
       const today = new Date().toISOString().slice(0, 10);
       expect(pnl).toHaveBeenCalledWith(3, { from: today, to: today });
-      expect(text('pnl-total')).toBe('+24.50USD');
+      expect(text('pnl-total')).toBe('+24.50 USD');
       expect(text('pnl-word')).toBe('Gain');
       expect(text('pnl-realised')).toBe('+40.00 Gain');
       expect(text('pnl-unrealised')).toBe('−15.50 Loss');
@@ -189,7 +195,7 @@ describe('DashboardComponent', () => {
       balance.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
       open();
       expect(text('cash-error')).toContain('could not be reached');
-      expect(text('pnl-total')).toBe('+24.50USD');
+      expect(text('pnl-total')).toBe('+24.50 USD');
 
       const retry: HTMLButtonElement = fixture.nativeElement.querySelector(
         '[data-testid="cash-panel"] .retry',

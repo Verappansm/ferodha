@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class InstrumentRepositoryImpl implements InstrumentRepository {
@@ -22,6 +23,11 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
     @Override
     public Optional<Instrument> findBySymbol(String symbol) {
         return instrumentMapper.findBySymbol(symbol).map(InstrumentRepositoryImpl::toDomain);
+    }
+
+    @Override
+    public Optional<Instrument> findByInstrumentId(UUID instrumentId) {
+        return instrumentMapper.findByInstrumentId(instrumentId).map(InstrumentRepositoryImpl::toDomain);
     }
 
     @Override
@@ -39,6 +45,7 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
 
     private static Instrument toDomain(InstrumentRow row) {
         Instrument instrument = new Instrument(
+                row.instrumentId(),
                 row.symbol(),
                 row.displayName(),
                 InstrumentType.valueOf(row.assetClass()),

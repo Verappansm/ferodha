@@ -101,20 +101,23 @@
         <constructor>
             <arg column="bank_account_number" javaType="java.lang.String"/>
             <arg column="email" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
-    <select id="findBankAccount" resultMap="bankAccount">
-        SELECT bank_account_number, email
+    <select id="findBankAccountByEmail" resultMap="bankAccount">
+        SELECT bank_account_number, email, currency
         FROM Third_Party_Bank
-        WHERE bank_account_number = #{number}
+        WHERE lower(email) = lower(#{email})
     </select>
 
-    <!-- The simulated bank holds no PIN for an account an operator verified by hand. -->
-    <insert id="insertBankAccount">
-        INSERT INTO Third_Party_Bank (bank_account_number, email, pin_hash, balance)
-        VALUES (#{number}, #{email}, 'not-set', 0)
-    </insert>
+    <select id="countAccountsOnBank" resultType="int">
+        SELECT count(*) FROM Accounts WHERE bank_account_number = #{number}
+    </select>
+
+    <select id="isEmailVerified" resultType="boolean">
+        SELECT email_verified_at IS NOT NULL FROM Users WHERE user_id = #{userId}::uuid
+    </select>
 
     <!--
         business_ref is derived from the numeric key, as Liquibase 001 does for
@@ -297,6 +300,107 @@
         WHERE instrument_id = #{id}::uuid
           AND tradable = NOT #{tradable}
     </update>
+
+    <select id="insertInstrument" resultType="java.lang.String">
+        INSERT INTO Instruments (ticker, name, exchange, currency, type, sector,
+                                 tradable, tradable_changed_by, tradable_changed_at)
+        VALUES (#{ticker}, #{name}, #{exchange}, #{currency}, #{type}::instrument_type_enum,
+                #{sector,jdbcType=VARCHAR}, true, #{adminId}::uuid, now())
+        ON CONFLICT (ticker) DO NOTHING
+        RETURNING instrument_id::text
+    </select>
+
+    <!-- ===================== Fees ===================== -->
+    <!-- Commission is Orders.fee_amount, in the account's currency, written by
+         the executor when it fills a portal order. Market-maker and seeded
+         orders (source other than PORTAL) pay none and are left out. The day
+         bounds are UTC dates, inclusive. -->
+
+    <resultMap id="feeCurrency" type="com.trade.admin.mapper.FeeCurrencyRow">
+        <constructor>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="orders" javaType="java.lang.Long"/>
+            <arg column="fees" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="feeUser" type="com.trade.admin.mapper.FeeUserRow">
+        <constructor>
+            <arg column="user_id" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="email" javaType="java.lang.String"/>
+            <arg column="account_id" javaType="java.lang.Long"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="orders" javaType="java.lang.Long"/>
+            <arg column="fees" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="feeInstrument" type="com.trade.admin.mapper.FeeInstrumentRow">
+        <constructor>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="orders" javaType="java.lang.Long"/>
+            <arg column="fees" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="feeFrom">
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Users u ON u.user_id = a.user_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.source = 'PORTAL'
+          AND o.status IN ('FILLED'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND o.fee_amount IS NOT NULL
+          AND o.fee_amount &gt; 0
+        <if test="from != null">
+            AND (COALESCE(o.executed_on, o.placed_at) AT TIME ZONE 'UTC')::date &gt;= #{from}
+        </if>
+        <if test="to != null">
+            AND (COALESCE(o.executed_on, o.placed_at) AT TIME ZONE 'UTC')::date &lt;= #{to}
+        </if>
+    </sql>
+
+    <select id="feeTotalsByCurrency" resultMap="feeCurrency">
+        SELECT a.currency AS currency, count(*) AS orders, COALESCE(SUM(o.fee_amount), 0) AS fees
+        <include refid="feeFrom"/>
+        GROUP BY a.currency
+        ORDER BY a.currency
+    </select>
+
+    <sql id="feeUserFilter">
+        <if test="q != null">
+            AND (u.name ILIKE '%' || #{q} || '%' OR u.email ILIKE '%' || #{q} || '%')
+        </if>
+    </sql>
+
+    <select id="feesByUser" resultMap="feeUser">
+        SELECT u.user_id::text AS user_id, u.name AS name, u.email AS email, a.id AS account_id,
+               a.currency AS currency, count(*) AS orders, SUM(o.fee_amount) AS fees
+        <include refid="feeFrom"/>
+        <include refid="feeUserFilter"/>
+        GROUP BY u.user_id, u.name, u.email, a.id, a.currency
+        ORDER BY SUM(o.fee_amount) / CASE WHEN a.currency = 'INR' THEN #{inrPerUsd} ELSE 1 END DESC, u.email
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countFeeUsers" resultType="long">
+        SELECT count(*) FROM (
+            SELECT 1
+            <include refid="feeFrom"/>
+            <include refid="feeUserFilter"/>
+            GROUP BY u.user_id, a.id
+        ) fee_users
+    </select>
+
+    <select id="feesByInstrument" resultMap="feeInstrument">
+        SELECT i.ticker AS symbol, i.name AS name, a.currency AS currency, count(*) AS orders,
+               SUM(o.fee_amount) AS fees
+        <include refid="feeFrom"/>
+        GROUP BY i.ticker, i.name, a.currency
+    </select>
 
     <!-- ===================== Orders ===================== -->
 

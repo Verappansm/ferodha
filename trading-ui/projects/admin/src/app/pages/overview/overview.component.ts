@@ -2,14 +2,16 @@ import { Component, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
-import { AdminApi, AdminSummary, AuditEntry, SystemHealth } from '../../api/admin-api';
+import { DecimalPipe } from '@angular/common';
+import { AdminApi, AdminSummary, AuditEntry, FeeSummary, SystemHealth } from '../../api/admin-api';
 import { adminErrorMessage } from '../../core/errors/admin-error-message';
+import { InfoTipComponent } from '../../shared/info-tip.component';
 import { StatusPillComponent } from '../../shared/status-pill.component';
 
 /** Headline counts, service health and the latest decisions, each loaded independently. */
 @Component({
   selector: 'adm-overview',
-  imports: [RouterLink, DatePipe, StatusPillComponent],
+  imports: [RouterLink, DatePipe, DecimalPipe, InfoTipComponent, StatusPillComponent],
   template: `
     <div class="page">
       <header class="page-header">
@@ -31,7 +33,12 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
             [class.tile-attention]="s.pendingRequests > 0"
             data-testid="tile-pending"
           >
-            <div class="tile-label">Pending account requests</div>
+            <div class="tile-label">
+              Pending account requests<adm-info-tip
+                label="Pending account requests"
+                text="New customers waiting for an administrator to open their trading account. They cannot sign in until you approve."
+              />
+            </div>
             <div class="tile-value">{{ s.pendingRequests }}</div>
           </a>
           <a class="tile" routerLink="/users">
@@ -58,6 +65,21 @@ import { StatusPillComponent } from '../../shared/status-pill.component';
             <div class="tile-label">Tradable instruments</div>
             <div class="tile-value">{{ s.tradableInstruments }}</div>
           </a>
+          @if (fees(); as f) {
+            <a class="tile" routerLink="/fees" data-testid="tile-fees">
+              <div class="tile-label">
+                Total fees (USD)<adm-info-tip
+                  label="Total fees"
+                  text="Commission taken on filled customer orders, all time. INR accounts are converted at 90 to the dollar."
+                />
+              </div>
+              <div class="tile-value">{{ f.totalFees | number: '1.2-2' }}</div>
+            </a>
+            <a class="tile" routerLink="/fees" data-testid="tile-fees-month">
+              <div class="tile-label">Fees this month (USD)</div>
+              <div class="tile-value">{{ f.feesThisMonth | number: '1.2-2' }}</div>
+            </a>
+          }
         </section>
       } @else if (!summaryError()) {
         <p class="state">Loading counts…</p>
@@ -141,6 +163,7 @@ export class OverviewComponent {
 
   readonly summary = signal<AdminSummary | null>(null);
   readonly summaryError = signal('');
+  readonly fees = signal<FeeSummary | null>(null);
   readonly health = signal<SystemHealth | null>(null);
   readonly healthError = signal('');
   readonly audit = signal<AuditEntry[]>([]);
@@ -157,6 +180,9 @@ export class OverviewComponent {
     firstValueFrom(this.api.summary())
       .then((s) => this.summary.set(s))
       .catch((e) => this.summaryError.set(adminErrorMessage(e)));
+    firstValueFrom(this.api.feeSummary())
+      .then((f) => this.fees.set(f))
+      .catch(() => this.fees.set(null)); // the counts still show; Fees has its own error
     firstValueFrom(this.api.health())
       .then((h) => this.health.set(h))
       .catch((e) => this.healthError.set(adminErrorMessage(e)));

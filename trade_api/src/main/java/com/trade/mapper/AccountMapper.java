@@ -13,6 +13,9 @@ public interface AccountMapper {
 
     Optional<AccountRow> findById(@Param("id") long id);
 
+    /** The trading account opened for a user, if any (one per user, LEAP-011). */
+    Optional<Long> findIdByUserId(@Param("userId") java.util.UUID userId);
+
     // The optimistic-locking write: names the version the row held when it
     // was read and increments it in the same statement. Returns the affected
     // row count rather than void, because that count is the only evidence of

@@ -49,6 +49,7 @@ tags:
   - name: AdminAccountRequests
   - name: AdminAccounts
   - name: AdminInstruments
+  - name: AdminFees
   - name: AdminOrders
   - name: AdminSystem
 
@@ -292,6 +293,105 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+    post:
+      tags: [AdminInstruments]
+      operationId: addInstrument
+      summary: Add a new tradable instrument
+      description: |
+        The ticker is the key, so adding one that exists is `ADM-409`. Prices come from the live
+        feed, which can only price a symbol the market-data provider knows: an unknown ticker is
+        listed but has no price, and cannot be traded, until it does.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInstrumentRequest'
+      responses:
+        '201':
+          description: The new instrument.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInstrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/fees/summary:
+    get:
+      tags: [AdminFees]
+      operationId: getFeeSummary
+      summary: Commission taken, all time and this month
+      description: |
+        The sum of the commission on filled customer orders, in USD (INR converted at the fixed
+        90 INR = 1 USD the executor settles at), with the unconverted per-currency figures.
+      responses:
+        '200':
+          description: The fee totals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/fees/by-user:
+    get:
+      tags: [AdminFees]
+      operationId: listFeesByUser
+      summary: Commission paid per customer account
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page, largest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeUserPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/fees/by-instrument:
+    get:
+      tags: [AdminFees]
+      operationId: listFeesByInstrument
+      summary: Commission taken per instrument, in USD
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Every instrument that earned a fee, largest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeeInstrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
   /api/v1/admin/instruments/{id}/delist:
     post:
       tags: [AdminInstruments]
@@ -461,6 +561,22 @@ components:
       schema:
         type: string
         format: uuid
+    FromDate:
+      name: from
+      in: query
+      required: false
+      description: First day to include (UTC date, inclusive).
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      required: false
+      description: Last day to include (UTC date, inclusive).
+      schema:
+        type: string
+        format: date
     Query:
       name: q
       in: query
@@ -555,18 +671,22 @@ components:
     ApproveAccountRequest:
       type: object
       additionalProperties: false
-      required: [bankAccountNumber, currency]
       properties:
         bankAccountNumber:
           type: string
           minLength: 4
           maxLength: 50
-          description: The applicant's verified bank account in the simulated bank.
+          description: >-
+            Optional. The account is the one the simulated bank holds under the applicant's
+            verified email, never created or chosen here. If given, it must be that one.
           example: BANK-100004
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
           example: USD
+          description: >-
+            Optional. The account opens in the currency of the bank account it is linked to, so
+            money moves between them one for one. If given, it must be that currency.
         note:
           type: string
           maxLength: 500
@@ -707,6 +827,129 @@ components:
           type: integer
         totalItems:
           type: integer
+
+    CreateInstrumentRequest:
+      type: object
+      additionalProperties: false
+      required: [ticker, name, exchange, currency, type, reason]
+      properties:
+        ticker:
+          type: string
+          pattern: '^[A-Z0-9][A-Z0-9.\-]{0,19}$'
+          example: NEWCO
+        name:
+          type: string
+          maxLength: 150
+        exchange:
+          type: string
+          maxLength: 50
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: USD
+        type:
+          $ref: '#/components/schemas/InstrumentType'
+        sector:
+          type: string
+          maxLength: 50
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    FeeByCurrency:
+      type: object
+      additionalProperties: false
+      required: [currency, orders, fees]
+      properties:
+        currency:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        fees:
+          type: number
+
+    FeeSummary:
+      type: object
+      additionalProperties: false
+      required: [currency, totalFees, feesThisMonth, feeOrders, byCurrency, partial]
+      properties:
+        currency:
+          type: string
+          description: The currency of the totals (USD).
+        totalFees:
+          type: number
+        feesThisMonth:
+          type: number
+        feeOrders:
+          type: integer
+          format: int64
+        byCurrency:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeByCurrency'
+        partial:
+          type: boolean
+          description: True when a currency could not be converted and is left out of the totals.
+
+    FeeUser:
+      type: object
+      additionalProperties: false
+      required: [userId, name, email, accountId, currency, orders, fees]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        accountId:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        fees:
+          type: number
+          description: In the account's own currency.
+        feesUsd:
+          type: [number, 'null']
+          description: The same amount in USD; null when the currency cannot be converted.
+
+    FeeUserPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeUser'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    FeeInstrument:
+      type: object
+      additionalProperties: false
+      required: [symbol, name, orders, feesUsd]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        feesUsd:
+          type: number
 
     AdminOrderStatus:
       type: string
@@ -868,3 +1111,9 @@ components:
         message:
           type: string
           description: For a developer reading a log. Never branch on it.
+        reason:
+          type: string
+          description: |
+            Present only on an ADM-409 a business rule raised (an approval the applicant or
+            the bank side has to act on first). A sentence written for the operator, naming
+            nothing they cannot already see; the console shows it as given.

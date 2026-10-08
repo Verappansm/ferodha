@@ -3,7 +3,10 @@ import { JwtModule } from '@nestjs/jwt';
 import { AppConfigModule } from '../config/config.module';
 import { AppConfigService } from '../config/config.service';
 import { PersistenceModule } from '../persistence/persistence.module';
+import { MailService } from '../mail/mail.service';
 import { AuthController } from './auth.controller';
+import { EmailVerificationService } from './email-verification.service';
+import { VerificationController } from './verification.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginAttemptLimiter } from './login-attempt-limiter';
@@ -28,9 +31,11 @@ import { ProfileService } from './profile.service';
       }),
     }),
   ],
-  controllers: [AuthController, ProfileController],
+  controllers: [AuthController, VerificationController, ProfileController],
   providers: [
     AuthService,
+    EmailVerificationService,
+    MailService,
     ProfileService,
     PasswordService,
     JwtAuthGuard,

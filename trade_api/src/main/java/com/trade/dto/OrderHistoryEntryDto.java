@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 //populated after order is created, field for price can be null [before execution]
+// rejectionReason is the trade executor's reason code, set only on a REJECTED order
 
 public record OrderHistoryEntryDto(
         String orderId,
@@ -18,6 +19,16 @@ public record OrderHistoryEntryDto(
         BigDecimal executedPrice,
         OrderStatus status,
         String idempotencyKey,
-        OffsetDateTime createdOn
+        OffsetDateTime createdOn,
+        String rejectionReason,
+        String instrumentCurrency,
+        String accountCurrency,
+        Integer filledQuantity,
+        BigDecimal filledValue,
+        BigDecimal filledValueAccountCurrency,
+        BigDecimal feeAmountInstrumentCurrency,
+        BigDecimal feeAmount,
+        BigDecimal cashAmountAccountCurrency,
+        BigDecimal estimatedValueAccountCurrency
 ) {
 }

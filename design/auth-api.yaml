@@ -124,7 +124,9 @@ paths:
       summary: Log in and receive tokens
       description: |
         Verifies the credentials and issues an access token and a refresh token. Every failure,
-        whatever its cause, returns the same `AUTH-401` body.
+        whatever its cause, returns the same `AUTH-401` body. Right credentials on a user an
+        administrator forced to reset return `AUTH-428` instead, and no tokens, until the password
+        is changed through `/auth/change-password`.
       requestBody:
         required: true
         content:
@@ -145,6 +147,127 @@ paths:
                 $ref: '#/components/schemas/TokenResponse'
         '401':
           $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+        '428':
+          description: The password is right, but it must be changed before a session is issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                passwordChangeRequired:
+                  value:
+                    errorCode: AUTH-428
+                    message: Password change required
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      operationId: changePassword
+      security: []
+      summary: Change the password, proving the current one
+      description: |
+        Replaces the password, clears a forced reset and revokes every refresh token the user holds.
+        A wrong current password, an unknown username and an inactive user all return the same
+        `AUTH-401`. The new password follows the registration length rule.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: Changed. Sign in with the new password.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/account-status:
+    post:
+      tags: [Auth]
+      operationId: accountStatus
+      security: []
+      summary: The state of the account-opening request, for someone who cannot sign in yet
+      description: |
+        LEAP-012. Checked with the email and password exactly as a login is, so a wrong password and
+        an unknown email are the same `AUTH-401`, and failures count towards the login throttle. No
+        token is issued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: The latest request's state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      summary: Sign out everywhere
+      description: |
+        LEAP-010. Revokes every refresh token the user holds, this device included, so every session
+        ends at its next refresh. The caller clears its own session at once.
+      responses:
+        '204':
+          description: Every refresh token is revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      security: []
+      summary: Enter the six-digit code mailed at registration
+      description: |
+        Proves the address is the registrant's own. The bank holds the customer's account under that
+        address, so an administrator can open a trading account only after this. A code lives ten
+        minutes and is burned by five wrong guesses. A wrong, expired or used-up code and an unknown
+        address all return the same `VAL-422`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '204':
+          description: Verified (also when it already was).
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/resend-code:
+    post:
+      tags: [Auth]
+      operationId: resendVerificationCode
+      security: []
+      summary: Mail a new verification code
+      description: |
+        At most one a minute per address. Always `204`, so it never reveals whether an address is
+        registered or already verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendCodeRequest'
+      responses:
+        '204':
+          description: Accepted.
         '422':
           $ref: '#/components/responses/InvalidInput'
 
@@ -287,6 +410,67 @@ components:
           maxLength: 128
           writeOnly: true
 
+    AccountStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [status, reason, emailVerified, requestedAt, decidedAt]
+      properties:
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, NONE]
+          description: The latest account-opening request; NONE when none was ever filed.
+        reason:
+          type: [string, 'null']
+          description: Why the request was rejected; null otherwise.
+        emailVerified:
+          type: boolean
+          description: Whether the code mailed at registration has been entered. Approval waits for it.
+        requestedAt:
+          type: [string, 'null']
+          format: date-time
+        decidedAt:
+          type: [string, 'null']
+          format: date-time
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [username, currentPassword, newPassword]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        currentPassword:
+          type: string
+          maxLength: 128
+          writeOnly: true
+        newPassword:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+
+    VerifyEmailRequest:
+      type: object
+      additionalProperties: false
+      required: [username, code]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+        code:
+          type: string
+          pattern: '^[0-9]{6}$'
+
+    ResendCodeRequest:
+      type: object
+      additionalProperties: false
+      required: [username]
+      properties:
+        username:
+          type: string
+          maxLength: 64
+
     RefreshRequest:
       type: object
       additionalProperties: false
@@ -359,12 +543,13 @@ components:
       properties:
         errorCode:
           type: string
-          enum: [AUTH-401, AUTH-409, VAL-422]
+          enum: [AUTH-401, AUTH-409, AUTH-428, VAL-422]
           description: |
             | Code | HTTP | Meaning |
             |---|---|---|
             | `AUTH-401` | 401 | Unauthorised or invalid token |
             | `AUTH-409` | 409 | Username already taken |
+            | `AUTH-428` | 428 | Right password, but an administrator forced a password change |
             | `VAL-422` | 422 | Invalid input |
 
             `AUTH-409` extends the platform error catalogue and is scoped to this service. The

@@ -5,6 +5,8 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
+  Optional,
   Post,
   Req,
   UseGuards,
@@ -23,12 +25,15 @@ import type { Request } from 'express';
 import { RegisterRequestDto } from './dto/register-request.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
+import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
 import {
+  AccountStatusResponseDto,
   ErrorResponseDto,
   TokenResponseDto,
   UserResponseDto,
 } from './dto/responses.dto';
 import { AuthService } from './auth.service';
+import { EmailVerificationService } from './email-verification.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LoginAttemptLimiter } from './login-attempt-limiter';
 import { clientIp, LoginThrottleGuard } from './login-throttle.guard';
@@ -46,9 +51,13 @@ import type { AccessTokenClaims } from './access-token-claims';
 })
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly loginAttempts: LoginAttemptLimiter,
+    @Optional()
+    private readonly emailVerification?: EmailVerificationService,
   ) {}
 
   @Post('register')
@@ -62,8 +71,18 @@ export class AuthController {
     description: 'The username is already taken.',
     type: ErrorResponseDto,
   })
-  register(@Body() body: RegisterRequestDto) {
-    return this.authService.register(body);
+  async register(@Body() body: RegisterRequestDto) {
+    const user = await this.authService.register(body);
+    // The code proves the email is theirs. If the mail server is down the user
+    // is still registered, and asks for another code from the verify page.
+    try {
+      await this.emailVerification?.issue(user.id, user.username);
+    } catch (error) {
+      this.logger.error(
+        `Verification code for user ${user.id} could not be sent: ${String(error)}`,
+      );
+    }
+    return user;
   }
 
   @Post('login')
@@ -93,6 +112,71 @@ export class AuthController {
       }
       throw error;
     }
+  }
+
+  @Post('change-password')
+  @UseGuards(LoginThrottleGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    operationId: 'changePassword',
+    summary:
+      'Change the password with the current one. Clears a forced reset and ends every session.',
+  })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async changePassword(
+    @Body() body: ChangePasswordRequestDto,
+    @Req() request: Request,
+  ): Promise<void> {
+    try {
+      await this.authService.changePassword(body);
+    } catch (error) {
+      // A wrong current password is a failed guess, counted like a login.
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === Number(HttpStatus.UNAUTHORIZED)
+      ) {
+        this.loginAttempts.recordFailure(clientIp(request));
+      }
+      throw error;
+    }
+  }
+
+  @Post('account-status')
+  @UseGuards(LoginThrottleGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    operationId: 'accountStatus',
+    summary:
+      'The state of the account-opening request, checked with the email and password (no token is issued). Failures count towards the login throttle.',
+  })
+  @ApiOkResponse({ type: AccountStatusResponseDto })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async accountStatus(@Body() body: LoginRequestDto, @Req() request: Request) {
+    try {
+      return await this.authService.accountStatus(body);
+    } catch (error) {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === Number(HttpStatus.UNAUTHORIZED)
+      ) {
+        this.loginAttempts.recordFailure(clientIp(request));
+      }
+      throw error;
+    }
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({
+    operationId: 'logoutAll',
+    summary:
+      'Sign out everywhere: revokes every refresh token the user holds, this device included.',
+  })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async logoutAll(@CurrentUser() claims: AccessTokenClaims): Promise<void> {
+    await this.authService.logoutEverywhere(claims);
   }
 
   @Post('refresh')

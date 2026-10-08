@@ -61,6 +61,31 @@ export class AppConfigService implements OnModuleInit {
     return this.configService.get<string>('POSTGRES_PASSWORD') || '';
   }
 
+  /** Empty means "no mail server": codes are logged, not mailed (development). */
+  get smtpHost(): string {
+    return this.configService.get<string>('SMTP_HOST') || '';
+  }
+
+  get smtpPort(): number {
+    return this.configService.get<number>('SMTP_PORT') || 587;
+  }
+
+  get smtpUser(): string {
+    return this.configService.get<string>('SMTP_USER') || '';
+  }
+
+  /** Never log this value. */
+  get smtpPassword(): string {
+    return this.configService.get<string>('SMTP_PASSWORD') || '';
+  }
+
+  get mailFrom(): string {
+    return (
+      this.configService.get<string>('MAIL_FROM') ||
+      'Ferodha <no-reply@ferodha.local>'
+    );
+  }
+
   /** The browser origins allowed to call this service, from CORS_ALLOWED_ORIGINS. */
   get corsAllowedOrigins(): string[] {
     return parseOrigins(

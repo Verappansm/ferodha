@@ -33,7 +33,7 @@ public class CorsConfig {
     static UrlBasedCorsConfigurationSource corsConfigurationSource(String allowedOrigins) {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(parseOrigins(allowedOrigins));
-        config.setAllowedMethods(List.of("GET", "POST", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         // The token travels in the Authorization header, never a cookie.
         config.setAllowCredentials(false);

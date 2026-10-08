@@ -39,4 +39,21 @@ describe('adminErrorMessage', () => {
   it('a request that never reached a service renders a readable sentence', () => {
     expect(adminErrorMessage(new HttpErrorResponse({ status: 0 }))).toBe(ADMIN_UNREACHABLE);
   });
+
+  it('shows the reason a business rule gives for a refusal, and the catalogue line for a bare conflict', () => {
+    const refusal = new HttpErrorResponse({
+      status: 409,
+      error: {
+        errorCode: 'ADM-409',
+        message: 'Conflict',
+        reason: 'The bank holds no account under a@b.com.',
+      },
+    });
+    expect(adminErrorMessage(refusal)).toBe('The bank holds no account under a@b.com.');
+    const bare = new HttpErrorResponse({
+      status: 409,
+      error: { errorCode: 'ADM-409', message: 'Conflict' },
+    });
+    expect(adminErrorMessage(bare)).toBe(ADMIN_ERROR_MESSAGES['ADM-409']);
+  });
 });

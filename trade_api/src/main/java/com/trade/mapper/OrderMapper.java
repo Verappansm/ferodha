@@ -32,7 +32,8 @@ public interface OrderMapper {
                      @Param("price") BigDecimal price,
                      @Param("executedPrice") BigDecimal executedPrice,
                      @Param("status") String status,
-                     @Param("idempotencyKey") String idempotencyKey);
+                     @Param("idempotencyKey") String idempotencyKey,
+                     @Param("feeRate") BigDecimal feeRate);
 
     // Records the matching execution row, kept for the position query in
     // PositionMapper, which derives holdings from Trades rather than from a
@@ -61,4 +62,6 @@ public interface OrderMapper {
                                        @Param("status") String status,
                                        @Param("from") OffsetDateTime from,
                                        @Param("to") OffsetDateTime to);
+
+    List<OrderTradeFillRow> findHistoryFills(@Param("orderIds") List<UUID> orderIds);
 }

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.mapper.BankFundsMapper">
+    <resultMap id="bankFunds" type="com.trade.mapper.BankFundsRow">
+        <constructor>
+            <idArg column="id" javaType="long"/>
+            <arg column="account_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="bank_account_number" javaType="java.lang.String"/>
+            <arg column="pin_hash" javaType="java.lang.String"/>
+            <arg column="cash_balance" javaType="java.math.BigDecimal"/>
+            <arg column="bank_balance" javaType="java.math.BigDecimal"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="bank_currency" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="version" javaType="int"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="fundsColumns">
+        a.id, a.account_id, a.bank_account_number, b.pin_hash, a.cash_balance,
+        b.balance AS bank_balance, a.currency, b.currency AS bank_currency, a.status, a.version
+    </sql>
+
+    <!-- Email equality is intentional: an Accounts foreign key alone proves a bank row exists,
+         but this proves the linked external account is owned by the same user. -->
+    <select id="findByAccountId" resultMap="bankFunds">
+        SELECT <include refid="fundsColumns"/>
+        FROM Accounts a
+        JOIN Third_Party_Bank b ON b.bank_account_number = a.bank_account_number
+        JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{accountId} AND lower(b.email) = lower(u.email)
+    </select>
+
+    <select id="findAndLockByAccountId" resultMap="bankFunds">
+        SELECT <include refid="fundsColumns"/>
+        FROM Accounts a
+        JOIN Third_Party_Bank b ON b.bank_account_number = a.bank_account_number
+        JOIN Users u ON u.user_id = a.user_id
+        WHERE a.id = #{accountId} AND lower(b.email) = lower(u.email)
+        FOR UPDATE OF a, b
+    </select>
+
+    <update id="debitBank">
+        UPDATE Third_Party_Bank SET balance = balance - #{amount}
+        WHERE bank_account_number = #{bankAccountNumber} AND balance >= #{amount}
+    </update>
+    <update id="creditBank">
+        UPDATE Third_Party_Bank SET balance = balance + #{amount}
+        WHERE bank_account_number = #{bankAccountNumber}
+    </update>
+    <insert id="insertTransaction">
+        INSERT INTO Transactions (account_id, transaction_type, amount, metadata, idempotency_key)
+        VALUES (#{accountUuid}, CAST(#{type} AS transaction_type_enum), #{amount},
+                jsonb_build_object('source', 'linked_bank'), #{idempotencyKey}::text)
+    </insert>
+
+    <!-- What open buy orders still need: the unfilled quantity at the limit price, and the
+         fee rate written on each order. The service converts it to the account currency. -->
+    <resultMap id="openBuy" type="com.trade.mapper.OpenBuyReservationRow">
+        <constructor>
+            <arg column="limit_price" javaType="java.math.BigDecimal"/>
+            <arg column="remaining_quantity" javaType="java.math.BigDecimal"/>
+            <arg column="fee_rate" javaType="java.math.BigDecimal"/>
+            <arg column="instrument_currency" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="openBuyReservations" resultMap="openBuy">
+        SELECT o.limit_price,
+               o.quantity - COALESCE(o.filled_quantity, 0) AS remaining_quantity,
+               COALESCE(o.fee_rate, 0) AS fee_rate,
+               i.currency AS instrument_currency
+        FROM Orders o
+        JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE o.account_id = #{accountUuid}
+          AND o.side = 'BUY'::order_side_enum
+          AND o.status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+          AND o.limit_price IS NOT NULL
+    </select>
+
+    <!-- LEAP-019: every cash movement on the account, newest first. -->
+    <resultMap id="transaction" type="com.trade.dto.BankTransactionDto">
+        <constructor>
+            <arg column="transaction_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="transaction_type" javaType="java.lang.String"/>
+            <arg column="amount" javaType="java.math.BigDecimal"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="transaction_date" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findTransactions" resultMap="transaction">
+        SELECT t.transaction_id, t.transaction_type::text AS transaction_type, t.amount, a.currency,
+               t.transaction_date
+        FROM Transactions t
+        JOIN Accounts a ON a.account_id = t.account_id
+        WHERE a.id = #{accountId}
+        ORDER BY t.transaction_date DESC, t.transaction_id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countTransactions" resultType="long">
+        SELECT COUNT(*) FROM Transactions t JOIN Accounts a ON a.account_id = t.account_id
+        WHERE a.id = #{accountId}
+    </select>
+</mapper>

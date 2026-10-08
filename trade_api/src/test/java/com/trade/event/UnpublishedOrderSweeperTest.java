@@ -41,7 +41,7 @@ class UnpublishedOrderSweeperTest {
     void resendsAStuckOrderWithTheSameIdsItWasPlacedWith() {
         OffsetDateTime placedAt = OffsetDateTime.of(2026, 9, 28, 10, 0, 0, 0, ZoneOffset.UTC);
         when(orderMapper.findUnpublished(any(), eq(100))).thenReturn(List.of(new UnpublishedOrderRow(
-                ORDER_UUID, 1L, "ACME", "BUY", 100, new BigDecimal("25.50"), "idem-1", placedAt)));
+                ORDER_UUID, 1L, "ACME", "USD", "BUY", 100, new BigDecimal("25.50"), "idem-1", placedAt)));
 
         sweeper.sweep();
 

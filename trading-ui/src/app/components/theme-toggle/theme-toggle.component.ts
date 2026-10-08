@@ -1,4 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
+import { PreferencesStore } from '../../core/preferences/preferences.store';
 import { Theme } from '../../core/theme/theme';
 
 /** A sun/moon button that switches between light and dark mode. */
@@ -9,7 +10,7 @@ import { Theme } from '../../core/theme/theme';
     <button
       type="button"
       class="theme-toggle"
-      (click)="theme.toggle()"
+      (click)="preferences.toggleTheme()"
       [attr.aria-label]="label()"
       [attr.title]="label()"
       data-testid="theme-toggle"
@@ -57,6 +58,8 @@ import { Theme } from '../../core/theme/theme';
 })
 export class ThemeToggleComponent {
   protected readonly theme = inject(Theme);
+  // Saves the choice as the customer's preference when signed in.
+  protected readonly preferences = inject(PreferencesStore);
   protected readonly dark = computed(() => {
     this.theme.choice();
     return this.theme.isDark();

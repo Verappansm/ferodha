@@ -27,6 +27,11 @@
             <arg column="status" javaType="java.lang.String"/>
             <arg column="idempotency_key" javaType="java.lang.String"/>
             <arg column="created_on" javaType="java.time.OffsetDateTime"/>
+            <arg column="rejection_reason" javaType="java.lang.String"/>
+            <arg column="instrument_currency" javaType="java.lang.String"/>
+            <arg column="account_currency" javaType="java.lang.String"/>
+            <arg column="fee_amount" javaType="java.math.BigDecimal"/>
+            <arg column="fee_rate" javaType="java.math.BigDecimal"/>
         </constructor>
     </resultMap>
 
@@ -35,6 +40,7 @@
             <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
             <arg column="account_id" javaType="long"/>
             <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="instrument_currency" javaType="java.lang.String"/>
             <arg column="side" javaType="java.lang.String"/>
             <arg column="quantity" javaType="int"/>
             <arg column="price" javaType="java.math.BigDecimal"/>
@@ -49,11 +55,11 @@
 
     <insert id="insertOrder">
         INSERT INTO Orders (order_id, user_id, account_id, instrument_id, side, order_type,
-                             limit_price, quantity, executed_price, status, idempotency_key)
+                             limit_price, quantity, executed_price, status, idempotency_key, fee_rate)
         VALUES (#{orderId}, #{userId}, #{accountUuid}, #{instrumentId},
                 #{side}::order_side_enum, 'LIMIT'::order_type_enum,
                 #{price}, #{quantity}, #{executedPrice,jdbcType=DECIMAL},
-                #{status}::order_status_enum, #{idempotencyKey})
+                #{status}::order_status_enum, #{idempotencyKey}, #{feeRate})
     </insert>
 
     <insert id="insertTrade">
@@ -65,6 +71,7 @@
         SELECT o.order_id,
                a.id AS account_id,
                i.ticker AS symbol,
+               i.currency AS instrument_currency,
                o.side,
                o.quantity,
                o.limit_price AS price,
@@ -96,12 +103,13 @@
           AND published_at IS NULL
     </update>
 
-    <!-- Only PORTAL orders: trades_generator inserts its own synthetic orders
+    <!-- Only PORTAL orders: the executor's market maker inserts its own synthetic orders
          and publishes them itself, so their published_at is never set here. -->
     <select id="findUnpublished" resultMap="unpublishedOrderRow">
         SELECT o.order_id,
                a.id AS account_id,
                i.ticker AS symbol,
+               i.currency AS instrument_currency,
                o.side,
                o.quantity,
                o.limit_price AS price,
@@ -128,7 +136,12 @@
                o.executed_price,
                o.status,
                o.idempotency_key,
-               o.placed_at AS created_on
+               o.placed_at AS created_on,
+               o.rejection_reason,
+               i.currency AS instrument_currency,
+               a.currency AS account_currency,
+               o.fee_amount,
+               o.fee_rate
         FROM Orders o
                  JOIN Accounts a ON a.account_id = o.account_id
                  JOIN Instruments i ON i.instrument_id = o.instrument_id
@@ -143,6 +156,24 @@
             AND o.placed_at &lt;= #{to}
         </if>
         ORDER BY o.placed_at DESC
+    </select>
+
+    <resultMap id="orderTradeFillRow" type="com.trade.mapper.OrderTradeFillRow">
+        <constructor>
+            <idArg column="order_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="execution_price" javaType="java.math.BigDecimal"/>
+            <arg column="execution_quantity" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findHistoryFills" resultMap="orderTradeFillRow">
+        SELECT t.order_id, t.execution_price, t.execution_quantity
+        FROM Trades t
+        WHERE t.order_id IN
+        <foreach collection="orderIds" item="orderId" open="(" separator="," close=")">
+            #{orderId,typeHandler=com.trade.mapper.UuidTypeHandler,jdbcType=OTHER}
+        </foreach>
+        ORDER BY t.order_id, t.executed_at, t.trade_id
     </select>
 
 </mapper>

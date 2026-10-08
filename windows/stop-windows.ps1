@@ -75,8 +75,6 @@ if (Test-Path $PidFile) {
 $Ports = @(
     (Get-Setting 'TRADE_API_PORT' '8080'),
     (Get-Setting 'TRADE_EXECUTOR_PORT' '8082'),
-    (Get-Setting 'TRADES_GENERATOR_PORT' '8083'),
-    (Get-Setting 'PRICING_GENERATOR_PORT' '8084'),
     (Get-Setting 'AUTH_SERVICE_PORT' '3000'),
     '4200',
     '4300'

@@ -1,30 +1,87 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
-import { ActivatedRoute } from '@angular/router';
+import { Location } from '@angular/common';
+import { ActivatedRoute, Params, Router } from '@angular/router';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 import { OrderingComponent } from './ordering.component';
 import { Session } from '../../core/session/session';
-import { TradeApi, OrderResponse, OrderStatus, OrderSide } from '../../api/trade-api';
+import {
+  TradeApi,
+  OrderResponse,
+  OrderReviewRequest,
+  OrderReviewResponse,
+  OrderStatus,
+  OrderSide,
+} from '../../api/trade-api';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
+
+/** What trade_api's review answers for a ticket: a 0.1% fee and 100,000 USD of cash. */
+function reviewOf(order: OrderReviewRequest): OrderReviewResponse {
+  const estimatedCost = order.quantity * order.price;
+  const fee = Math.round(estimatedCost * 0.001 * 100) / 100;
+  const buy = order.side === OrderSide.BUY;
+  const total = buy ? estimatedCost + fee : estimatedCost - fee;
+  return {
+    ...order,
+    currency: 'USD',
+    estimatedCost,
+    feeRate: 0.001,
+    fee,
+    total,
+    estimatedCostAccountCurrency: estimatedCost,
+    feeAccountCurrency: fee,
+    totalAccountCurrency: total,
+    cashBalance: 100000,
+    accountCurrency: 'USD',
+    cashRemaining: buy ? 100000 - total : null,
+  };
+}
 
 describe('OrderingComponent', () => {
   let fixture: ComponentFixture<OrderingComponent>;
   let placeOrder: ReturnType<typeof vi.fn>;
+  let reviewOrder: ReturnType<typeof vi.fn>;
+  let navigate: ReturnType<typeof vi.fn>;
+  let back: ReturnType<typeof vi.fn>;
+  let queryParams: BehaviorSubject<Params>;
+  let orderHistory: ReturnType<typeof vi.fn>;
   const accountId = signal(3);
 
   beforeEach(async () => {
     placeOrder = vi.fn().mockReturnValue(of({}));
+    reviewOrder = vi.fn((order: OrderReviewRequest) => of(reviewOf(order)));
+    navigate = vi.fn().mockResolvedValue(true);
+    back = vi.fn();
+    queryParams = new BehaviorSubject<Params>({});
+    orderHistory = vi.fn().mockReturnValue(of([]));
     await TestBed.configureTestingModule({
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId } },
-        { provide: TradeApi, useValue: { placeOrder, quote: vi.fn().mockReturnValue(of(null)) } },
+        provideStubPreferences(),
         {
-          provide: ActivatedRoute,
+          provide: TradeApi,
           useValue: {
-            queryParams: of({}),
+            placeOrder,
+            reviewOrder,
+            orderHistory,
+            quote: vi.fn().mockReturnValue(of(null)),
+            getInstruments: vi
+              .fn()
+              .mockReturnValue(
+                of({
+                  instruments: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+                  total: 1,
+                  pageSize: 1000,
+                  offset: 0,
+                }),
+              ),
           },
         },
+        { provide: ActivatedRoute, useValue: { queryParams } },
+        { provide: Router, useValue: { navigate } },
+        { provide: Location, useValue: { back } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(OrderingComponent);
@@ -48,10 +105,21 @@ describe('OrderingComponent', () => {
     el.dispatchEvent(new Event('change'));
   }
 
-  async function submit(): Promise<void> {
-    byTestId<HTMLButtonElement>('order-submit')!.click();
+  async function click(id: string): Promise<void> {
+    byTestId<HTMLButtonElement>(id)!.click();
     await fixture.whenStable();
     fixture.detectChanges();
+  }
+
+  /** Review, then Confirm, as a customer would. On the review already, only Confirm. */
+  async function submit(): Promise<void> {
+    fixture.detectChanges();
+    if (!byTestId('order-review')) {
+      await click('order-submit');
+    }
+    if (byTestId('order-review')) {
+      await click('order-review-confirm');
+    }
   }
 
   it('renders the account read-only from the session token', () => {
@@ -93,6 +161,60 @@ describe('OrderingComponent', () => {
     expect(byTestId('order-result')).toBeTruthy();
     expect(byTestId('order-result-status')?.textContent).toContain(OrderStatus.NEW);
     expect(byTestId('order-result-id')?.textContent).toContain('ORD-12345');
+  });
+
+  it('follows the placed order and shows a rejection with its reason', async () => {
+    vi.useFakeTimers();
+    try {
+      placeOrder.mockReturnValue(
+        of({
+          orderId: 'ORD-777',
+          status: OrderStatus.NEW,
+          message: 'Order accepted',
+          symbol: 'AAPL',
+          side: OrderSide.SELL,
+          quantity: 5,
+          price: 230.0,
+        }),
+      );
+      orderHistory.mockReturnValue(
+        of([
+          {
+            orderId: 'ORD-777',
+            accountId: 3,
+            symbol: 'AAPL',
+            side: OrderSide.SELL,
+            quantity: 5,
+            price: 230.0,
+            status: OrderStatus.REJECTED,
+            rejectionReason: 'NOT_MARKETABLE',
+            createdOn: '2026-10-06T09:00:00Z',
+          },
+        ]),
+      );
+      fixture.componentInstance.form.setValue({
+        symbol: 'AAPL',
+        side: OrderSide.SELL,
+        quantity: 5,
+        price: 230,
+      });
+      await fixture.componentInstance.startReview();
+      await fixture.componentInstance.submit();
+      fixture.detectChanges();
+      expect(byTestId('order-result-status')?.textContent).toContain('NEW');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      fixture.detectChanges();
+
+      expect(orderHistory).toHaveBeenCalledWith(3);
+      expect(byTestId('order-result-status')?.textContent).toContain('REJECTED');
+      expect(byTestId('order-result-reason')?.textContent).toContain(
+        'market moved past your limit',
+      );
+      expect(byTestId('order-error')?.textContent).toContain('ORD-777 was rejected');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('an invalid quantity is blocked before submission', async () => {
@@ -336,6 +458,7 @@ describe('OrderingComponent', () => {
     fillValidOrder();
 
     await submit();
+    await click('order-review-back');
     input('order-quantity', '11');
     await submit();
 
@@ -394,6 +517,162 @@ describe('OrderingComponent', () => {
     expect(byTestId('order-price-error')?.textContent).toContain('2 decimal places');
   });
 
+  describe('review and confirm (LEAP-017)', () => {
+    it('Review shows the figures trade_api works out, and places nothing', async () => {
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(placeOrder).not.toHaveBeenCalled();
+      expect(reviewOrder).toHaveBeenCalledWith({
+        accountId: 3,
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+      expect(byTestId('order-review-cost')?.textContent).toContain('1,500.00');
+      expect(byTestId('order-review-fee')?.textContent).toContain('1.50');
+      expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
+      expect(byTestId('order-review-cash')?.textContent).toContain('98,498.50');
+    });
+
+    it('a sell shows what it receives and no cash-remaining line', async () => {
+      fillValidOrder();
+      select('order-side', OrderSide.SELL);
+      input('order-price', '150.00');
+      await click('order-submit');
+
+      expect(byTestId('order-review-total')?.textContent).toContain('1,498.50');
+      expect(byTestId('order-review-cash')).toBeNull();
+    });
+
+    it('back returns to the ticket with every field kept', async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-back');
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(fixture.componentInstance.form.getRawValue()).toEqual({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+      expect(placeOrder).not.toHaveBeenCalled();
+    });
+
+    it('confirm places exactly the reviewed order', async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-confirm');
+
+      expect(placeOrder).toHaveBeenCalledTimes(1);
+      expect(placeOrder.mock.calls[0][0]).toMatchObject({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+    });
+
+    it('a review that cannot be worked out says so and cannot be confirmed', async () => {
+      reviewOrder.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 0 })));
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-error')?.textContent).toContain('could not work out');
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(true);
+    });
+
+    it('a review the platform refuses shows its sentence', async () => {
+      reviewOrder.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 404,
+              error: { errorCode: 'INS-404', message: 'Instrument not found' },
+            }),
+        ),
+      );
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-error')?.textContent?.trim()).not.toBe('');
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(true);
+    });
+
+    it('without a cash figure (a sell, or another currency) there is no cash line', async () => {
+      reviewOrder.mockImplementation((order: OrderReviewRequest) =>
+        of({ ...reviewOf(order), accountCurrency: 'INR', cashRemaining: null }),
+      );
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(byTestId('order-review-total')?.textContent).toContain('1,501.50');
+      expect(byTestId('order-review-cash')).toBeNull();
+      expect(byTestId<HTMLButtonElement>('order-review-confirm')?.disabled).toBe(false);
+    });
+  });
+
+  describe('the review in the browser history', () => {
+    it('Review adds the review flag to the URL as a new history entry', async () => {
+      fillValidOrder();
+      await click('order-submit');
+
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { review: '1' }, replaceUrl: false }),
+      );
+    });
+
+    it("the browser's Back from the review returns to the ticket with every field kept", async () => {
+      fillValidOrder();
+      await click('order-submit');
+      queryParams.next({ review: '1' });
+
+      queryParams.next({}); // what popping the history entry does
+      fixture.detectChanges();
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(fixture.componentInstance.form.getRawValue()).toEqual({
+        symbol: 'AAPL',
+        side: OrderSide.BUY,
+        quantity: 10,
+        price: 150,
+      });
+      expect(placeOrder).not.toHaveBeenCalled();
+    });
+
+    it("the page's Back button pops the review's history entry", async () => {
+      fillValidOrder();
+      await click('order-submit');
+      await click('order-review-back');
+
+      expect(back).toHaveBeenCalledTimes(1);
+    });
+
+    it('a review flag with no review behind it (a reload) is dropped from the URL', async () => {
+      queryParams.next({ symbol: 'AAPL', review: '1' });
+
+      expect(byTestId('order-review')).toBeNull();
+      expect(navigate).toHaveBeenCalledWith(
+        [],
+        expect.objectContaining({ queryParams: { review: null }, replaceUrl: true }),
+      );
+    });
+
+    it('the review flag changing never overwrites what was typed', async () => {
+      queryParams.next({ symbol: 'AAPL', side: 'BUY', price: '150' });
+      input('order-quantity', '10');
+      input('order-price', '149.00');
+      await click('order-submit');
+
+      queryParams.next({ symbol: 'AAPL', side: 'BUY', price: '150', review: '1' });
+
+      expect(fixture.componentInstance.form.controls.price.value).toBe(149);
+    });
+  });
+
   it('shows the order message from the API response', async () => {
     const orderResponse: OrderResponse = {
       orderId: 'ORD-12345',
@@ -440,8 +719,20 @@ describe('OrderingComponent price suggestion', () => {
       imports: [OrderingComponent],
       providers: [
         { provide: Session, useValue: { accountId: signal(3) } },
-        { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
+        provideStubPreferences(),
+        {
+          provide: TradeApi,
+          useValue: {
+            placeOrder: vi.fn(),
+            quote,
+            getInstruments: vi
+              .fn()
+              .mockReturnValue(of({ instruments: [], total: 0, pageSize: 1000, offset: 0 })),
+          },
+        },
         { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
+        { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
+        { provide: Location, useValue: { back: vi.fn() } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(OrderingComponent);
@@ -476,6 +767,17 @@ describe('OrderingComponent price suggestion', () => {
     expect(text(fixture, 'order-suggested-price')).toContain(
       'Suggested limit 230.35 (+0.02% past the ask)',
     );
+  });
+
+  it('says how the order fills: a buy at the current ask, a sell at the current bid', async () => {
+    const fixture = await open({ symbol: 'AAPL', side: 'BUY' });
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current ask 230.30');
+    expect(text(fixture, 'order-fill-note')).toContain('never more than your price');
+
+    fixture.componentInstance.form.controls.side.setValue('SELL');
+    fixture.detectChanges();
+    expect(text(fixture, 'order-fill-note')).toContain('fills at the current bid 230.10');
+    expect(text(fixture, 'order-fill-note')).toContain('never less than your price');
   });
 
   it('suggests a price from the quote when the link carries none (the market list)', async () => {

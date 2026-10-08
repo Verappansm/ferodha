@@ -1,5 +1,6 @@
 import { Component, inject, OnInit, signal, WritableSignal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { BalanceResponse, OrderHistoryEntry, TradeApi } from '../../api/trade-api';
@@ -25,6 +26,7 @@ export const PANEL_ROWS = 5;
   selector: 'app-dashboard',
   imports: [
     DatePipe,
+    RouterLink,
     CashPanelComponent,
     PnlPanelComponent,
     RecentOrdersPanelComponent,

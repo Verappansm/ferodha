@@ -1,5 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { RouterLink } from '@angular/router';
 import {
   PnlResponse,
@@ -21,7 +22,7 @@ export type SortKey = 'symbol' | 'value' | 'pnl';
  */
 @Component({
   selector: 'app-portfolio',
-  imports: [DatePipe, DecimalPipe, RouterLink],
+  imports: [DatePipe, MoneyPipe, RouterLink],
   templateUrl: './portfolio.component.html',
   styleUrl: './portfolio.component.css',
 })

@@ -48,9 +48,33 @@ fauxnance:
   base-url: ${FAUXNANCE_API_URL}
   api-key: ${FAUXNANCE_API_KEY}
 
-# Only consulted under the market-sim profile - see TradesGeneratorQuoteSource.
-trades-generator:
-  base-url: ${TRADES_GENERATOR_URL:http://trades-generator:8083}
+# The executor's own price feed (com.trade.executor.ticker, formerly the
+# pricing_generator service) and, under market-sim, its market maker
+# (com.trade.executor.marketmaker, formerly trades_generator). The feed runs
+# under every profile and is the one process spending the Fauxnance quota:
+# daily candles and five-minute anchor quotes, a bounded tick every few
+# seconds to market-data, and the live tick fills are priced against
+# (LiveTickQuoteSource).
+generator:
+  candle:
+    refresh-interval-seconds: ${GENERATOR_CANDLE_REFRESH_SECONDS:86400}
+    persistence-interval-seconds: ${GENERATOR_CANDLE_PERSISTENCE_SECONDS:86400}
+  bars:
+    retention-hours: ${GENERATOR_BAR_RETENTION_HOURS:26}
+  quote:
+    refresh-interval-seconds: ${GENERATOR_QUOTE_REFRESH_SECONDS:300}
+  tick:
+    interval-seconds: ${GENERATOR_TICK_INTERVAL_SECONDS:5}
+    default-volatility: ${GENERATOR_DEFAULT_VOLATILITY:0.0015}
+  market-data:
+    daily-quota: ${GENERATOR_DAILY_QUOTA:2000}
+    batch-size: ${GENERATOR_BATCH_SIZE:25}
+  # market-sim only: synthetic counter-orders from the market-maker account.
+  orders:
+    interval-seconds: ${GENERATOR_ORDERS_INTERVAL_SECONDS:10}
+    probability: ${GENERATOR_ORDERS_PROBABILITY:0.3}
+    min-quantity: ${GENERATOR_ORDERS_MIN_QUANTITY:1}
+    max-quantity: ${GENERATOR_ORDERS_MAX_QUANTITY:20}
 
 executor:
   # Off by default (the spec-exact story this repo was built against: a
@@ -60,8 +84,8 @@ executor:
   # OrderBookMatcher.
   matching:
     enabled: ${EXECUTOR_MATCHING_ENABLED:false}
-  fee:
-    rate: ${EXECUTOR_FEE_RATE:0.001}
+  # No fee rate here: each order carries its own (Orders.fee_rate), written
+  # by trade_api from its fee.rate when it accepted the order (LEAP-017).
   quote:
     retry:
       max-attempts: ${EXECUTOR_QUOTE_RETRY_MAX_ATTEMPTS:3}
@@ -71,7 +95,7 @@ executor:
   publish:
     timeout-ms: ${EXECUTOR_PUBLISH_TIMEOUT_MS:5000}
   market-data:
-    # The poller is off: pricing_generator publishes market-data under every
+    # The poller is off: the price feed (com.trade.executor.ticker) publishes market-data under every
     # profile (see MarketDataPoller). Fills still use their own quote.
     poller-enabled: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:false}
     # Same env var the sprint brief names for the poller specifically -

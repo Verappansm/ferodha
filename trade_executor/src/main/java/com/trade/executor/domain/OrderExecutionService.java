@@ -1,7 +1,8 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.settlement.InsufficientFundsAtSettlementException;
 import com.trade.executor.consumer.PoisonMessageException;
-import com.trade.executor.currency.CurrencyConverter;
+import com.trade.executor.currency.ApiSuppliedRates;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.OrderPlacedPayload;
 import com.trade.executor.event.TradeEventPublisher;
@@ -29,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
 // Orchestrates one ORDER_PLACED event end to end: load, re-check, price,
@@ -50,7 +52,6 @@ public class OrderExecutionService {
     private final QuoteSource quoteSource;
     private final SettlementService settlementService;
     private final TradeEventPublisher tradeEventPublisher;
-    private final CurrencyConverter currencyConverter;
     private final FeeCalculator feeCalculator;
     private final OrderBookMatcher orderBookMatcher;
     private final boolean matchingEnabled;
@@ -58,7 +59,7 @@ public class OrderExecutionService {
     public OrderExecutionService(OrderMapper orderMapper, AccountMapper accountMapper,
                                   InstrumentMapper instrumentMapper, PositionMapper positionMapper,
                                   QuoteSource quoteSource, SettlementService settlementService,
-                                  TradeEventPublisher tradeEventPublisher, CurrencyConverter currencyConverter,
+                                  TradeEventPublisher tradeEventPublisher,
                                   FeeCalculator feeCalculator, OrderBookMatcher orderBookMatcher,
                                   @Value("${executor.matching.enabled:false}") boolean matchingEnabled) {
         this.orderMapper = orderMapper;
@@ -68,7 +69,6 @@ public class OrderExecutionService {
         this.quoteSource = quoteSource;
         this.settlementService = settlementService;
         this.tradeEventPublisher = tradeEventPublisher;
-        this.currencyConverter = currencyConverter;
         this.feeCalculator = feeCalculator;
         this.orderBookMatcher = orderBookMatcher;
         this.matchingEnabled = matchingEnabled;
@@ -114,8 +114,16 @@ public class OrderExecutionService {
             return;
         }
 
+        // The rates travel on the message and never change on redelivery,
+        // so a missing one is poison: dead-letter now, before anything is
+        // settled, rather than retry or fail half-way through a match walk.
+        if (!ApiSuppliedRates.hasRate(account.currency(), event.instrumentToAccountRates())) {
+            throw new PoisonMessageException("ORDER_PLACED " + event.orderId()
+                    + " carries no trade_api FX rate for account currency " + account.currency());
+        }
+
         if (matchingEnabled) {
-            processWithMatching(order, account, instrument);
+            processWithMatching(order, account, event.instrumentToAccountRates());
             return;
         }
 
@@ -137,9 +145,9 @@ public class OrderExecutionService {
         BigDecimal executedPrice = MoneyRounding.toMoneyScale(((FillDecision.Fill) decision).settlementPrice());
 
         BigDecimal tradeValueInstrumentCcy = executedPrice.multiply(BigDecimal.valueOf(order.quantity()));
-        BigDecimal tradeValueAccountCcy =
-                currencyConverter.convert(tradeValueInstrumentCcy, instrument.currency(), account.currency());
-        BigDecimal fee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(tradeValueAccountCcy));
+        BigDecimal tradeValueAccountCcy = ApiSuppliedRates.apply(
+                tradeValueInstrumentCcy, account.currency(), event.instrumentToAccountRates());
+        BigDecimal fee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(tradeValueAccountCcy, order.feeRate()));
         BigDecimal totalCashDelta = MoneyRounding.toMoneyScale(side == OrderSide.BUY
                 ? tradeValueAccountCcy.add(fee)
                 : tradeValueAccountCcy.subtract(fee));
@@ -154,8 +162,17 @@ public class OrderExecutionService {
             return;
         }
 
-        SettlementOutcome outcome = settlementService.settleFill(
-                order, account, executedPrice, order.quantity(), fee, totalCashDelta, side);
+        SettlementOutcome outcome;
+        try {
+            outcome = settlementService.settleFill(
+                    order, account, executedPrice, order.quantity(), fee, totalCashDelta, side);
+        } catch (InsufficientFundsAtSettlementException e) {
+            // The cash went between the check above and the write: the fill rolled back, so
+            // the order is still NEW and is rejected the ordinary way.
+            log.info("Order {}: {}", order.orderId(), e.getMessage());
+            settleAndPublishReject(order, RejectionReason.INSUFFICIENT_FUNDS);
+            return;
+        }
         if (outcome.result() == SettlementOutcome.Result.ALREADY_PROCESSED) {
             log.info("Order {} was already settled by a prior delivery - not republishing", order.orderId());
             return;
@@ -178,29 +195,32 @@ public class OrderExecutionService {
     // no quote fetch, no FillRule, no rejection path here. A limit order
     // that finds no counterparty is exactly what a real exchange's order
     // book does with one too: nothing happens until something crosses it.
-    private void processWithMatching(OrderRow order, AccountRow account, InstrumentRow instrument) {
-        // Worst-case re-check before attempting any match at all, same
-        // reasoning as the quote-based path's rule 6/7 re-check: the
-        // order's own limit price is the ceiling the trader authorized
-        // (matching can only ever do at least as well via price
-        // improvement, never worse), fee included the same way the
-        // quote-based path includes it.
+    private void processWithMatching(OrderRow order, AccountRow account,
+                                     Map<String, BigDecimal> instrumentToAccountRates) {
+        // Re-check before matching: a BUY against the cash as it is now, at the
+        // limit price (the most it can cost, since a match can only do better),
+        // fee included; a SELL against the holdings.
         OrderSide side = OrderSide.valueOf(order.side());
         int remainingQuantity = order.remainingQuantity();
-        BigDecimal worstCaseValue = currencyConverter.convert(
-                order.limitPrice().multiply(BigDecimal.valueOf(remainingQuantity)), instrument.currency(), account.currency());
-        BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(feeCalculator.calculateFee(worstCaseValue));
-
-        Optional<RejectionReason> preCheck = side == OrderSide.BUY
-                ? ExecutionRuleCheck.checkAffordable(account, MoneyRounding.toMoneyScale(worstCaseValue.add(worstCaseFee)))
-                : ExecutionRuleCheck.checkHoldingsSufficient(
-                        positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()), remainingQuantity);
+        Optional<RejectionReason> preCheck;
+        if (side == OrderSide.BUY) {
+            BigDecimal worstCaseValue = ApiSuppliedRates.apply(
+                    order.limitPrice().multiply(BigDecimal.valueOf(remainingQuantity)),
+                    account.currency(), instrumentToAccountRates);
+            BigDecimal worstCaseFee = MoneyRounding.toMoneyScale(
+                    feeCalculator.calculateFee(worstCaseValue, order.feeRate()));
+            preCheck = ExecutionRuleCheck.checkAffordable(
+                    account, MoneyRounding.toMoneyScale(worstCaseValue.add(worstCaseFee)));
+        } else {
+            preCheck = ExecutionRuleCheck.checkHoldingsSufficient(
+                    positionMapper.findHeldQuantity(account.accountUuid(), order.instrumentId()), remainingQuantity);
+        }
         if (preCheck.isPresent()) {
             settleAndPublishReject(order, preCheck.get());
             return;
         }
 
-        OrderBookMatcher.Result result = orderBookMatcher.match(order, account, instrument);
+        OrderBookMatcher.Result result = orderBookMatcher.match(order, account, instrumentToAccountRates);
         if (!result.matchedAnything()) {
             log.info("Order {} found no crossing liquidity - resting at {}", order.orderId(), order.status());
             return;
@@ -222,4 +242,5 @@ public class OrderExecutionService {
             tradeEventPublisher.publishPartiallyFilled(order, result.lastExecutionPrice(), result.totalFee());
         }
     }
+
 }

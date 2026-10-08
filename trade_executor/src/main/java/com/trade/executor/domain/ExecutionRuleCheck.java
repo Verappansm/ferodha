@@ -9,9 +9,12 @@ import java.util.Optional;
 // Design question 2: which Sprint 5 rules get re-checked at execution time.
 // Re-checked here: instrument still tradable (rule 3, explicit AC),
 // account still ACTIVE (rule 2, covers design question 3 -
-// suspended-after-acceptance), affordability including the fee (rule 6,
-// explicit unit test), holdings sufficiency for SELL (rule 7, defensive
-// symmetry with rule 6). NOT re-checked, deliberately: account existence
+// suspended-after-acceptance), affordability including the fee for a BUY
+// (rule 6) and holdings sufficiency for a SELL (rule 7). Affordability is
+// checked by trade_api when the order is accepted too, but cash can change
+// between acceptance and fill, so it is checked here against the account as it
+// is now.
+// NOT re-checked, deliberately: account existence
 // (implicit - OrderExecutionService already loaded it or the message is an
 // infra fault), quantity/price validity (immutable since placement), and
 // the idempotency key (redelivery is handled by SettlementService's guarded
@@ -38,6 +41,11 @@ public final class ExecutionRuleCheck {
                 : Optional.of(RejectionReason.ACCOUNT_NOT_ACTIVE);
     }
 
+    // Re-checked at fill time even though trade_api checked it at placement: two
+    // buys that each fit the cash when placed (two quick orders, or strategies)
+    // may not fit together by the time the second fills. Without this the second
+    // fill would drive the balance below zero, the database's CHECK would throw,
+    // and the order would be stuck instead of rejected INSUFFICIENT_FUNDS.
     public static Optional<RejectionReason> checkAffordable(AccountRow account, BigDecimal totalCashDelta) {
         return account.cashBalance().compareTo(totalCashDelta) >= 0
                 ? Optional.empty()

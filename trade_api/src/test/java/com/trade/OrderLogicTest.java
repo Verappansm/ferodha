@@ -15,7 +15,6 @@ import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.DomainException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
-import com.trade.exception.InsufficientFundsException;
 import com.trade.exception.InsufficientHoldingsException;
 import com.trade.exception.InvalidOrderException;
 
@@ -30,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -51,44 +51,12 @@ class OrderLogicTest {
 
     @BeforeEach
     void setUp() {
-        orderLogic = new OrderLogic(
-                accountId -> Optional.ofNullable(accountsById.get(accountId)),
-                new InstrumentRepository() {
-                    @Override
-                    public Optional<Instrument> findBySymbol(String symbol) {
-                        return Optional.ofNullable(instrumentsBySymbol.get(symbol));
-                    }
-
-                    @Override
-                    public List<Instrument> findAllTradable(int limit, long offset) {
-                        // Not used in these tests
-                        return List.of();
-                    }
-
-                    @Override
-                    public long countTradable() {
-                        // Not used in these tests
-                        return 0;
-                    }
-                },
-                (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
-                new IdempotencyKeyStore() {
-                    @Override
-                    public boolean isUsed(String key) {
-                        return usedIdempotencyKeys.contains(key);
-                    }
-
-                    @Override
-                    public void markUsed(String key) {
-                        usedIdempotencyKeys.add(key);
-                    }
-                }
-        );
+        orderLogic = orderLogicCharging(BigDecimal.ZERO);
 
         // A tradable instrument, present for every test unless one of them
         // deliberately removes or delists it.
         instrumentsBySymbol.put(SYMBOL,
-                new Instrument(SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
+                new Instrument(UUID.randomUUID(), SYMBOL, "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
     }
 
     // ---------------- Rule 1: account must exist ----------------
@@ -229,21 +197,7 @@ class OrderLogicTest {
         assertDoesNotThrow(() -> orderLogic.evaluate(validBuyOrder()));
     }
 
-    // ---------------- Rule 6: BUY must be affordable ----------------
-
-    @Test
-    @DisplayName("Rule 6: should reject BUY when funds are insufficient")
-    void buyInsufficientFunds() {
-        // Order costs 10 * 100.00 = 1000.00, account only has 50.00.
-        givenActiveAccount(new BigDecimal("50.00"));
-
-        InsufficientFundsException exception = assertThrows(
-                InsufficientFundsException.class,
-                () -> orderLogic.evaluate(validBuyOrder())
-        );
-
-        assertEquals("ORD-400", exception.getCode());
-    }
+    // Buy affordability is checked in trade_api after currency conversion.
 
     @Test
     @DisplayName("Rule 6: should not fire when funds are sufficient")
@@ -307,10 +261,7 @@ class OrderLogicTest {
     @Test
     @DisplayName("A request breaking two rules gets the code of the first one")
     void evaluationOrder() {
-        // A SUSPENDED account with no cash breaks both rule 2 (not active)
-        // and rule 6 (cannot afford the buy). It must fail with rule 2's
-        // code, ACC-403 - not rule 6's ORD-400 - because the order the rules
-        // run in is itself part of what is being tested here.
+        // A suspended account is refused before later order checks can run.
         givenSuspendedAccount();
 
         DomainException exception = assertThrows(
@@ -322,6 +273,50 @@ class OrderLogicTest {
     }
 
     // ---------------- test data helpers ----------------
+
+    // The domain rules over the in-memory fakes, charging feeRate on a fill.
+    private OrderLogic orderLogicCharging(BigDecimal feeRate) {
+        return new OrderLogic(
+                accountId -> Optional.ofNullable(accountsById.get(accountId)),
+                new InstrumentRepository() {
+                    @Override
+                    public Optional<Instrument> findBySymbol(String symbol) {
+                        return Optional.ofNullable(instrumentsBySymbol.get(symbol));
+                    }
+
+                    @Override
+                    public Optional<Instrument> findByInstrumentId(java.util.UUID instrumentId) {
+                        // Not used in these tests
+                        return Optional.empty();
+                    }
+
+                    @Override
+                    public List<Instrument> findAllTradable(int limit, long offset) {
+                        // Not used in these tests
+                        return List.of();
+                    }
+
+                    @Override
+                    public long countTradable() {
+                        // Not used in these tests
+                        return 0;
+                    }
+                },
+                (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
+                new IdempotencyKeyStore() {
+                    @Override
+                    public boolean isUsed(String key) {
+                        return usedIdempotencyKeys.contains(key);
+                    }
+
+                    @Override
+                    public void markUsed(String key) {
+                        usedIdempotencyKeys.add(key);
+                    }
+                },
+                feeRate
+        );
+    }
 
     private Order validBuyOrder() {
         Order order = new Order();

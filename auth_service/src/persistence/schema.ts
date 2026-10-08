@@ -31,4 +31,15 @@ export const SCHEMA_STATEMENTS: string[] = [
   // link now comes from Accounts.user_id, so a database that still has the
   // column loses it.
   `ALTER TABLE Users DROP COLUMN IF EXISTS account_id`,
+  // Set when the user enters the code mailed to their address (trade_api's
+  // changelog 021 adds the same column; either service may start first).
+  `ALTER TABLE Users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ`,
+  // One live code per user; only its hash is stored. A new code replaces the old.
+  `CREATE TABLE IF NOT EXISTS auth_email_otps (
+     user_id    UUID PRIMARY KEY REFERENCES Users (user_id) ON DELETE CASCADE,
+     code_hash  VARCHAR(64) NOT NULL,
+     expires_at TIMESTAMPTZ NOT NULL,
+     attempts   INT NOT NULL DEFAULT 0,
+     sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   )`,
 ];

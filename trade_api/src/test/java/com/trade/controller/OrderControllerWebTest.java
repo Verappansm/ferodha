@@ -1,7 +1,9 @@
 package com.trade.controller;
 
+import com.trade.mapper.UserAccessMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trade.dto.OrderResponseDto;
+import com.trade.dto.OrderReviewResponseDto;
 import com.trade.dto.PlaceOrderRequestDto;
 import com.trade.enums.OrderSide;
 import com.trade.enums.OrderStatus;
@@ -25,7 +27,9 @@ import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,6 +50,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "app.jwt.secret=" + JwtTestFixture.SECRET)
 class OrderControllerWebTest {
 
+    // JwtAuthFilter asks Users whether the token's user may still act; the
+    // slice has no database, and an unstubbed mock answers "not blocked".
+    @MockitoBean
+    private UserAccessMapper userAccessMapper;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -60,6 +69,10 @@ class OrderControllerWebTest {
     // acknowledgement) is covered by OrderPlacedPublisherTest.
     @MockitoBean
     private OrderPlacedPublisher orderPlacedPublisher;
+
+    // A cancel is announced through the notifications module once it has committed.
+    @MockitoBean
+    private com.trade.notification.service.NotificationService notifications;
 
     @Test
     void placingAnOrderWithAValidTokenReturnsTheContractShapedResponse() throws Exception {
@@ -201,6 +214,78 @@ class OrderControllerWebTest {
                 .andExpect(content().json("""
                         {"errorCode":"VAL-422","message":"Invalid input"}
                         """));
+    }
+
+    private static final java.util.UUID CANCELLED_ID = java.util.UUID.fromString("6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e");
+
+    @Test
+    void aCancelledOrderIsAnnouncedToItsOwner() throws Exception {
+        when(orderService.cancelOrder(CANCELLED_ID, 1L)).thenReturn(new OrderResponseDto(
+                "ORD-" + CANCELLED_ID, OrderStatus.CANCELLED, "Order cancelled",
+                "ACME", OrderSide.BUY, 100, new BigDecimal("25.50")));
+
+        mockMvc.perform(delete("/api/v1/orders/" + CANCELLED_ID)
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L)))
+                .andExpect(status().isOk());
+
+        verify(notifications).notify(eq(1L), any(), eq(com.trade.notification.enums.NotificationEventType.ORDER_CANCELLED),
+                eq("ORD-" + CANCELLED_ID), eq("ACME"), isNull());
+    }
+
+    @Test
+    void aCancelThatIsRefusedAnnouncesNothing() throws Exception {
+        when(orderService.cancelOrder(CANCELLED_ID, 1L))
+                .thenThrow(new com.trade.exception.OrderNotCancellableException(CANCELLED_ID.toString(), OrderStatus.FILLED));
+
+        mockMvc.perform(delete("/api/v1/orders/" + CANCELLED_ID)
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L)))
+                .andExpect(status().isConflict());
+
+        verify(notifications, never()).notify(anyLong(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void reviewingAnOrderReturnsTheFiguresAndPublishesNothing() throws Exception {
+        when(orderService.reviewOrder(any(), eq(1L))).thenReturn(new OrderReviewResponseDto(
+                "ACME", OrderSide.BUY, 100, new BigDecimal("25.50"), "USD",
+                new BigDecimal("2550.00"), new BigDecimal("0.001"), new BigDecimal("2.55"),
+                new BigDecimal("2552.55"), new BigDecimal("2550.00"), new BigDecimal("2.55"),
+                new BigDecimal("2552.55"), new BigDecimal("10000.00"), "USD", new BigDecimal("7447.45")));
+
+        mockMvc.perform(post("/api/v1/orders/review")
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountId":1,"symbol":"ACME","side":"BUY","quantity":100,"price":25.50}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"estimatedCost":2550.00,"feeRate":0.001,"fee":2.55,"total":2552.55,"cashRemaining":7447.45}
+                        """));
+
+        verify(orderService, never()).placeOrder(any(), any());
+        verify(orderPlacedPublisher, never()).publish(any());
+    }
+
+    @Test
+    void reviewingAnInvalidOrderReturnsValError() throws Exception {
+        mockMvc.perform(post("/api/v1/orders/review")
+                        .header("Authorization", "Bearer " + JwtTestFixture.validToken(1L))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountId":1,"symbol":"ACME","side":"BUY","quantity":0,"price":25.50}
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    void reviewingWithNoTokenIsUnauthorised() throws Exception {
+        mockMvc.perform(post("/api/v1/orders/review")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"accountId":1,"symbol":"ACME","side":"BUY","quantity":1,"price":25.50}
+                                """))
+                .andExpect(status().isUnauthorized());
     }
 
     private PlaceOrderRequestDto validRequest() {

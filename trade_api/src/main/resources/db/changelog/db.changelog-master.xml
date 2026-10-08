@@ -26,5 +26,24 @@
     <include file="db/changelog/011-market-bars.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/012-client-digest-seed-passwords.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/013-more-instruments.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/014-order-fee-rate.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/015-strategies.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/016-strategy-last-checked.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/017-preferences.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-price-alerts.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-watchlist-display-order.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-bank-transfer-idempotency.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/020-bank-demo-pin-verifiers.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/019-indian-instruments.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/021-bank-account-linking.sql" relativeToChangelogFile="false"/>
+    <!-- Moves the old Notifications table aside before 016 creates the module's own. -->
+    <include file="db/changelog/020-legacy-notifications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/016-notifications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/022-notifications-unify.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/023-notification-read-and-legacy.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/024-bank-currency-alert-state-instrument-search.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/025-demo-bank-accounts.sql" relativeToChangelogFile="false"/>
+
 
 </databaseChangeLog>

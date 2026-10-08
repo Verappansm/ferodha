@@ -18,6 +18,24 @@ export interface OrderHistoryEntry {
     side: OrderSide;
     quantity: number;
     /**
+     * Currency used for prices and instrument values.
+     */
+    instrumentCurrency: string;
+    /**
+     * Account cash currency.
+     */
+    accountCurrency: string;
+    filledQuantity: number;
+    filledValue?: number | null;
+    filledValueAccountCurrency?: number | null;
+    feeAmountInstrumentCurrency?: number | null;
+    /**
+     * Commission, in the account currency.
+     */
+    feeAmount?: number | null;
+    cashAmountAccountCurrency?: number | null;
+    estimatedValueAccountCurrency: number;
+    /**
      * The limit price submitted with the order.
      */
     price: number;
@@ -28,6 +46,10 @@ export interface OrderHistoryEntry {
     status: OrderStatus;
     idempotencyKey?: string;
     createdOn: string;
+    /**
+     * Why the Trade Executor rejected the order. Null unless the order is REJECTED. One of INSTRUMENT_NOT_TRADABLE, ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS, INSUFFICIENT_HOLDINGS, NOT_MARKETABLE, PRICE_UNAVAILABLE. 
+     */
+    rejectionReason?: string | null;
 }
 export namespace OrderHistoryEntry {
 }
