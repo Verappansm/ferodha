@@ -1,6 +1,7 @@
-import { Component, computed, inject, signal, effect, OnDestroy, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, signal, effect, OnDestroy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { catchError, debounceTime, distinctUntilChanged, of, Subject, switchMap } from 'rxjs';
 import { Router } from '@angular/router';
 import { formatNumber } from '../../core/format/number-format';
 import { PreferencesStore } from '../../core/preferences/preferences.store';
@@ -21,16 +22,67 @@ import {
 } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
 import {
+  CellStyleModule,
+  ClientSideRowModelModule,
   ColDef,
   GridApi,
   GridReadyEvent,
+  ModuleRegistry,
+  NumberEditorModule,
   RowClassParams,
+  RowStyleModule,
+  SelectEditorModule,
+  TextEditorModule,
   ValueFormatterParams,
   ICellRendererParams,
   CellValueChangedEvent,
+  themeQuartz,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
-import { AgGridThemeComponent } from './ag-grid-theme.component';
+
+// ag-grid 33 and later render nothing until the features a grid uses are registered.
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  CellStyleModule,
+  RowStyleModule,
+  NumberEditorModule,
+  SelectEditorModule,
+  TextEditorModule,
+]);
+
+/**
+ * The grid's look, from the app's own tokens, so light and dark mode and the
+ * rest of the app stay in step with no separate grid stylesheet.
+ */
+export const WATCHLIST_GRID_THEME = themeQuartz.withParams({
+  backgroundColor: 'var(--surface)',
+  foregroundColor: 'var(--ink-900)',
+  textColor: 'var(--ink-900)',
+  subtleTextColor: 'var(--ink-500)',
+  headerBackgroundColor: 'var(--ink-100)',
+  headerTextColor: 'var(--ink-500)',
+  headerFontSize: 11.5,
+  headerFontWeight: 600,
+  borderColor: 'var(--ink-200)',
+  rowBorder: { color: 'var(--ink-200)' },
+  rowHoverColor: 'var(--row-hover)',
+  oddRowBackgroundColor: 'var(--surface)',
+  selectedRowBackgroundColor: 'var(--brand-100)',
+  accentColor: 'var(--brand-600)',
+  fontFamily: 'inherit',
+  fontSize: 13.5,
+  wrapperBorder: false,
+  wrapperBorderRadius: 0,
+  headerRowBorder: { color: 'var(--ink-200)' },
+  columnBorder: false,
+  cellHorizontalPadding: 14,
+});
+
+/** An alert threshold: a positive price with at most two decimals (LEAP-007). */
+export function isValidAlertPrice(price: number | null): price is number {
+  if (price === null || !Number.isFinite(price) || price <= 0) return false;
+  return Math.abs(price * 100 - Math.round(price * 100)) < 1e-6;
+}
 
 const WATCHLIST_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b',
@@ -52,8 +104,7 @@ interface WatchlistRow {
 
 @Component({
   selector: 'app-watchlist',
-  standalone: true,
-  imports: [CommonModule, FormsModule, AgGridAngular, AgGridThemeComponent],
+  imports: [FormsModule, AgGridAngular],
   templateUrl: './watchlist.component.html',
   styleUrls: ['./watchlist.component.css'],
 })
@@ -62,6 +113,10 @@ export class WatchlistComponent implements OnDestroy {
   private readonly preferences = inject(PreferencesStore);
   private readonly tradeApi = inject(TradeApi);
   private readonly router = inject(Router);
+
+  protected readonly gridTheme = WATCHLIST_GRID_THEME;
+  /** Each keystroke in the search box; only the latest search's answer is shown. */
+  private readonly searchTerms = new Subject<string>();
 
   // Watchlists
   readonly watchlists = signal<WatchlistResponse[]>([]);
@@ -146,9 +201,9 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'symbol',
         headerName: 'Ticker',
-        width: 80,
-        minWidth: 80,
-        cellStyle: { fontWeight: 600, color: '#111827' },
+        width: 96,
+        minWidth: 90,
+        cellClass: 'wl-symbol',
       },
       {
         field: 'name',
@@ -156,27 +211,43 @@ export class WatchlistComponent implements OnDestroy {
         width: 180,
         minWidth: 140,
         flex: 1,
-        cellStyle: { color: '#374151' },
+        cellClass: 'wl-name',
       },
       {
         field: 'lastPrice',
         headerName: 'Price',
-        width: 100,
-        minWidth: 95,
+        width: 130,
+        minWidth: 110,
+        type: 'rightAligned',
         valueFormatter: (p: ValueFormatterParams<WatchlistRow, number>) => {
           // Get real-time price from price map
-          const realPrice = this.priceMap().get(p.data?.symbol || '')?.mid;
-          const displayPrice = realPrice ?? p.value;
-          return displayPrice
-            ? `${formatNumber(displayPrice, this.preferences.numberFormat(), '1.2-2')}`
-            : '—';
+          const snapshot = this.priceMap().get(p.data?.symbol || '');
+          const displayPrice = snapshot?.mid ?? p.value;
+          if (!displayPrice) return '—';
+          const text = formatNumber(displayPrice, this.preferences.numberFormat(), '1.2-2');
+          // A price the feed has not refreshed recently is never shown as live.
+          return snapshot?.stale ? `${text} (stale)` : text;
+        },
+        cellClass: (params: any) =>
+          this.priceMap().get(params.data?.symbol || '')?.stale ? 'wl-num wl-stale' : 'wl-num',
+      },
+      {
+        field: 'dayChangePercent',
+        headerName: 'Day change',
+        width: 120,
+        minWidth: 110,
+        type: 'rightAligned',
+        valueFormatter: (p: ValueFormatterParams<WatchlistRow, number>) => {
+          const pct = p.value;
+          if (pct == null || !p.data?.lastPrice) return '—';
+          if (pct === 0) return '0.00%';
+          // A sign as well as a colour, so the direction never rests on colour alone.
+          return `${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(2)}%`;
         },
         cellClass: (params: any) => {
-          const changePercent = params.data?.dayChangePercent as number;
-          if (!changePercent || changePercent === 0) {
-            return 'price-cell-neutral';
-          }
-          return changePercent > 0 ? 'price-cell-positive' : 'price-cell-negative';
+          const pct = params.value as number;
+          if (!pct || !params.data?.lastPrice) return 'wl-num';
+          return pct > 0 ? 'wl-num wl-up' : 'wl-num wl-down';
         },
       },
       {
@@ -189,11 +260,14 @@ export class WatchlistComponent implements OnDestroy {
       },
       {
         field: 'alertPrice',
-        headerName: 'Alert Price',
+        headerName: 'Alert at',
         width: 120,
         minWidth: 110,
+        type: 'rightAligned',
         valueFormatter: (p: ValueFormatterParams<WatchlistRow, number | null>) => {
-          return p.value != null ? `$${p.value.toFixed(2)}` : '—';
+          return p.value != null
+            ? formatNumber(p.value, this.preferences.numberFormat(), '1.2-2')
+            : '—';
         },
         editable: isEditing,
         cellEditor: 'agNumberCellEditor',
@@ -207,13 +281,13 @@ export class WatchlistComponent implements OnDestroy {
           if (row && row.alertPrice !== null && row.alertDirection) {
             const currentPrice = this.priceMap().get(row.symbol)?.mid ?? row.lastPrice;
             if (row.alertDirection === 'ABOVE' && currentPrice > row.alertPrice) {
-              return 'alert-triggered';
+              return 'wl-num alert-triggered';
             }
             if (row.alertDirection === 'BELOW' && currentPrice < row.alertPrice) {
-              return 'alert-triggered';
+              return 'wl-num alert-triggered';
             }
           }
-          return '';
+          return 'wl-num';
         },
         onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
           this.onAlertPriceChanged(event);
@@ -240,24 +314,18 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'itemId',
         headerName: '',
-        width: 85,
-        minWidth: 85,
-        maxWidth: 85,
+        width: 110,
+        minWidth: 110,
+        maxWidth: 110,
         suppressAutoSize: true,
         suppressMovable: true,
-        cellStyle: {
-          textAlign: 'center',
-          padding: '0 8px',
-        },
         hide: !isEditing,
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const button = document.createElement('button');
-          button.className = 'delete-row-btn';
-          button.innerHTML = 'Delete';
-          button.title = 'Delete item';
+          button.className = 'wl-btn wl-btn-danger';
+          button.textContent = 'Remove';
+          button.title = `Remove ${params.data?.symbol ?? 'item'} from this watchlist`;
           button.type = 'button';
-          button.style.whiteSpace = 'nowrap';
-          button.style.fontSize = '12px';
           button.onclick = (e) => {
             e.stopPropagation();
             this.deleteRow(params.data!.itemId);
@@ -268,31 +336,22 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'itemId',
         headerName: '',
-        width: 100,
-        minWidth: 100,
-        maxWidth: 100,
+        width: 160,
+        minWidth: 160,
+        maxWidth: 160,
         suppressAutoSize: true,
         suppressMovable: true,
-        cellStyle: {
-          textAlign: 'center',
-          padding: '0 8px',
-        },
         hide: isEditing,
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const container = document.createElement('div');
-          container.style.display = 'flex';
-          container.style.gap = '4px';
-          container.style.justifyContent = 'center';
+          container.className = 'wl-actions';
 
           // Edit alert button
           const editBtn = document.createElement('button');
-          editBtn.className = 'alert-edit-btn';
-          editBtn.innerHTML = params.data?.alertPrice ? 'Edit Alert' : 'Create Alert';
-          editBtn.title = params.data?.alertPrice ? 'Edit price alert' : 'Create price alert';
+          editBtn.className = 'wl-btn';
+          editBtn.textContent = params.data?.alertPrice != null ? 'Edit alert' : 'Set alert';
+          editBtn.title = params.data?.alertPrice != null ? 'Edit price alert' : 'Create price alert';
           editBtn.type = 'button';
-          editBtn.style.whiteSpace = 'nowrap';
-          editBtn.style.fontSize = '11px';
-          editBtn.style.padding = '4px 8px';
           editBtn.onclick = (e) => {
             e.stopPropagation();
             this.openCreateAlertModal(params.data!);
@@ -301,17 +360,10 @@ export class WatchlistComponent implements OnDestroy {
           // Delete alert button (only show if alert exists)
           if (params.data?.alertPrice !== null) {
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'delete-alert-btn';
-            deleteBtn.innerHTML = 'Remove';
+            deleteBtn.className = 'wl-btn wl-btn-danger';
+            deleteBtn.textContent = 'Clear';
             deleteBtn.title = 'Remove price alert';
             deleteBtn.type = 'button';
-            deleteBtn.style.whiteSpace = 'nowrap';
-            deleteBtn.style.fontSize = '11px';
-            deleteBtn.style.padding = '4px 8px';
-            deleteBtn.style.background = '#fee2e2';
-            deleteBtn.style.color = '#dc2626';
-            deleteBtn.style.border = '1px solid #fecaca';
-            deleteBtn.style.borderRadius = '4px';
             deleteBtn.onclick = (e) => {
               e.stopPropagation();
               this.deletePriceAlert(params.data!.itemId);
@@ -335,6 +387,23 @@ export class WatchlistComponent implements OnDestroy {
   });
 
   constructor() {
+    this.searchTerms
+      .pipe(
+        debounceTime(200),
+        distinctUntilChanged(),
+        switchMap((query) =>
+          this.tradeApi
+            .getInstruments(100, 0, query)
+            .pipe(catchError(() => of({ instruments: [] as InstrumentResponse[], total: 0 }))),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((response) => {
+        // A selection made while the search was in flight wins over its answer.
+        if (!this.selectedInstrument()) this.searchResults.set(response.instruments);
+        this.isSearching.set(false);
+      });
+
     effect(() => {
       const accountId = this.session.accountId();
       if (accountId) {
@@ -493,16 +562,9 @@ export class WatchlistComponent implements OnDestroy {
       return;
     }
     this.isSearching.set(true);
-    this.tradeApi.getInstruments(100, 0, query).subscribe({
-      next: (response) => {
-        this.searchResults.set(response.instruments);
-        this.isSearching.set(false);
-      },
-      error: () => {
-        this.isSearching.set(false);
-        this.searchResults.set([]);
-      },
-    });
+    this.selectedInstrument.set(null);
+    this.showAddDropdown.set(false);
+    this.searchTerms.next(query);
   }
 
   selectInstrument(instrument: InstrumentResponse): void {
@@ -712,8 +774,7 @@ export class WatchlistComponent implements OnDestroy {
     const isEditing = this.createAlertItemId() !== null;
     // For editing, itemId is already set. For creating, we need available items loaded.
     return this.createAlertItemId() !== null &&
-           this.createAlertPrice() !== null &&
-           this.createAlertPrice()! >= 0 &&
+           isValidAlertPrice(this.createAlertPrice()) &&
            this.createAlertDirection() !== null &&
            (isEditing || this.createAlertAvailableItems().length > 0);
   }
@@ -724,8 +785,12 @@ export class WatchlistComponent implements OnDestroy {
     const alertPrice = this.createAlertPrice();
     const alertDirection = this.createAlertDirection();
 
-    if (!itemId || !watchlistId || alertPrice === null || alertPrice < 0 || !alertDirection) {
-      this.createAlertError.set('Please fill all fields with valid values');
+    if (!itemId || !watchlistId || !alertDirection) {
+      this.createAlertError.set('Choose an instrument and a direction.');
+      return;
+    }
+    if (!isValidAlertPrice(alertPrice)) {
+      this.createAlertError.set('Enter a price above zero with at most two decimal places.');
       return;
     }
 
@@ -737,7 +802,10 @@ export class WatchlistComponent implements OnDestroy {
       next: (response) => {
         this.isCreatingAlert.set(false);
         this.closeCreateAlertModal();
-        this.showNotification(`Price alert created for ${response.symbol}: ${alertDirection} $${alertPrice.toFixed(2)}`, 'success');
+        this.showNotification(
+          `Alert set: ${response.symbol} ${alertDirection === 'ABOVE' ? 'above' : 'below'} ${alertPrice.toFixed(2)}`,
+          'success',
+        );
         // Reload items to get updated alert info
         this.loadItems(watchlistId);
       },
@@ -756,8 +824,8 @@ export class WatchlistComponent implements OnDestroy {
     if (!watchlistId || !row) return;
 
     // Validate: if price is set but direction is not, don't save yet
-    if (newPrice !== null && newPrice < 0) {
-      this.showNotification('Alert price must be non-negative', 'error');
+    if (newPrice !== null && !isValidAlertPrice(newPrice)) {
+      this.showNotification('An alert price must be above zero, with at most two decimals', 'error');
       this.loadItems(watchlistId); // Revert
       return;
     }
@@ -807,7 +875,7 @@ export class WatchlistComponent implements OnDestroy {
     this.tradeApi.updatePriceAlert(watchlistId, itemId, request).subscribe({
       next: (response) => {
         const directionText = alertDirection === 'ABOVE' ? 'above' : 'below';
-        const priceText = alertPrice !== null ? `$${alertPrice.toFixed(2)}` : 'removed';
+        const priceText = alertPrice !== null ? alertPrice.toFixed(2) : 'removed';
         this.showNotification(`Price alert updated for ${response.symbol}: ${directionText} ${priceText}`, 'success');
         this.loadItems(watchlistId);
       },
@@ -852,19 +920,9 @@ export class WatchlistComponent implements OnDestroy {
 
   // ===== Helpers =====
 
-  private getPriceColor(changePercent: number): string {
-    if (!changePercent || changePercent === 0) {
-      return '#111827'; // ink-900
-    }
-    return changePercent > 0 ? '#22c55e' : '#ef4444'; // positive: green, negative: red
-  }
-
-  getRowClass(params: RowClassParams<WatchlistRow>): string {
-    if (this.isEditing()) {
-      return 'ag-row-editing';
-    }
-    return '';
-  }
+  /** An arrow function: the grid calls it without binding `this`. */
+  readonly getRowClass = (_params: RowClassParams<WatchlistRow>): string =>
+    this.isEditing() ? 'wl-row-editing' : '';
 
   getWatchlistColor(watchlistId: string): string {
     const idx = this.watchlists().findIndex(w => w.watchlistId === watchlistId);
@@ -932,7 +990,7 @@ export class SparklineRenderer {
     const first = prices[0];
     const last = prices.at(-1);
     if (!last) {
-      this.color = 'var(--neutral)';
+      this.color = 'var(--ink-400)';
     } else {
       this.color = last >= first ? 'var(--positive)' : 'var(--negative)';
     }

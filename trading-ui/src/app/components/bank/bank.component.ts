@@ -1,5 +1,6 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { BankFundsResponse, BankTransferType, TradeApi } from '../../api/trade-api';
@@ -15,10 +16,16 @@ import bcrypt from 'bcryptjs';
  */
 export const PIN_PROOF_SALT = '$2b$12$D6aOfmGWG4oQpLdkJ0PV.e';
 
+const OUTCOME_UNKNOWN =
+  'We could not confirm whether the transfer went through. Check your balances, or press the button again: retrying this same transfer can never move the money twice.';
+
+/**
+ * Bank page (LEAP-019): both balances, and moving money between the linked
+ * bank account and the trading account.
+ */
 @Component({
   selector: 'app-bank',
-  standalone: true,
-  imports: [CommonModule, FormsModule, MoneyPipe],
+  imports: [DatePipe, FormsModule, MoneyPipe],
   templateUrl: './bank.component.html',
   styleUrls: ['./bank.component.css'],
 })
@@ -35,8 +42,35 @@ export class BankComponent implements OnInit {
   isLoading = signal(false);
   funds = signal<BankFundsResponse | null>(null);
 
+  /** The linked account number with all but the last four characters hidden. */
+  readonly maskedAccount = computed(() => {
+    const number = this.funds()?.bankAccountNumber ?? '';
+    return number.length > 4 ? `•••• ${number.slice(-4)}` : number;
+  });
+
+  /**
+   * The idempotency key of the transfer on the form. Kept until the platform
+   * gives a definite answer, so pressing the button again after a network
+   * failure re-sends the same key and can never move the money twice.
+   * Changing the direction or the amount makes it a different transfer.
+   */
+  private pendingKey: string | null = null;
+
   ngOnInit(): void {
     void this.loadFunds();
+  }
+
+  setType(type: BankTransferType): void {
+    if (type === this.transactionType()) return;
+    this.transactionType.set(type);
+    this.pendingKey = null;
+    this.success.set('');
+    this.error.set('');
+  }
+
+  setAmount(value: number | string | null): void {
+    this.amount.set(value === '' || value === null ? null : +value);
+    this.pendingKey = null;
   }
 
   async loadFunds(): Promise<void> {
@@ -63,24 +97,37 @@ export class BankComponent implements OnInit {
       this.error.set('Enter a positive amount and your bank PIN.');
       return;
     }
+    if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-6) {
+      this.error.set('The amount can have at most 2 decimal places.');
+      return;
+    }
+    const idempotencyKey = (this.pendingKey ??= crypto.randomUUID());
     this.isSubmitting.set(true);
     try {
       const result = await firstValueFrom(
         this.api.bankTransfer(accountId, this.transactionType(), {
-          amount: Number(amount.toFixed(4)),
+          amount: Math.round(amount * 100) / 100,
           pinHash: bcrypt.hashSync(pin, PIN_PROOF_SALT),
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey,
         }),
       );
+      this.pendingKey = null;
       this.funds.set(result);
       this.pin.set('');
+      this.amount.set(null);
       this.success.set(
         this.transactionType() === 'DEPOSIT'
           ? 'Deposit completed. Your trading balance has been updated.'
           : 'Withdrawal completed. Your bank balance has been updated.',
       );
     } catch (error) {
-      this.error.set(errorMessage(error));
+      if (error instanceof HttpErrorResponse && error.status === 0) {
+        // No answer: keep the key so a retry is this same transfer.
+        this.error.set(OUTCOME_UNKNOWN);
+      } else {
+        this.pendingKey = null;
+        this.error.set(errorMessage(error));
+      }
     } finally {
       this.isSubmitting.set(false);
     }

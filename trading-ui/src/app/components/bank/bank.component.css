@@ -1,142 +1,45 @@
-.bank-container {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 36px 24px 64px;
-}
-.bank-heading {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-.bank-heading h1 {
-  margin: 4px 0 8px;
-  color: var(--ink-900);
-}
-.bank-heading p {
-  margin: 0;
+/* Layout only: tiles, card, segmented, field and btn are global (styles.css). */
+.direction {
+  margin: 0 0 16px;
+  font-size: 13px;
   color: var(--ink-500);
 }
-.eyebrow {
-  color: var(--brand-600) !important;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.balances {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.balances article,
-.transfer-card {
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-}
-.balances article {
-  padding: 22px;
-  display: grid;
-  gap: 7px;
-}
-.balances span,
-small,
-.transfer-card p {
-  color: var(--ink-500);
-}
-.balances strong {
-  color: var(--ink-900);
-  font-size: 1.45rem;
-}
-.transfer-card {
-  padding: 26px;
-}
-.transfer-card h2 {
-  margin: 0 0 6px;
-  color: var(--ink-900);
-}
-.transfer-card p {
-  margin: 0 0 20px;
-}
+
 fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr) auto;
-  gap: 14px;
-  align-items: end;
-}
-label {
-  display: grid;
-  gap: 7px;
-  color: var(--ink-700);
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-input,
-select {
   min-width: 0;
-  box-sizing: border-box;
-  height: 42px;
-  border: 1px solid var(--ink-300);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
-  color: var(--ink-900);
-  padding: 0 10px;
-  font: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
-button {
-  height: 42px;
-  border-radius: var(--radius-sm);
-  padding: 0 16px;
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
+
+.amount {
+  position: relative;
 }
-.primary {
-  border: 1px solid var(--brand-600);
-  background: var(--brand-600);
-  color: white;
+
+.amount .input {
+  padding-right: 52px;
+  font-variant-numeric: tabular-nums;
 }
-.secondary {
-  border: 1px solid var(--ink-300);
-  background: var(--surface);
-  color: var(--ink-700);
-}
-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-.message {
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  margin: 0 0 18px;
-}
-.error {
-  background: var(--negative-bg);
-  color: var(--negative);
-  border: 1px solid var(--negative-border);
-}
-.success {
-  background: var(--positive-bg);
-  color: var(--positive);
-  border: 1px solid var(--brand-200);
-}
-.loading {
+
+.suffix {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--ink-500);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
-@media (max-width: 720px) {
-  .bank-heading,
-  fieldset {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
-  .balances {
-    grid-template-columns: 1fr;
-  }
+
+.submit-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ink-200);
+}
+
+.submit-row .btn {
+  min-width: 180px;
 }

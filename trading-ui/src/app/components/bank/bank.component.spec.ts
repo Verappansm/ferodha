@@ -97,4 +97,37 @@ describe('BankComponent', () => {
     expect(c.success()).toBe('');
     expect(c.amount()).toBe(10);
   });
+  it('a retry after no answer reuses the same key, so the money can never move twice', async () => {
+    const c = fixture.componentInstance;
+    c.amount.set(50);
+    c.pin.set('1234');
+    bankTransfer.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
+    await c.submit();
+    expect(c.error()).toContain('could not confirm');
+
+    await c.submit();
+    const [first, second] = bankTransfer.mock.calls.map((call) => call[2].idempotencyKey);
+    expect(second).toBe(first);
+  });
+
+  it('a different amount is a different transfer, with a new key', async () => {
+    const c = fixture.componentInstance;
+    c.amount.set(50);
+    c.pin.set('1234');
+    bankTransfer.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 0 })));
+    await c.submit();
+    c.setAmount(60);
+    await c.submit();
+    const [first, second] = bankTransfer.mock.calls.map((call) => call[2].idempotencyKey);
+    expect(second).not.toBe(first);
+  });
+
+  it('refuses an amount with more than two decimals before sending', async () => {
+    const c = fixture.componentInstance;
+    c.amount.set(10.005);
+    c.pin.set('1234');
+    await c.submit();
+    expect(bankTransfer).not.toHaveBeenCalled();
+    expect(c.error()).toContain('2 decimal places');
+  });
 });

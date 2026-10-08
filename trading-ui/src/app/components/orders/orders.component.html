@@ -1,101 +1,89 @@
-<section class="orders-container">
-  <header class="orders-header">
-    <h2>Orders</h2>
-    <button
-      type="button"
-      class="refresh"
-      data-testid="orders-refresh"
-      [disabled]="isLoading()"
-      (click)="refresh()"
-    >
-      Refresh
-    </button>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Orders</h1>
+      <p>Orders in process at the top, with a cancel control; finished orders below.</p>
+    </div>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="orders-refresh"
+        [disabled]="isLoading()"
+        (click)="refresh()"
+      >
+        {{ isLoading() && hasLoaded() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+      <a class="btn btn-primary" routerLink="/order">New order</a>
+    </div>
   </header>
 
-  <form class="filters" (ngSubmit)="applyFilters()" data-testid="orders-filters">
-    <label>
-      Status
-      <select name="status" [(ngModel)]="statusFilter" data-testid="filter-status">
-        <option value="">All</option>
-        @for (status of statusFilters; track status) {
-          <option [value]="status">{{ status }}</option>
-        }
-      </select>
-    </label>
-    <label>
-      From
-      <input type="date" name="from" [(ngModel)]="fromDate" data-testid="filter-from" />
-    </label>
-    <label>
-      To
-      <input type="date" name="to" [(ngModel)]="toDate" data-testid="filter-to" />
-    </label>
-    <button type="submit" class="refresh" data-testid="filter-apply">Apply</button>
-    @if (isFiltered()) {
-      <button type="button" class="refresh" data-testid="filter-clear" (click)="clearFilters()">
-        Clear
-      </button>
-    }
-  </form>
-
   @if (isPolling()) {
-    <p class="note" data-testid="orders-polling">Checking orders that are in process…</p>
+    <p class="notice notice-info" data-testid="orders-polling">
+      <span class="live-dot" aria-hidden="true"></span>
+      Checking orders that are in process…
+    </p>
   }
   @if (isStalled()) {
-    <p class="note" data-testid="orders-stalled">
+    <p class="notice notice-warning" data-testid="orders-stalled">
       Some orders are still in process. Press Refresh to check again.
     </p>
   }
-
   @if (cancelOutcome(); as outcome) {
-    <p [class]="outcome.ok ? 'outcome' : 'error'" role="status" data-testid="cancel-outcome">
+    <p
+      [class]="outcome.ok ? 'notice notice-success' : 'notice notice-error'"
+      role="status"
+      data-testid="cancel-outcome"
+    >
       {{ outcome.text }}
     </p>
   }
-
   @if (error()) {
-    <p class="error" role="alert" data-testid="orders-error">{{ error() }}</p>
+    <p class="notice notice-error" role="alert" data-testid="orders-error">{{ error() }}</p>
   }
 
-  @if (!hasLoaded() && isLoading()) {
-    <p data-testid="orders-loading">Loading orders…</p>
-  } @else if (hasLoaded() && orders().length === 0) {
-    <p data-testid="orders-empty">
-      {{ isFiltered() ? 'No orders match these filters.' : 'You have not placed any orders yet.' }}
-    </p>
-  } @else if (orders().length > 0) {
-    @if (openOrders().length > 0) {
-      <h3>Open orders</h3>
-      <div class="table-scroll">
-        <table data-testid="open-orders-table">
+  @if (openOrders().length > 0) {
+    <section class="card" aria-labelledby="open-title">
+      <header class="card-header">
+        <h2 id="open-title">In process</h2>
+        <span class="pill pill-info">{{ openOrders().length }} open</span>
+      </header>
+      <div class="table-wrap">
+        <table class="table" data-testid="open-orders-table">
           <thead>
             <tr>
-              <th>Order ID</th>
-              <th>Placed</th>
+              <th>Order</th>
               <th>Symbol</th>
               <th>Side</th>
               <th class="num">Qty</th>
               <th class="num">Limit price</th>
               <th class="num">Estimated value</th>
               <th>Status</th>
-              <th><span class="visually-hidden">Cancel</span></th>
+              <th class="num"><span class="visually-hidden">Cancel</span></th>
             </tr>
           </thead>
           <tbody>
             @for (order of openOrders(); track order.orderId) {
-              <tr data-testid="order-row">
-                <td class="mono" data-testid="order-id">{{ order.orderId }}</td>
-                <td>{{ order.createdOn | date: 'd MMM y, HH:mm' }}</td>
-                <td>{{ order.symbol }}</td>
-                <td>{{ order.side }}</td>
+              <tr data-testid="order-row" [class.confirming]="confirmingId() === order.orderId">
+                <td>
+                  <div class="cell-stack">
+                    <span class="mono" data-testid="order-id">{{ order.orderId }}</span>
+                    <small>{{ order.createdOn | date: 'd MMM y, HH:mm' }}</small>
+                  </div>
+                </td>
+                <td class="symbol">{{ order.symbol }}</td>
+                <td [class]="order.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ order.side }}</td>
                 <td class="num">{{ order.quantity | money }}</td>
-                <td class="num">{{ order.price | money: '1.2-2' }}</td>
+                <td class="num">
+                  {{ order.price | money: '1.2-2' }}
+                  <span class="muted">{{ order.instrumentCurrency }}</span>
+                </td>
                 <td class="num">{{ value(order) | money: '1.2-2' }}</td>
                 <td><app-order-status-badge [status]="order.status" /></td>
-                <td class="cancel-cell">
+                <td class="num">
                   <button
                     type="button"
-                    class="refresh"
+                    class="btn btn-danger-outline btn-sm"
                     data-testid="cancel-order"
                     [attr.aria-label]="'Cancel order ' + order.orderId"
                     [attr.aria-expanded]="confirmingId() === order.orderId"
@@ -110,32 +98,34 @@
                    so the table never widens and no horizontal scroll appears. -->
               @if (confirmingId() === order.orderId) {
                 <tr class="confirm-row" data-testid="cancel-confirm">
-                  <td colspan="9">
-                    <span class="confirm-text">
-                      Cancel {{ order.side }} {{ order.quantity | money }} {{ order.symbol }} at
-                      {{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}? Nothing is
-                      sent until you confirm.
-                    </span>
-                    <span class="confirm-actions">
-                      <button
-                        type="button"
-                        class="danger"
-                        data-testid="cancel-yes"
-                        [disabled]="cancellingId() !== null"
-                        (click)="confirmCancel(order)"
-                      >
-                        {{ cancellingId() === order.orderId ? 'Cancelling…' : 'Yes, cancel' }}
-                      </button>
-                      <button
-                        type="button"
-                        class="refresh"
-                        data-testid="cancel-keep"
-                        [disabled]="cancellingId() !== null"
-                        (click)="keepOrder()"
-                      >
-                        Keep it
-                      </button>
-                    </span>
+                  <td colspan="8">
+                    <div class="confirm">
+                      <span class="confirm-text">
+                        Cancel {{ order.side }} {{ order.quantity | money }} {{ order.symbol }} at
+                        {{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}? Nothing
+                        is sent until you confirm.
+                      </span>
+                      <span class="confirm-actions">
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          data-testid="cancel-keep"
+                          [disabled]="cancellingId() !== null"
+                          (click)="keepOrder()"
+                        >
+                          Keep it
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-danger btn-sm"
+                          data-testid="cancel-yes"
+                          [disabled]="cancellingId() !== null"
+                          (click)="confirmCancel(order)"
+                        >
+                          {{ cancellingId() === order.orderId ? 'Cancelling…' : 'Yes, cancel' }}
+                        </button>
+                      </span>
+                    </div>
                   </td>
                 </tr>
               }
@@ -143,16 +133,91 @@
           </tbody>
         </table>
       </div>
-    }
+    </section>
+  }
 
-    @if (finishedOrders().length > 0) {
-      <h3>Order history</h3>
-      <div class="table-scroll">
-        <table data-testid="orders-table">
+  <section class="card" aria-labelledby="history-title">
+    <header class="card-header">
+      <h2 id="history-title">Order history</h2>
+    </header>
+
+    <form class="filters" (ngSubmit)="applyFilters()" data-testid="orders-filters">
+      <div class="field">
+        <label class="field-label" for="filter-status">Status</label>
+        <select
+          id="filter-status"
+          class="input"
+          name="status"
+          [(ngModel)]="statusFilter"
+          data-testid="filter-status"
+        >
+          <option value="">All statuses</option>
+          @for (status of statusFilters; track status) {
+            <option [value]="status">{{ status }}</option>
+          }
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label" for="filter-from">From</label>
+        <input
+          id="filter-from"
+          class="input"
+          type="date"
+          name="from"
+          [(ngModel)]="fromDate"
+          data-testid="filter-from"
+        />
+      </div>
+      <div class="field">
+        <label class="field-label" for="filter-to">To</label>
+        <input
+          id="filter-to"
+          class="input"
+          type="date"
+          name="to"
+          [(ngModel)]="toDate"
+          data-testid="filter-to"
+        />
+      </div>
+      <div class="filter-actions">
+        <button type="submit" class="btn btn-secondary" data-testid="filter-apply">Apply</button>
+        @if (isFiltered()) {
+          <button
+            type="button"
+            class="btn btn-ghost"
+            data-testid="filter-clear"
+            (click)="clearFilters()"
+          >
+            Clear
+          </button>
+        }
+      </div>
+    </form>
+
+    @if (!hasLoaded() && isLoading()) {
+      <div class="card-body" aria-hidden="true">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+      <p class="visually-hidden" data-testid="orders-loading">Loading orders…</p>
+    } @else if (hasLoaded() && orders().length === 0) {
+      <p class="state" data-testid="orders-empty">
+        @if (isFiltered()) {
+          No orders match these filters.
+        } @else {
+          <strong>You have not placed any orders yet</strong>
+          <a routerLink="/instruments">Browse the market</a> to place your first.
+        }
+      </p>
+    } @else if (finishedOrders().length === 0 && orders().length > 0) {
+      <p class="state">Nothing has finished yet. Orders still in process are listed above.</p>
+    } @else if (finishedOrders().length > 0) {
+      <div class="table-wrap">
+        <table class="table" data-testid="orders-table">
           <thead>
             <tr>
-              <th>Order ID</th>
-              <th>Placed</th>
+              <th>Order</th>
               <th>Symbol</th>
               <th>Side</th>
               <th class="num">Qty</th>
@@ -167,54 +232,78 @@
           <tbody>
             @for (order of finishedOrders(); track order.orderId) {
               <tr data-testid="order-row">
-                <td class="mono" data-testid="order-id">{{ order.orderId }}</td>
-                <td>{{ order.createdOn | date: 'd MMM y, HH:mm' }}</td>
-                <td>{{ order.symbol }}</td>
-                <td>{{ order.side }}</td>
+                <td>
+                  <div class="cell-stack">
+                    <span class="mono" data-testid="order-id">{{ order.orderId }}</span>
+                    <small>{{ order.createdOn | date: 'd MMM y, HH:mm' }}</small>
+                  </div>
+                </td>
+                <td class="symbol">{{ order.symbol }}</td>
+                <td [class]="order.side === 'BUY' ? 'side-buy' : 'side-sell'">{{ order.side }}</td>
                 <td class="num">{{ order.quantity | money }}</td>
                 <td class="num">
-                  {{ order.price | money: '1.2-2' }} {{ order.instrumentCurrency }}
+                  {{ order.price | money: '1.2-2' }}
+                  <span class="muted">{{ order.instrumentCurrency }}</span>
                 </td>
                 <td class="num">
-                  {{
-                    order.executedPrice != null
-                      ? (order.executedPrice | money: '1.2-2') + ' ' + order.instrumentCurrency
-                      : '—'
-                  }}
+                  @if (order.executedPrice != null) {
+                    {{ order.executedPrice | money: '1.2-2' }}
+                    <span class="muted">{{ order.instrumentCurrency }}</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
                 </td>
                 <td class="num">
                   @if (order.filledValue != null) {
-                    {{ order.filledValue | money: '1.2-2' }} {{ order.instrumentCurrency }}
-                    @if (
-                      order.instrumentCurrency !== order.accountCurrency &&
-                      order.filledValueAccountCurrency != null
-                    ) {
-                      <small class="currency-secondary">
-                        {{ order.filledValueAccountCurrency | money: '1.2-2' }}
-                        {{ order.accountCurrency }}
-                      </small>
-                    }
+                    <div class="cell-stack">
+                      <span
+                        >{{ order.filledValue | money: '1.2-2' }}
+                        <span class="muted">{{ order.instrumentCurrency }}</span></span
+                      >
+                      @if (
+                        order.instrumentCurrency !== order.accountCurrency &&
+                        order.filledValueAccountCurrency != null
+                      ) {
+                        <small>
+                          {{ order.filledValueAccountCurrency | money: '1.2-2' }}
+                          {{ order.accountCurrency }}
+                        </small>
+                      }
+                    </div>
+                  } @else if (order.executedPrice != null) {
+                    <!-- No per-fill figures (an older order): quantity × fill price. -->
+                    {{ value(order) | money: '1.2-2' }}
+                    <span class="muted">{{ order.instrumentCurrency }}</span>
                   } @else {
-                    —
+                    <span class="muted">—</span>
                   }
                 </td>
                 <td class="num">
                   @if (order.feeAmount != null) {
-                    {{ order.feeAmountInstrumentCurrency | money: '1.2-2' }}
-                    {{ order.instrumentCurrency }}
-                    @if (order.instrumentCurrency !== order.accountCurrency) {
-                      <small class="currency-secondary">
-                        {{ order.feeAmount | money: '1.2-2' }} {{ order.accountCurrency }}
-                      </small>
-                    }
+                    <div class="cell-stack">
+                      <span
+                        >{{ order.feeAmountInstrumentCurrency | money: '1.2-2' }}
+                        <span class="muted">{{ order.instrumentCurrency }}</span></span
+                      >
+                      @if (order.instrumentCurrency !== order.accountCurrency) {
+                        <small>{{ order.feeAmount | money: '1.2-2' }} {{ order.accountCurrency }}</small>
+                      }
+                    </div>
                   } @else {
-                    —
+                    <span class="muted">—</span>
                   }
                 </td>
-                <td class="num">
-                  {{ order.executedPrice != null ? (order.executedPrice | money: '1.2-2') : '—' }}
+                <td class="num" data-testid="order-cash">
+                  @if (order.cashAmountAccountCurrency != null) {
+                    <span [class]="order.side === 'BUY' ? 'loss' : 'gain'"
+                      >{{ order.side === 'BUY' ? '−' : '+'
+                      }}{{ order.cashAmountAccountCurrency | money: '1.2-2' }}</span
+                    >
+                    <span class="muted">{{ order.accountCurrency }}</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
                 </td>
-                <td class="num">{{ value(order) | money: '1.2-2' }}</td>
                 <td>
                   <app-order-status-badge [status]="order.status" />
                   @if (rejectionLabel(order.rejectionReason); as reason) {
@@ -232,5 +321,5 @@
         </table>
       </div>
     }
-  }
-</section>
+  </section>
+</div>

@@ -1,7 +1,6 @@
 import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TradeApi, InstrumentResponse, InstrumentType, PriceSnapshot } from '../../api/trade-api';
 import { suggestedLimitPrice } from '../../core/format/limit-price';
 import { MoneyPipe } from '../../core/format/money.pipe';
@@ -9,16 +8,24 @@ import { MoneyPipe } from '../../core/format/money.pipe';
 /** How often the prices of the rows on screen are re-read. */
 export const PRICE_REFRESH_MS = 15_000;
 
+/** How long a moved price keeps its up or down flash. */
+const FLASH_MS = 1_000;
+
+/**
+ * The market list (LEAP-015): every tradable instrument, searchable by ticker
+ * or name and filterable by exchange, sector and type. The search and filters
+ * live in the URL, so a filtered list can be bookmarked or shared.
+ */
 @Component({
   selector: 'app-instruments',
-  standalone: true,
-  imports: [CommonModule, FormsModule, MoneyPipe],
+  imports: [FormsModule, MoneyPipe, RouterLink],
   templateUrl: './instruments.component.html',
   styleUrls: ['./instruments.component.css'],
 })
 export class InstrumentsComponent {
   private readonly tradeApi = inject(TradeApi);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   // Pagination
   readonly pageSize = 20;
@@ -121,8 +128,16 @@ export class InstrumentsComponent {
 
   /** The latest price per symbol, for the rows on screen. */
   readonly prices = signal<ReadonlyMap<string, PriceSnapshot>>(new Map());
+  /** Symbols whose price just moved, and which way, for a brief flash. */
+  readonly moves = signal<ReadonlyMap<string, 'up' | 'down'>>(new Map());
+  readonly hasFilters = computed(
+    () =>
+      !!(this.searchQuery() || this.selectedExchange() || this.selectedSector() || this.selectedType()),
+  );
 
   constructor() {
+    this.readFiltersFromUrl();
+
     // Load all instruments once when component initializes
     this.loadAllInstruments();
 
@@ -147,12 +162,24 @@ export class InstrumentsComponent {
   private loadPrices(symbols: string[]): void {
     if (symbols.length === 0) return;
     this.tradeApi.prices(symbols).subscribe({
-      next: (prices) =>
+      next: (prices) => {
+        const moved = new Map<string, 'up' | 'down'>();
         this.prices.update((current) => {
           const next = new Map(current);
-          for (const price of prices) next.set(price.symbol, price);
+          for (const price of prices) {
+            const before = current.get(price.symbol)?.mid;
+            if (before != null && price.mid != null && price.mid !== before) {
+              moved.set(price.symbol, price.mid > before ? 'up' : 'down');
+            }
+            next.set(price.symbol, price);
+          }
           return next;
-        }),
+        });
+        if (moved.size > 0) {
+          this.moves.set(moved);
+          setTimeout(() => this.moves.set(new Map()), FLASH_MS);
+        }
+      },
       error: () => {
         // Prices are a convenience on this page: the list stays usable without them.
       },
@@ -184,24 +211,52 @@ export class InstrumentsComponent {
     });
   }
 
-  private loadInstruments(): void {
-    // Method kept for compatibility
+  /** A bookmarked or shared link opens with its search and filters applied. */
+  private readFiltersFromUrl(): void {
+    const params = this.route.snapshot.queryParamMap;
+    this.searchQuery.set(params.get('q') ?? '');
+    this.selectedExchange.set(params.get('exchange') ?? '');
+    this.selectedSector.set(params.get('sector') ?? '');
+    this.selectedType.set(params.get('type') ?? '');
+  }
+
+  /** Writes the search and filters into the URL without adding a history entry per keystroke. */
+  private writeFiltersToUrl(): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        q: this.searchQuery() || null,
+        exchange: this.selectedExchange() || null,
+        sector: this.selectedSector() || null,
+        type: this.selectedType() || null,
+      },
+      replaceUrl: true,
+    });
   }
 
   onSearchChange(): void {
     this.currentOffset.set(0); // Reset to first page
+    this.writeFiltersToUrl();
   }
 
   onExchangeChange(): void {
-    this.currentOffset.set(0); // Reset to first page
+    this.onSearchChange();
   }
 
   onSectorChange(): void {
-    this.currentOffset.set(0); // Reset to first page
+    this.onSearchChange();
   }
 
   onTypeChange(): void {
-    this.currentOffset.set(0); // Reset to first page
+    this.onSearchChange();
+  }
+
+  clearFilters(): void {
+    this.searchQuery.set('');
+    this.selectedExchange.set('');
+    this.selectedSector.set('');
+    this.selectedType.set('');
+    this.onSearchChange();
   }
 
   nextPage(): void {
@@ -210,6 +265,14 @@ export class InstrumentsComponent {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
+
+  /** The first and last row numbers on this page, for "1–20 of 95". */
+  readonly rangeStart = computed(() =>
+    this.totalFilteredCount() === 0 ? 0 : this.currentOffset() + 1,
+  );
+  readonly rangeEnd = computed(() =>
+    Math.min(this.currentOffset() + this.pageSize, this.totalFilteredCount()),
+  );
 
   prevPage(): void {
     if (this.hasPrevPage()) {

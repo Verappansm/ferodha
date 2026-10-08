@@ -1,216 +1,142 @@
-.ordering-container {
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 28px 20px;
+/* Layout only: card, field, input, kv, notice and btn are global (styles.css). */
+.ticket-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
 }
 
-h2 {
-  margin: 0 0 24px;
-  font-size: 1.5rem;
+/* The ticket carries its side's colour along the top edge. */
+.ticket {
+  overflow: hidden;
+  border-top: 3px solid var(--positive);
+  transition: border-color 0.2s ease;
+}
+
+.ticket.sell {
+  border-top-color: var(--negative);
+}
+
+.step {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-500);
 }
 
 .order-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 18px;
-  margin-bottom: 24px;
-  padding: 24px;
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-label {
-  font-size: 0.85rem;
+.symbol-input {
   font-weight: 600;
-  color: var(--ink-700);
+  text-transform: uppercase;
 }
 
-.form-control {
-  height: 44px;
-  padding: 0 12px;
-  font: inherit;
-  color: var(--ink-900);
-  background: var(--surface);
-  border: 1px solid var(--ink-300);
-  border-radius: var(--radius-sm);
+.symbol-input::placeholder {
+  font-weight: 400;
+  text-transform: none;
 }
 
-.form-control:focus {
-  outline: none;
-  border-color: var(--brand-500);
-  box-shadow: var(--focus-ring);
-}
-
-.form-control[readonly] {
-  color: var(--ink-500);
+.quote-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
   background: var(--ink-100);
-  cursor: not-allowed;
+  border-radius: var(--radius-sm);
 }
 
-.error-message {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--negative);
+.quote-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
-.btn {
-  height: 46px;
-  padding: 0 20px;
-  font: inherit;
+.live-dot.is-stale {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-bg);
+}
+
+.bid-ask {
+  display: flex;
+  gap: 18px;
+  color: var(--ink-700);
+  font-variant-numeric: tabular-nums;
+}
+
+.suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.review-summary {
+  margin: 0 0 12px;
+  font-size: 17px;
   font-weight: 600;
-  border: none;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
 }
 
-.btn-primary {
-  color: #fff;
-  background: var(--brand-600);
+.kv dt small {
+  font-size: 12px;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: var(--brand-700);
+.kv .total {
+  border-top: 1px solid var(--ink-300);
 }
 
-.btn-primary:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.kv .total dt {
+  font-weight: 600;
+  color: var(--ink-900);
 }
 
-.alert {
-  margin-bottom: 20px;
-  padding: 14px 16px;
-  font-weight: 500;
-  border: 1px solid;
-  border-radius: var(--radius-sm);
+.kv .total dd {
+  font-size: 16px;
 }
 
-.alert-success {
-  color: var(--positive);
-  background: var(--positive-bg);
-}
-
-.alert-error {
+.kv dd.negative {
   color: var(--negative);
-  background: var(--negative-bg);
 }
 
-.order-result {
-  margin-top: 20px;
-  padding: 20px;
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius);
+.review-note {
+  margin-top: 12px;
 }
 
-.fill-note {
-  margin: 4px 0 16px;
-  font-size: 0.85rem;
-  color: var(--ink-500);
+.review-actions .btn {
+  min-width: 110px;
+}
+
+.side-col {
+  display: grid;
+  gap: 20px;
 }
 
 .reject-reason {
   color: var(--negative);
 }
 
-.order-result h3 {
-  margin: 0 0 14px;
-  font-size: 1.05rem;
+.result-msg {
+  margin-top: 10px;
 }
 
-dl {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 10px 16px;
-  margin: 0;
-}
-
-dt {
-  font-weight: 600;
+.fill-note {
+  margin: 0 0 12px;
   color: var(--ink-700);
 }
 
-dd {
+.how-list {
+  display: grid;
+  gap: 6px;
   margin: 0;
-  color: var(--ink-900);
-  word-break: break-word;
-}
-
-small {
-  font-size: 0.82rem;
+  padding-left: 18px;
+  font-size: 13px;
   color: var(--ink-500);
 }
 
-.current-price {
-  margin-top: 6px;
-  font-size: 0.85rem;
-  color: var(--ink-500);
-}
-
-.current-price .stale {
-  color: var(--warning);
-  font-weight: 600;
-}
-
-.order-review {
-  margin-bottom: 24px;
-  padding: 24px;
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-}
-
-.order-review h3 {
-  margin: 0 0 16px;
-  font-size: 1.1rem;
-}
-
-.order-review dl {
-  grid-template-columns: 140px 1fr;
-}
-
-.order-review .negative {
-  color: var(--negative);
-  font-weight: 600;
-}
-
-.order-review .note {
-  margin: 16px 0;
-  font-size: 0.85rem;
-  color: var(--ink-500);
-}
-
-.review-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.btn:not(.btn-primary) {
-  color: var(--ink-900);
-  background: var(--ink-100);
-  border: 1px solid var(--ink-300);
-}
-
-.btn:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-.link-button {
-  padding: 0;
-  font: inherit;
-  color: var(--brand-600);
-  background: none;
-  border: 0;
-  text-decoration: underline;
-  cursor: pointer;
+@media (width <= 900px) {
+  .ticket-layout {
+    grid-template-columns: 1fr;
+  }
 }

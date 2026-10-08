@@ -2,106 +2,175 @@
   <a class="skip-link" href="#main" data-testid="skip-link">Skip to main content</a>
   <!-- The sign-in and create-account pages are full-screen; the bar appears once signed in. -->
   @if (session.isSignedIn()) {
-  <header class="navbar">
-    <a class="nav-brand" routerLink="/dashboard">
-      <span class="brand-mark" aria-hidden="true">F</span>
-      Ferodha
-    </a>
-    <nav aria-label="Main">
-      <ul class="nav-links">
-        <li><a routerLink="/dashboard" routerLinkActive="active">Dashboard</a></li>
-        <li><a routerLink="/portfolio" routerLinkActive="active">Portfolio</a></li>
-        <li><a routerLink="/instruments" routerLinkActive="active">Markets</a></li>
-        <li><a routerLink="/orders" routerLinkActive="active">Orders</a></li>
-        <li><a routerLink="/watchlist" routerLinkActive="active">Watchlist</a></li>
-        <li><a routerLink="/strategies" routerLinkActive="active">Strategies</a></li>
-        <li><a routerLink="/bank" routerLinkActive="active">Bank</a></li>
-        <li><a routerLink="/help" routerLinkActive="active" data-testid="nav-help">Help</a></li>
-      </ul>
-    </nav>
-    <div class="nav-actions">
-      <button
-        type="button"
-        class="profile-icon nav-icon"
-        data-testid="balance-visibility"
-        (click)="preferences.toggleMasked()"
-        [attr.aria-pressed]="preferences.masked()"
-        [attr.aria-label]="preferences.masked() ? 'Show balances' : 'Hide balances'"
-        [attr.title]="preferences.masked() ? 'Show balances' : 'Hide balances'"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
-          <circle cx="12" cy="12" r="3" />
-          @if (preferences.masked()) {
-          <path d="M3 3l18 18" />
-          }
-        </svg>
-      </button>
-      <a
-        routerLink="/notifications"
-        class="profile-icon nav-icon nav-bell"
-        routerLinkActive="active"
-        data-testid="nav-notifications"
-        [attr.aria-label]="
-          notifications.unread() > 0
-            ? 'Notifications, ' + notifications.unread() + ' unread'
-            : 'Notifications'
-        "
-        title="Notifications"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-        </svg>
-        @if (notifications.unread() > 0) {
-        <span class="nav-badge" data-testid="nav-unread" aria-hidden="true"
-          >{{ notifications.unread() > 99 ? '99+' : notifications.unread() }}</span
-        >
-        }
-      </a>
-      <a
-        routerLink="/settings"
-        class="profile-icon nav-icon"
-        title="Settings"
-        aria-label="Settings"
-        routerLinkActive="active"
-        data-testid="nav-settings"
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="3" />
-          <path
-            d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"
-          />
-        </svg>
-      </a>
-      <a
-        routerLink="/profile"
-        class="profile-icon"
-        title="View Profile"
-        aria-label="View your profile"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-      </a>
-      <app-theme-toggle />
-      <button type="button" class="sign-out" data-testid="sign-out" (click)="signOut()">
-        Sign out
-      </button>
-    </div>
-  </header>
+    <header class="navbar">
+      <div class="navbar-inner">
+        <a class="nav-brand" routerLink="/dashboard">
+          <span class="brand-mark" aria-hidden="true">F</span>
+          Ferodha
+        </a>
+
+        <nav aria-label="Main" class="nav-main">
+          <ul class="nav-links">
+            @for (link of links; track link.path) {
+              <li>
+                <a [routerLink]="link.path" routerLinkActive="active">{{ link.label }}</a>
+              </li>
+            }
+          </ul>
+        </nav>
+
+        <div class="nav-actions">
+          <a class="btn btn-primary btn-sm trade-btn" routerLink="/order" data-testid="nav-trade">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            Trade
+          </a>
+
+          <button
+            type="button"
+            class="icon-btn"
+            data-testid="balance-visibility"
+            (click)="preferences.toggleMasked()"
+            [attr.aria-pressed]="preferences.masked()"
+            [attr.aria-label]="preferences.masked() ? 'Show balances' : 'Hide balances'"
+            [attr.title]="preferences.masked() ? 'Show balances' : 'Hide balances'"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="3" />
+              @if (preferences.masked()) {
+                <path d="M3 3l18 18" />
+              }
+            </svg>
+          </button>
+
+          <a
+            routerLink="/notifications"
+            class="icon-btn nav-bell"
+            routerLinkActive="active"
+            data-testid="nav-notifications"
+            [attr.aria-label]="
+              notifications.unread() > 0
+                ? 'Notifications, ' + notifications.unread() + ' unread'
+                : 'Notifications'
+            "
+            title="Notifications"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            @if (notifications.unread() > 0) {
+              <span class="nav-badge" data-testid="nav-unread" aria-hidden="true">{{
+                notifications.unread() > 99 ? '99+' : notifications.unread()
+              }}</span>
+            }
+          </a>
+
+          <app-theme-toggle />
+
+          <div class="account">
+            <button
+              type="button"
+              class="avatar-btn"
+              data-testid="account-menu"
+              aria-haspopup="menu"
+              [attr.aria-expanded]="menuOpen()"
+              aria-controls="account-menu"
+              (click)="toggleMenu($event)"
+            >
+              <span class="avatar" aria-hidden="true">{{ initial() }}</span>
+              <span class="visually-hidden">Account menu</span>
+              <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+
+            @if (menuOpen()) {
+              <div class="menu" id="account-menu" role="menu" (click)="$event.stopPropagation()">
+                <div class="menu-head">
+                  <span class="menu-name">{{ session.user()?.username }}</span>
+                  @if (session.accountId(); as id) {
+                    <span class="menu-sub">Trading account {{ id }}</span>
+                  }
+                </div>
+                <a class="menu-item" role="menuitem" routerLink="/profile" (click)="closeMenu()">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Profile
+                </a>
+                <a
+                  class="menu-item"
+                  role="menuitem"
+                  routerLink="/settings"
+                  data-testid="nav-settings"
+                  (click)="closeMenu()"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                      d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"
+                    />
+                  </svg>
+                  Settings
+                </a>
+                <a
+                  class="menu-item"
+                  role="menuitem"
+                  routerLink="/help"
+                  data-testid="nav-help"
+                  (click)="closeMenu()"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01" />
+                  </svg>
+                  Help and support
+                </a>
+                <hr />
+                <button
+                  type="button"
+                  class="menu-item danger"
+                  role="menuitem"
+                  data-testid="sign-out"
+                  (click)="signOut()"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+                  </svg>
+                  Sign out
+                </button>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </header>
   }
 
   <main class="main-content" id="main" tabindex="-1">
     <router-outlet></router-outlet>
   </main>
+
+  <!-- LEAP-008: a toast for each notification that arrives while the app is open. -->
+  @if (notifications.toasts().length > 0) {
+    <div class="toasts" role="region" aria-label="New notifications" aria-live="polite">
+      @for (t of notifications.toasts(); track t.notificationId) {
+        <div [class]="'toast toast-' + toastTone(t.eventType)" data-testid="toast">
+          <span class="toast-dot" aria-hidden="true"></span>
+          <a class="toast-body" [routerLink]="toastLink(t)" (click)="openToast(t)">
+            <strong>{{ toastTitle(t.eventType) }}</strong>
+            <span>{{ t.message }}</span>
+          </a>
+          <button
+            type="button"
+            class="toast-close"
+            aria-label="Dismiss"
+            (click)="notifications.dismissToast(t.notificationId)"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+      }
+    </div>
+  }
 </div>

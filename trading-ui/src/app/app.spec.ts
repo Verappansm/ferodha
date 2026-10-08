@@ -20,7 +20,10 @@ describe('App', () => {
         provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting(),
-        { provide: Session, useValue: { isSignedIn, signOut } },
+        {
+          provide: Session,
+          useValue: { isSignedIn, signOut, user: signal(null), accountId: signal(null) },
+        },
         provideStubPreferences(),
       ],
     }).compileComponents();
@@ -53,10 +56,14 @@ describe('App', () => {
     const navigateByUrl = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
 
-    (fixture.nativeElement as HTMLElement)
-      .querySelector<HTMLButtonElement>('[data-testid="sign-out"]')!
-      .click();
+    // Sign-out lives in the account menu, which is closed until opened.
+    expect(root.querySelector('[data-testid="sign-out"]')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-testid="account-menu"]')!.click();
+    await fixture.whenStable();
+
+    root.querySelector<HTMLButtonElement>('[data-testid="sign-out"]')!.click();
     await fixture.whenStable();
 
     expect(signOut).toHaveBeenCalledTimes(1);

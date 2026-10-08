@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
@@ -47,6 +48,7 @@ describe('OrdersComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OrdersComponent],
       providers: [
+        provideRouter([]),
         { provide: Session, useValue: { accountId } },
         provideStubPreferences(),
         { provide: TradeApi, useValue: { orderHistory, placeOrder, cancelOrder } },
@@ -320,7 +322,7 @@ describe('OrdersComponent', () => {
       // The question is its own full-width row under the order: the table never widens.
       const confirmRow = byTestId('cancel-confirm')!;
       expect(confirmRow.tagName).toBe('TR');
-      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('9');
+      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('8');
       expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00 USD?');
 
       orderHistory.mockReturnValue(

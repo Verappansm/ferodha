@@ -1,205 +1,190 @@
-<div class="instruments-container">
-  <div class="instruments-header">
-    <h2>Tradable Instruments</h2>
-    <p class="subtitle">Search and filter available instruments to trade</p>
-  </div>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Markets</h1>
+      <p>Every instrument you can trade, with its live price. Open one for its chart and quote.</p>
+    </div>
+  </header>
 
-  <!-- Error Message -->
   @if (errorMessage()) {
-    <div class="alert alert-danger" role="alert">
-      {{ errorMessage() }}
-    </div>
+    <p class="notice notice-error" role="alert">{{ errorMessage() }}</p>
   }
 
-  <!-- Loading State -->
-  @if (isLoading()) {
-    <div class="loading-spinner">
-      <p>Loading instruments...</p>
-    </div>
-  }
-
-  <!-- Filters -->
-  <div class="filters-section">
-    <!-- Search Bar -->
-    <div class="search-group">
-      <input
-        type="text"
-        class="form-control search-input"
-        placeholder="Search by symbol or name (e.g., AAPL, Apple)"
-        [(ngModel)]="searchQuery"
-        (input)="onSearchChange()"
-      />
-    </div>
-
-    <!-- Filter Dropdowns -->
-    <div class="filters-row">
-      <div class="filter-group">
-        <label for="filter-exchange">Exchange</label>
+  <section class="card" aria-label="Instruments">
+    <div class="filters">
+      <div class="field grow">
+        <label class="field-label" for="filter-search">Search</label>
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            id="filter-search"
+            type="search"
+            class="input"
+            placeholder="Ticker or name, e.g. AAPL or Apple"
+            autocomplete="off"
+            [(ngModel)]="searchQuery"
+            (input)="onSearchChange()"
+          />
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label" for="filter-exchange">Exchange</label>
         <select
           id="filter-exchange"
-          class="form-control"
+          class="input"
           [(ngModel)]="selectedExchange"
           (change)="onExchangeChange()"
         >
-          <option value="">All Exchanges</option>
+          <option value="">All exchanges</option>
           @for (exch of exchanges(); track exch) {
             <option [value]="exch">{{ exch }}</option>
           }
         </select>
       </div>
-
-      <div class="filter-group">
-        <label for="filter-sector">Sector</label>
+      <div class="field">
+        <label class="field-label" for="filter-sector">Sector</label>
         <select
           id="filter-sector"
-          class="form-control"
+          class="input"
           [(ngModel)]="selectedSector"
           (change)="onSectorChange()"
         >
-          <option value="">All Sectors</option>
+          <option value="">All sectors</option>
           @for (sec of sectors(); track sec) {
             <option [value]="sec">{{ sec }}</option>
           }
         </select>
       </div>
-
-      <div class="filter-group">
-        <label for="filter-type">Type</label>
-        <select
-          id="filter-type"
-          class="form-control"
-          [(ngModel)]="selectedType"
-          (change)="onTypeChange()"
-        >
-          <option value="">All Types</option>
+      <div class="field">
+        <label class="field-label" for="filter-type">Type</label>
+        <select id="filter-type" class="input" [(ngModel)]="selectedType" (change)="onTypeChange()">
+          <option value="">All types</option>
           @for (t of types(); track t) {
             <option [value]="t">{{ t }}</option>
           }
         </select>
       </div>
+      @if (hasFilters()) {
+        <button type="button" class="btn btn-ghost" (click)="clearFilters()">Clear</button>
+      }
     </div>
 
-    <!-- Clear Filters -->
-    @if (searchQuery() || selectedExchange() || selectedSector() || selectedType()) {
-      <div class="clear-filters">
-        <button
-          class="btn btn-sm btn-outline-secondary"
-          (click)="
-            searchQuery.set('');
-            selectedExchange.set('');
-            selectedSector.set('');
-            selectedType.set('');
-            onSearchChange()
-          "
+    @if (isLoading()) {
+      <div class="card-body" aria-hidden="true">
+        @for (i of [1, 2, 3, 4, 5, 6]; track i) {
+          <div class="skeleton"></div>
+        }
+      </div>
+      <span class="visually-hidden">Loading instruments…</span>
+    } @else if (paginatedInstruments().length > 0) {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Instrument</th>
+              <th>Type</th>
+              <th>Exchange</th>
+              <th>Sector</th>
+              <th class="num">Price</th>
+              <th class="num"><span class="visually-hidden">Trade</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (instrument of paginatedInstruments(); track instrument.symbol) {
+              <tr class="instrument-row" (click)="viewDetails(instrument.symbol)">
+                <td>
+                  <div class="cell-stack">
+                    <a
+                      class="symbol-link"
+                      [routerLink]="['/instruments', instrument.symbol]"
+                      (click)="$event.stopPropagation()"
+                      >{{ instrument.symbol }}</a
+                    >
+                    <small class="name">{{ instrument.name }}</small>
+                  </div>
+                </td>
+                <td><span class="chip">{{ instrument.type }}</span></td>
+                <td>{{ instrument.exchange }} <span class="muted">· {{ instrument.currency }}</span></td>
+                <td class="muted">{{ instrument.sector || '—' }}</td>
+                <td
+                  class="num price"
+                  data-testid="instrument-price"
+                  [class.flash-up]="moves().get(instrument.symbol) === 'up'"
+                  [class.flash-down]="moves().get(instrument.symbol) === 'down'"
+                >
+                  @if (priceOf(instrument.symbol)?.mid; as mid) {
+                    <span [class.stale-price]="priceOf(instrument.symbol)?.stale">{{
+                      mid | money: '1.2-2'
+                    }}</span>
+                    @if (priceOf(instrument.symbol)?.stale) {
+                      <span class="stale-dot" title="Stale price" aria-label="stale">•</span>
+                    }
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+                <td class="num">
+                  <div class="row-actions">
+                    <button
+                      type="button"
+                      class="btn btn-buy btn-sm"
+                      (click)="$event.stopPropagation(); buyInstrument(instrument.symbol)"
+                      [attr.aria-label]="'Buy ' + instrument.symbol"
+                    >
+                      Buy
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-sell btn-sm"
+                      (click)="$event.stopPropagation(); sellInstrument(instrument.symbol)"
+                      [attr.aria-label]="'Sell ' + instrument.symbol"
+                    >
+                      Sell
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else if (allInstruments().length > 0) {
+      <p class="state">
+        <strong>No instruments match</strong>
+        Try a different search, or clear the filters.
+      </p>
+    } @else if (!errorMessage()) {
+      <p class="state">No instruments are available to trade right now.</p>
+    }
+
+    @if (!isLoading() && totalFilteredCount() > 0) {
+      <div class="pager">
+        <span class="pager-range"
+          >{{ rangeStart() }}–{{ rangeEnd() }} of {{ totalFilteredCount() }} instruments</span
         >
-          Clear All Filters
-        </button>
+        @if (totalPages() > 1) {
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            [disabled]="!hasPrevPage()"
+            (click)="prevPage()"
+          >
+            Previous
+          </button>
+          <span class="muted">Page {{ currentPageNum() }} of {{ totalPages() }}</span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            [disabled]="!hasNextPage()"
+            (click)="nextPage()"
+          >
+            Next
+          </button>
+        }
       </div>
     }
-  </div>
-
-  <!-- Results Count -->
-  <div class="results-info">
-    <p class="results-text">
-      Showing {{ paginatedInstruments().length }} of {{ totalFilteredCount() }} instruments
-    </p>
-  </div>
-
-  <!-- Instruments Table -->
-  @if (!isLoading() && paginatedInstruments().length > 0) {
-    <div class="instruments-table-wrapper">
-      <table class="instruments-table">
-        <thead>
-          <tr>
-            <th class="col-symbol">Symbol</th>
-            <th class="col-name">Name</th>
-            <th class="col-type">Type</th>
-            <th class="col-exchange">Exchange</th>
-            <th class="col-sector">Sector</th>
-            <th class="col-currency">Currency</th>
-            <th class="col-price">Price</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (instrument of paginatedInstruments(); track instrument.symbol) {
-            <tr class="instrument-row" (click)="viewDetails(instrument.symbol)">
-              <td class="col-symbol">
-                <strong>{{ instrument.symbol }}</strong>
-              </td>
-              <td class="col-name">{{ instrument.name }}</td>
-              <td class="col-type">
-                <span class="badge" [ngClass]="'badge-' + instrument.type.toLowerCase()">
-                  {{ instrument.type }}
-                </span>
-              </td>
-              <td class="col-exchange">{{ instrument.exchange }}</td>
-              <td class="col-sector">{{ instrument.sector || '—' }}</td>
-              <td class="col-currency">{{ instrument.currency }}</td>
-              <td class="col-price" data-testid="instrument-price">
-                @if (priceOf(instrument.symbol)?.mid; as mid) {
-                  <span [class.stale-price]="priceOf(instrument.symbol)?.stale">{{
-                    mid | money: '1.2-2'
-                  }}</span>
-                  @if (priceOf(instrument.symbol)?.stale) {
-                    <span class="stale-dot" title="Stale price" aria-label="stale">•</span>
-                  }
-                } @else {
-                  <span class="no-price">—</span>
-                }
-              </td>
-              <td class="col-actions">
-                <div class="action-buttons">
-                  <button
-                    class="btn btn-sm btn-success"
-                    (click)="$event.stopPropagation(); buyInstrument(instrument.symbol)"
-                    title="Buy {{ instrument.symbol }}"
-                  >
-                    Buy
-                  </button>
-                  <button
-                    class="btn btn-sm btn-danger"
-                    (click)="$event.stopPropagation(); sellInstrument(instrument.symbol)"
-                    title="Sell {{ instrument.symbol }}"
-                  >
-                    Sell
-                  </button>
-                </div>
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  }
-
-  <!-- Empty State -->
-  @if (!isLoading() && paginatedInstruments().length === 0 && totalFilteredCount() > 0) {
-    <div class="empty-state">
-      <p>No instruments match your search. Try adjusting the filters.</p>
-    </div>
-  }
-
-  @if (!isLoading() && totalFilteredCount() === 0 && allInstruments().length === 0) {
-    <div class="empty-state">
-      <p>No instruments available at this time.</p>
-    </div>
-  }
-
-  <!-- Pagination -->
-  @if (totalPages() > 1) {
-    <div class="pagination-section">
-      <div class="pagination-info">
-        <p>Page {{ currentPageNum() }} of {{ totalPages() }}</p>
-      </div>
-      <div class="pagination-controls">
-        <button class="btn btn-outline-primary" [disabled]="!hasPrevPage()" (click)="prevPage()">
-          ← Previous
-        </button>
-        <button class="btn btn-outline-primary" [disabled]="!hasNextPage()" (click)="nextPage()">
-          Next →
-        </button>
-      </div>
-    </div>
-  }
+  </section>
 </div>

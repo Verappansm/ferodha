@@ -1,35 +1,48 @@
-<section class="settings">
-  <h2>Preferences</h2>
+<div class="page page-narrow">
+  <header class="page-header">
+    <div>
+      <h1>Settings</h1>
+      <p>
+        How Ferodha tells you about your orders and how it looks. Saved for
+        <strong data-testid="prefs-account">{{
+          accountId() != null ? 'account ' + accountId() : 'your account'
+        }}</strong>
+        and applied every time you sign in.
+      </p>
+    </div>
+  </header>
 
   @if (!preferences.available()) {
-    <p class="notice" role="alert" data-testid="prefs-unavailable">
+    <p class="notice notice-warning" role="alert" data-testid="prefs-unavailable">
       Settings are temporarily unavailable. The app is using the defaults until they can be loaded.
     </p>
   }
 
-  <form [formGroup]="form" (ngSubmit)="save()" novalidate data-testid="prefs-form">
-    <p class="account" data-testid="prefs-account">
-      Trading account:
-      <strong>{{ accountId() != null ? 'Account ' + accountId() : 'Your account' }}</strong>
-      <span class="muted">(opened every time you sign in)</span>
-    </p>
-
-    <fieldset class="card">
-      <legend>Notifications</legend>
+  <form [formGroup]="form" (ngSubmit)="save()" novalidate data-testid="prefs-form" class="stack">
+    <section class="card" aria-labelledby="notify-title">
+      <header class="card-header">
+        <div>
+          <h2 id="notify-title">Notifications</h2>
+          <p class="sub">If an email cannot be sent, the alert still appears in the app.</p>
+        </div>
+      </header>
 
       <div class="row">
-        <span class="label">
+        <span class="label" id="channel-label">
           Send alerts by
           @if (isDefault('notificationChannel')) {
             <span class="tag">Default</span>
           }
         </span>
-        <div class="options">
-          <label>
+        <div class="options" role="radiogroup" aria-labelledby="channel-label">
+          <label class="option">
             <input type="radio" formControlName="notificationChannel" value="IN_APP" />
-            In-app (bell and toast)
+            <span>
+              <strong>In the app</strong>
+              <small>The bell and a pop-up</small>
+            </span>
           </label>
-          <label [class.disabled]="!preferences.values().contactDetail">
+          <label class="option" [class.disabled]="!preferences.values().contactDetail">
             <input
               type="radio"
               formControlName="notificationChannel"
@@ -37,12 +50,14 @@
               data-testid="prefs-email"
               [attr.disabled]="preferences.values().contactDetail ? null : true"
             />
-            Email
-            @if (preferences.values().contactDetail; as email) {
-              <span class="muted">{{ email }}</span>
-            } @else {
-              <span class="muted">no email on file</span>
-            }
+            <span>
+              <strong>Email</strong>
+              @if (preferences.values().contactDetail; as email) {
+                <small>{{ email }}</small>
+              } @else {
+                <small>No email on file</small>
+              }
+            </span>
           </label>
         </div>
       </div>
@@ -54,18 +69,23 @@
             <span class="tag">Default</span>
           }
         </span>
-        <div class="options grid">
-          <label><input type="checkbox" formControlName="orderFilled" /> Order filled</label>
-          <label><input type="checkbox" formControlName="orderRejected" /> Order rejected</label>
-          <label><input type="checkbox" formControlName="orderCancelled" /> Order cancelled</label>
-          <label><input type="checkbox" formControlName="priceAlerts" /> Price alerts</label>
+        <div class="checks">
+          <label class="check"><input type="checkbox" formControlName="orderFilled" /> Order filled</label>
+          <label class="check"
+            ><input type="checkbox" formControlName="orderRejected" /> Order rejected</label
+          >
+          <label class="check"
+            ><input type="checkbox" formControlName="orderCancelled" /> Order cancelled</label
+          >
+          <label class="check"><input type="checkbox" formControlName="priceAlerts" /> Price alerts</label>
         </div>
       </div>
-      <p class="hint">If an email cannot be sent, the alert still appears in the app.</p>
-    </fieldset>
+    </section>
 
-    <fieldset class="card">
-      <legend>Display</legend>
+    <section class="card" aria-labelledby="display-title">
+      <header class="card-header">
+        <h2 id="display-title">Display</h2>
+      </header>
 
       <div class="row">
         <span class="label">
@@ -74,7 +94,7 @@
             <span class="tag">Default</span>
           }
         </span>
-        <div class="options">
+        <div class="segmented-radios">
           <label><input type="radio" formControlName="theme" value="LIGHT" /> Light</label>
           <label><input type="radio" formControlName="theme" value="DARK" /> Dark</label>
         </div>
@@ -87,14 +107,14 @@
             <span class="tag">Default</span>
           }
         </span>
-        <div class="options">
+        <div class="segmented-radios">
           <label>
             <input type="radio" formControlName="numberFormat" value="INDIAN" />
-            {{ sample('INDIAN') }} <span class="muted">Indian</span>
+            {{ sample('INDIAN') }}
           </label>
           <label>
             <input type="radio" formControlName="numberFormat" value="INTERNATIONAL" />
-            {{ sample('INTERNATIONAL') }} <span class="muted">International</span>
+            {{ sample('INTERNATIONAL') }}
           </label>
         </div>
       </div>
@@ -106,8 +126,14 @@
             <span class="tag">Default</span>
           }
         </label>
-        <div class="options">
-          <input id="prefs-compact" type="checkbox" role="switch" formControlName="compactTables" />
+        <div class="switch-row">
+          <input
+            id="prefs-compact"
+            class="switch"
+            type="checkbox"
+            role="switch"
+            formControlName="compactTables"
+          />
           <span class="muted">Tighter rows, so more fit on screen</span>
         </div>
       </div>
@@ -119,15 +145,23 @@
             <span class="tag">Default</span>
           }
         </label>
-        <div class="options">
-          <input id="prefs-hide" type="checkbox" role="switch" formControlName="hideBalances" />
+        <div class="switch-row">
+          <input
+            id="prefs-hide"
+            class="switch"
+            type="checkbox"
+            role="switch"
+            formControlName="hideBalances"
+          />
           <span class="muted">Show ••••• until you press the eye icon in the top bar</span>
         </div>
       </div>
-    </fieldset>
+    </section>
 
-    <fieldset class="card">
-      <legend>Home</legend>
+    <section class="card" aria-labelledby="home-title">
+      <header class="card-header">
+        <h2 id="home-title">Home</h2>
+      </header>
       <div class="row">
         <label class="label" for="prefs-start">
           Open after sign-in
@@ -135,19 +169,24 @@
             <span class="tag">Default</span>
           }
         </label>
-        <div class="options">
-          <select id="prefs-start" formControlName="startPage" data-testid="prefs-start-page">
+        <div>
+          <select
+            id="prefs-start"
+            class="input start-select"
+            formControlName="startPage"
+            data-testid="prefs-start-page"
+          >
             @for (page of startPages; track page.value) {
               <option [value]="page.value">{{ page.label }}</option>
             }
           </select>
         </div>
       </div>
-    </fieldset>
+    </section>
 
     @if (status(); as s) {
       <p
-        [class]="s.kind"
+        [class]="s.kind === 'error' ? 'notice notice-error' : 'notice notice-success'"
         [attr.role]="s.kind === 'error' ? 'alert' : 'status'"
         data-testid="prefs-status"
       >
@@ -155,24 +194,25 @@
       </p>
     }
 
-    <div class="actions">
+    <div class="actions" [class.dirty]="form.dirty">
       <button
         type="button"
-        class="btn btn-secondary"
+        class="btn btn-ghost"
         data-testid="prefs-reset"
         [disabled]="saving() || preferences.values().customised.length === 0"
         (click)="resetToDefaults()"
       >
         Reset to defaults
       </button>
+      <span class="unsaved" aria-live="polite">{{ form.dirty ? 'You have unsaved changes' : '' }}</span>
       <button
         type="submit"
         class="btn btn-primary"
         data-testid="prefs-save"
         [disabled]="saving() || !form.dirty"
       >
-        {{ saving() ? 'Saving…' : 'Save' }}
+        {{ saving() ? 'Saving…' : 'Save changes' }}
       </button>
     </div>
   </form>
-</section>
+</div>
