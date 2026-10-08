@@ -1,9 +1,9 @@
 /* Layout only: card, field, input, kv, notice and btn are global (styles.css). */
+/* One column: the ticket, then the order result, then how it fills. */
 .ticket-layout {
   display: grid;
-  grid-template-columns: minmax(0, 560px) minmax(0, 1fr);
   gap: 20px;
-  align-items: start;
+  max-width: 640px;
 }
 
 /* The ticket carries its side's colour along the top edge. */
@@ -123,10 +123,4 @@
   padding-left: 18px;
   font-size: 13px;
   color: var(--ink-500);
-}
-
-@media (width <= 900px) {
-  .ticket-layout {
-    grid-template-columns: 1fr;
-  }
 }
