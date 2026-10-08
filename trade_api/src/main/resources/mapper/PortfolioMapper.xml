@@ -44,7 +44,7 @@
 
     <!--
         The newest stored price per symbol: the close of its latest minute bar
-        (pricing_generator's ticks) or, failing that, of its latest daily
+        (the price feed's ticks) or, failing that, of its latest daily
         candle, observed at the start of that bar or day (UTC).
     -->
     <select id="findLatestStoredPrices" resultMap="storedPriceRow">

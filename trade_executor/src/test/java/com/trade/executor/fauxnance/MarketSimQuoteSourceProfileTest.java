@@ -1,6 +1,6 @@
 package com.trade.executor.fauxnance;
 
-import com.trade.executor.config.TradesGeneratorClientConfig;
+import com.trade.executor.ticker.CurrentTickStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,11 +12,10 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 // The default wiring - see SpecExactQuoteSourceProfileTest for the retired
 // alternative. Under market-sim, and equally with no profile at all, the live
-// ticker (TradesGeneratorQuoteSource) is the only candidate QuoteSource bean.
+// ticker (LiveTickQuoteSource) is the only candidate QuoteSource bean.
 @SpringBootTest(classes = {FauxnanceClientConfig.class, FauxnanceQuoteClient.class,
-        TradesGeneratorClientConfig.class, TradesGeneratorQuoteSource.class})
+        CurrentTickStore.class, LiveTickQuoteSource.class})
 @ActiveProfiles("market-sim")
-@TestPropertySource(properties = {"trades-generator.base-url=http://trades-generator.test"})
 class MarketSimQuoteSourceProfileTest {
 
     @Autowired
@@ -24,6 +23,6 @@ class MarketSimQuoteSourceProfileTest {
 
     @Test
     void liveTickerSourceIsSelectedUnderMarketSim() {
-        assertInstanceOf(TradesGeneratorQuoteSource.class, quoteSource);
+        assertInstanceOf(LiveTickQuoteSource.class, quoteSource);
     }
 }

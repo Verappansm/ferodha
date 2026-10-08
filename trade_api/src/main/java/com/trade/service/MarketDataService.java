@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 
 // The instrument page (LEAP-016). Every figure comes from what the platform
-// already holds - the latest market-data quote (pricing_generator's ticks),
+// already holds - the latest market-data quote (the price feed's ticks),
 // its minute bars and Fauxnance's daily candles - so the browser never
 // calls Fauxnance and no request here spends quota.
 @Service

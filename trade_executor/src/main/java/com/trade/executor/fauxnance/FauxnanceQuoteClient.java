@@ -30,8 +30,8 @@ import java.util.Optional;
 //
 // RETIRED from the default wiring, kept as code. Fills used to be priced with
 // one real Fauxnance quote fetched per order; they now use the live ticker
-// (pricing_generator's current tick) under every profile - see
-// TradesGeneratorQuoteSource - so the price a customer sees and the price
+// (the price feed's current tick) under every profile - see
+// LiveTickQuoteSource - so the price a customer sees and the price
 // their order is filled against are the same number. Switch this back on with
 // SPRING_PROFILES_ACTIVE=fauxnance-direct (it then also needs
 // FAUXNANCE_API_URL and FAUXNANCE_API_KEY, and the ticker source stands down).

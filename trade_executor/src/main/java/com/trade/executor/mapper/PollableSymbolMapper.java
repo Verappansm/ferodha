@@ -13,4 +13,8 @@ public interface PollableSymbolMapper {
     // about, per Story 8's explicit "poll only the symbols someone holds
     // or is watching."
     List<String> findPollableSymbols();
+
+    // Every tradable symbol, plus any held or watched that has since been delisted: what
+    // the price feed (com.trade.executor.ticker) prices and the market maker quotes.
+    List<String> findTradableHeldOrWatchedSymbols();
 }

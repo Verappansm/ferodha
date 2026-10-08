@@ -103,7 +103,7 @@
           AND published_at IS NULL
     </update>
 
-    <!-- Only PORTAL orders: trades_generator inserts its own synthetic orders
+    <!-- Only PORTAL orders: the executor's market maker inserts its own synthetic orders
          and publishes them itself, so their published_at is never set here. -->
     <select id="findUnpublished" resultMap="unpublishedOrderRow">
         SELECT o.order_id,

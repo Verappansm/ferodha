@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 // The newest quote seen per symbol on the market-data topic. trade_api holds
 // no Fauxnance key (B15), so this is where the portfolio routes get a live
-// price: pricing_generator publishes every tick there, under every profile. Lives in memory only - after a
+// price: the executor's price feed publishes every tick there, under every profile. Lives in memory only - after a
 // restart MarketDataListener re-reads the topic's retained day of quotes.
 @Component
 public class LatestQuotes {

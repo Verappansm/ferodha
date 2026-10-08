@@ -870,8 +870,8 @@ test_idempotency() {
 # SECTION 6: market-sim Profile - Order-Book Matching & Synthetic Liquidity
 # ============================================================================
 # Everything above ran whatever profile the stack was actually started with
-# (SPRING_PROFILES_ACTIVE, read from .env by both trade-executor and
-# trades-generator - see docker-compose.yml). This section only demonstrates
+# (SPRING_PROFILES_ACTIVE, read from .env by trade-executor, which runs the
+# market maker too - see docker-compose.yml). This section only demonstrates
 # something different if that was market-sim: restart the stack first with
 #   SPRING_PROFILES_ACTIVE=market-sim ./scripts/demo.sh
 # (or set it in .env and re-run this script) to see it. Under the default
@@ -893,7 +893,7 @@ market_sim_demo() {
     fi
 
     print_subheader "6.1 Placing a SELL priced to cross any synthetic BUY (source=RANDOMIZER)"
-    echo "trades_generator's OrderGenerator places synthetic counter-orders through a seeded"
+    echo "trade-executor's market maker (OrderGenerator) places synthetic counter-orders through a seeded"
     echo "market-maker account every ~10s (30% chance per watched symbol by default), priced at"
     echo "the live tick's own bid/ask - see logic.md's 'Where the crossing counterparty usually"
     echo "comes from'. Pricing this SELL far below any plausible AAPL quote guarantees it crosses"
@@ -988,7 +988,7 @@ print_summary() {
 🧪 market-sim PROFILE (Section 6, only if the stack was started with
    SPRING_PROFILES_ACTIVE=market-sim):
    Order-book matching, real partial fills (PARTIALLY_FILLED), synthetic
-   RANDOMIZER counter-orders from trades_generator, and both sides of a
+   RANDOMIZER counter-orders from the executor's market maker, and both sides of a
    match publishing their own trade-events - none of which exist under the
    default profile. See logic.md (gitignored) for the full walkthrough.
 

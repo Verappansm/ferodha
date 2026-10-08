@@ -25,23 +25,23 @@ below is a decision the team has taken and will defend at review.
 | B09 | Issuer validation | Story 3 vs `auth-api.yaml` | Story 3: "do not require a particular issuer value in any consumer". Contract: "Consumers must validate the configured issuer" | trade_api accepts only tokens whose `iss` is `auth-service` (`app.jwt.issuer`) |
 | B10 | Ports (retired) | `infra/README.md`; contract `servers` | Postgres `localhost:5432`, Kafka `localhost:9092`, auth `localhost:3000`, trade API `:8080` | No longer a departure: since 2026-10-03 the Docker host ports are the contract's, the same as the Windows profile |
 | B11 | Env names | Neueda root `.env.example` | `FAUXNANCE_BASE_URL`, `POSTGRES_DB=trading` | `FAUXNANCE_API_URL`, `POSTGRES_DB=tradedb` |
-| B12 | Container count | Top-level README | Five containers: Postgres, Kafka, Trade REST API, Trade Executor, auth service | Also `kafka-ui`, `pricing-generator` and `trades-generator` |
+| B12 | Container count | Top-level README | Five containers: Postgres, Kafka, Trade REST API, Trade Executor, auth service | Also `kafka-ui`. The price feed and the market maker (LEAP-002, LEAP-004) once ran as `pricing-generator` and `trades-generator`; they now run inside trade-executor, so there are two Spring Boot services |
 | B13 | Order status | `contracts/trade-api.yaml` OrderStatus | `NEW, FILLED, REJECTED, CANCELLED`; "There is no partial-fill state" | Adds `PARTIALLY_FILLED`, plus `Orders.source` and `Orders.filled_quantity` (LEAP-003) |
 | B14 | Fill quantity | `contracts/kafka-topics.md` ORDER_FILLED | `quantity` equals the ordered quantity, "since partial fills are out of scope" | Under `market-sim`, a fill can carry less than the ordered quantity (LEAP-003) |
-| B15 | Fauxnance key holder | Architecture HLD | The Trade Executor is the "only holder of FAUXNANCE_API_KEY" | `pricing_generator` holds it under every profile as the platform's one live price feed (`market-data` ticks, chart history). The executor also holds it under the default profile, to price each fill; its market-data poller is off. Under `market-sim` the executor has no key (LEAP-002, LEAP-016) |
+| B15 | Fauxnance key holder | Architecture HLD | The Trade Executor is the "only holder of FAUXNANCE_API_KEY" | No longer a departure: the executor is again the only key holder. Its price feed (`com.trade.executor.ticker`, formerly `pricing_generator`) spends the quota under every profile as the platform's one live price feed (`market-data` ticks, chart history); its old market-data poller is off (LEAP-002, LEAP-016) |
 | B16 | Order-flow scope | `trade-api.yaml` / Sprint 7 README | One order, one quote: fill-or-reject | Under `market-sim`, orders match against a resting book, rest if unmatched, and expire by TTL (LEAP-003/004) |
 | B17 | Where the claims live | Sprint 4 README | `claims.md` in the analytics folder | `design/analytics-claims.md`; `analytics_etl/README.md` points to it |
 | B18 | Admin tokens | `auth-api.yaml` JWT claims contract | Every token carries an integer `accountId`; `roles` is `CUSTOMER` or `ADMIN` | `POST /auth/admin/login` issues an admin console token: `roles: [ADMIN]`, `aud: admin-console`, no `accountId`, no refresh token. Customer `/auth/login` refuses admin users; trade_api accepts each kind only on its own routes |
 | B19 | Admin routes and error codes | `trade-api.yaml`, `auth-api.yaml` | No admin routes; catalogues as listed | `/api/v1/admin/**` in trade_api and `/admin/**` in the auth service (`design/admin-trade-api.yaml`, `design/admin-auth-api.yaml`), adding `AUTH-403`, `ADM-404` and `ADM-409` |
 | B20 | Portfolio pricing and FX | `contracts/portfolio-api.yaml` | Last prices from Fauxnance `GET /quotes`, batched; totals converted with live `FX:` rates | Last prices from the `market-data` topic (mid of bid and ask), falling back to the newest stored minute bar or daily candle (`Market_Data` was replaced by `market_candles` and `market_bars`, B21); totals converted at the executor's fixed 90 INR = 1 USD until LEAP-006 |
-| B21 | Market data routes and tables | `contracts/trade-api.yaml`; LEAP-016 story | No instrument routes; chart history "from `Market_Data`" | `GET /api/v1/instruments`, `/instruments/{symbol}`, `/{symbol}/quote` and `/{symbol}/history` added to `design/trade-api.yaml`. `Market_Data` is dropped (Liquibase 010) for `market_candles` (Fauxnance daily candles) and `market_bars` (1-minute bars from `pricing_generator`'s ticks, Liquibase 011); no news panel |
+| B21 | Market data routes and tables | `contracts/trade-api.yaml`; LEAP-016 story | No instrument routes; chart history "from `Market_Data`" | `GET /api/v1/instruments`, `/instruments/{symbol}`, `/{symbol}/quote` and `/{symbol}/history` added to `design/trade-api.yaml`. `Market_Data` is dropped (Liquibase 010) for `market_candles` (Fauxnance daily candles) and `market_bars` (1-minute bars from the executor's price-feed ticks, Liquibase 011); no news panel |
 | B22 | Profile routes | `contracts/auth-api.yaml` | `GET /auth/me` only | `GET` and `PATCH /profile` in the auth service (`design/profile-api.yaml`): name and phone editable, read from the token only (LEAP-020) |
 | B23 | Password on the wire | `contracts/auth-api.yaml` RegisterRequest, LoginRequest; admin login (B18) | `password` is the password itself, 12 to 128 characters | The trading UI and the admin console send `sha256("ferodha-v1:" + lower-case email + ":" + password)`, 64 hex characters, in its place; the auth service bcrypts what arrives, unchanged. The 12-character minimum is enforced in the browser on the typed password. Seed users re-hashed by trade-api Liquibase 012 |
 | B24 | Order review and fee rate | `contracts/trade-api.yaml`; Sprint 7 executor | No review route; the executor holds the fee rate and applies it at settlement | `POST /api/v1/orders/review` returns cost, fee and total for a ticket without placing it. The rate lives only in trade_api (`fee.rate`), is written on each order as `Orders.fee_rate` (Liquibase 014), and the executor charges the order's own rate (LEAP-017) |
 | B25 | Rejection reason in order history | `contracts/trade-api.yaml` OrderHistoryEntry | No field says why an order was rejected | Optional `rejectionReason` (the executor's code, null unless `REJECTED`), shown on the Orders page and on the order ticket |
 | B26 | Change password and forced reset | `contracts/auth-api.yaml`; LEAP-010, LEAP-016 stories | `/auth/login` answers only 200 or `AUTH-401` | Right credentials on a user with a forced reset answer `AUTH-428` (HTTP 428) and no tokens; `POST /auth/change-password` (current password as the credential, so no token) sets the new one, clears the flag and revokes every refresh token |
 | B27 | Automated strategies | Sprint 10 stretch brief (`catalogue/stretch.md`); `contracts/kafka-topics.md` | No strategy routes; no delegated identity | `GET/POST /api/v1/strategies`, `/{id}`, `/{id}/events`, `/{id}/enable`, `/{id}/disable` in trade_api; orders placed with a 60 second delegated token carrying `strategyId` and `act.sub` claims, accepted only on `POST /api/v1/orders` and only while the strategy is ENABLED; consumer group `strategy-service` on `market-data` and `trade-events`; Liquibase 015 |
-| B28 | Fill price source | `contracts/kafka-topics.md` (executor prices a fill with one Fauxnance quote); Sprint 7 brief | One real quote per order, `GET /quotes/{symbol}` | The executor fills at pricing_generator's live tick under every profile; the direct Fauxnance client is retired behind the profile `fauxnance-direct`. The fill rule is unchanged |
+| B28 | Fill price source | `contracts/kafka-topics.md` (executor prices a fill with one Fauxnance quote); Sprint 7 brief | One real quote per order, `GET /quotes/{symbol}` | The executor fills at its own price feed's live tick (read in process) under every profile; the direct Fauxnance client is retired behind the profile `fauxnance-direct`. The fill rule is unchanged |
 | B29 | Admin fees and adding instruments | `design/admin-trade-api.yaml` (LEAP-022 lists and delists only) | No fee figures; no way to add an instrument | `GET /admin/fees/summary`, `/fees/by-user`, `/fees/by-instrument` (commission on filled portal orders, in USD) and `POST /admin/instruments`; a Fees page and tiles on the overview, and an Add instrument form on the Instruments page |
 | B30 | Email verification at registration | `contracts/auth-api.yaml` (register, login, refresh only) | No way to prove the registrant owns the address | `POST /auth/verify-email` (204, `VAL-422` for any wrong, expired or used-up code) and `POST /auth/resend-code` (always 204); `Users.email_verified_at`; approval refused until verified |
 | B31 | Account approval takes no bank number | `design/admin-trade-api.yaml` (`ApproveAccountRequest.bankAccountNumber` required) | Operator types the bank account | `bankAccountNumber` and `currency` optional; the bank account is the one held under the applicant's verified email, never created by the console, and the account opens in that bank account's currency (`Third_Party_Bank.currency`, changelog 024); one bank account per user and per account (changelog 021) |
@@ -128,9 +128,10 @@ cost: a native Postgres on 5432 must be stopped before `docker compose up`.
 service and script in one commit.
 
 **B12 (extra containers).** `kafka-ui` is a development convenience with no role
-in the platform. `pricing-generator` (LEAP-002) and `trades-generator` (LEAP-004)
-are the market simulation. None of them is on the order path
-under the default profile.
+in the platform. The price feed (LEAP-002) and the market maker (LEAP-004) used to
+be two more Spring Boot services; the platform may have only trade-api and
+trade-executor, so both now run as packages inside trade-executor, reading the
+live tick in process instead of over HTTP.
 
 **B13-B16 (market simulation).** All four are the `market-sim` profile
 (LEAP-002 to LEAP-004), which exists to demonstrate a real order book without
@@ -162,7 +163,7 @@ not allow the action. Both services write their decisions to the one
 
 **B20 (portfolio pricing).** trade_api holds no Fauxnance key (B15), and a
 second key holder would split the 2000-a-day quota. Every quote the platform
-fetches is already published on `market-data` by `pricing_generator`, under
+fetches is already published on `market-data` by trade-executor's price feed, under
 every profile, so the portfolio module reads that
 topic into memory and spends no quota at all. The staleness rules are kept as
 written: a quote older than `PORTFOLIO_STALE_AFTER_SECONDS` (default 300) is
@@ -175,7 +176,7 @@ of the totals and marks the summary partial.
 **B21 (market data).** The instrument page needs a price, statistics and a
 chart without the browser ever calling Fauxnance, so trade_api serves them from
 what the platform already holds. Fauxnance candles are end-of-day only, so the
-1D chart comes from `pricing_generator`'s own ticks, folded into one-minute
+1D chart comes from the price feed's own ticks, folded into one-minute
 bars and kept for 26 hours; the longer ranges come from the daily candles it
 stores once a day. A statistic the stored history cannot back (no candle before
 today, no bars yet) is null, never invented. Fauxnance has no news endpoint, so
@@ -218,7 +219,7 @@ The executor has no rate of its own; it charges each fill at the order's
 rate, which also keeps a resting order (`market-sim`) and an order the sweeper
 re-sends on the rate the customer reviewed, even if the rate changes later.
 The `ORDER_PLACED` envelope is unchanged, since the executor settles from the
-row. Orders trade_api does not write (`trades_generator`'s market-maker orders,
+row. Orders trade_api does not write (the executor's market-maker orders,
 seed orders) take the column default 0. The review is worked out at the limit
 price, in the instrument's currency; the executor charges on the executed
 price, converted to the account's currency (fixed 90 INR = 1 USD until

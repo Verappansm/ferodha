@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
-// Price history for the instrument page (LEAP-016): pricing_generator's
+// Price history for the instrument page (LEAP-016): the price feed's
 // minute bars (market_bars) and Fauxnance's daily candles (market_candles).
 @Mapper
 public interface MarketHistoryMapper {
