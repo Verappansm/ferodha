@@ -73,10 +73,10 @@ describe('BankComponent', () => {
     );
   });
 
-  it('loads and shows both balances of the signed-in account', () => {
+  it('shows the trading balance, and never the bank balance', () => {
     expect(bankFunds).toHaveBeenCalledWith(3);
     expect(fixture.nativeElement.textContent).toContain('2,500.50');
-    expect(fixture.nativeElement.textContent).toContain('25,000.00');
+    expect(fixture.nativeElement.textContent).not.toContain('25,000.00');
   });
 
   it('lists every movement newest first, with a sign and a word', () => {

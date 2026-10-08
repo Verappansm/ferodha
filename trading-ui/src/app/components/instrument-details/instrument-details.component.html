@@ -194,6 +194,54 @@
           </div>
         </section>
 
+        <section class="card" aria-labelledby="signal-title" data-testid="signal">
+          <header class="card-header">
+            <h2 id="signal-title">Signal</h2>
+            @if (tradeSignal(); as sg) {
+              <span
+                class="pill"
+                [class.pill-positive]="sg.direction === 'BUY'"
+                [class.pill-negative]="sg.direction === 'SELL'"
+                [class.pill-neutral]="sg.direction === 'HOLD'"
+                data-testid="signal-direction"
+                >{{ sg.direction }}{{ sg.direction === 'HOLD' ? '' : ' · ' + sg.strength.toLowerCase() }}</span
+              >
+            }
+          </header>
+          <div class="card-body">
+            @if (signalError()) {
+              <p class="field-error" role="alert">{{ signalError() }}</p>
+            } @else if (tradeSignal(); as sg) {
+              <p class="signal-reason" data-testid="signal-reason">{{ sg.reason }}</p>
+              @if (sg.sma20 != null) {
+                <dl class="kv">
+                  <div>
+                    <dt>20-day average</dt>
+                    <dd>{{ sg.sma20 | money: '1.2-2' }}</dd>
+                  </div>
+                  <div>
+                    <dt>50-day average</dt>
+                    <dd>{{ sg.sma50 | money: '1.2-2' }}</dd>
+                  </div>
+                  <div>
+                    <dt>14-day RSI</dt>
+                    <dd>{{ sg.rsi14 | money: '1.0-1' }}</dd>
+                  </div>
+                </dl>
+              }
+              <p class="field-hint signal-note">
+                {{ sg.disclaimer }}
+                @if (sg.asOf) {
+                  Daily closes to {{ sg.asOf | date: 'd MMM y' }}.
+                }
+              </p>
+            } @else {
+              <div class="skeleton" aria-hidden="true"></div>
+              <div class="skeleton" aria-hidden="true"></div>
+            }
+          </div>
+        </section>
+
         <section class="card" aria-labelledby="stats-title" data-testid="stats">
           <header class="card-header">
             <h2 id="stats-title">Key statistics</h2>

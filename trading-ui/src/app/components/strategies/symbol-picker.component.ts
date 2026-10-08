@@ -1,4 +1,4 @@
-import { Component, computed, input, model, signal } from '@angular/core';
+import { Component, computed, effect, input, model, signal, untracked } from '@angular/core';
 
 export interface SymbolOption {
   symbol: string;
@@ -10,7 +10,9 @@ let nextId = 0;
 /**
  * A searchable drop-down over the instruments that exist: type part of a
  * symbol or a company name, pick with the mouse or Up, Down and Enter. Only a
- * listed instrument can be chosen, so a mistyped symbol cannot get through.
+ * listed instrument can be chosen, so a mistyped symbol cannot get through -
+ * unless `freeText` is on (the order ticket), where what is typed is the value
+ * and the platform's own validation answers for it.
  */
 @Component({
   selector: 'app-symbol-picker',
@@ -62,7 +64,8 @@ let nextId = 0;
 
     .input {
       width: 100%;
-      padding: 10px 12px;
+      height: 38px;
+      padding: 0 12px;
       font: inherit;
       color: var(--ink-900);
       background: var(--surface);
@@ -127,11 +130,23 @@ export class SymbolPickerComponent {
   readonly placeholder = input('Search a symbol or company');
   readonly emptyText = input('No matching instrument');
   readonly testId = input('symbol-picker');
+  /** What is typed is the value at once, upper-cased; the list only suggests. */
+  readonly freeText = input(false);
 
   readonly listId = `symbol-list-${nextId++}`;
   readonly query = signal('');
   readonly open = signal(false);
   readonly active = signal(0);
+
+  constructor() {
+    // A value set from outside (a prefilled link, a reset form) shows in the box.
+    effect(() => {
+      const value = this.value();
+      untracked(() => {
+        if (this.query().trim().toUpperCase() !== value.toUpperCase()) this.query.set(value);
+      });
+    });
+  }
 
   readonly matches = computed(() => {
     const q = this.query().trim().toLowerCase();
@@ -154,7 +169,11 @@ export class SymbolPickerComponent {
     this.query.set(text);
     this.open.set(true);
     this.active.set(0);
-    if (text === '') this.value.set('');
+    if (this.freeText()) {
+      this.value.set(text.trim().toUpperCase());
+    } else if (text === '') {
+      this.value.set('');
+    }
   }
 
   select(option: SymbolOption): void {
@@ -170,7 +189,7 @@ export class SymbolPickerComponent {
     const exact = this.options().find((o) => o.symbol === typed);
     if (exact) {
       this.select(exact);
-    } else {
+    } else if (!this.freeText()) {
       this.query.set(this.value());
     }
     this.open.set(false);

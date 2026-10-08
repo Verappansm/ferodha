@@ -58,15 +58,16 @@
             </p>
 
             <div class="field wide">
-              <label class="field-label" for="symbol">Symbol</label>
-              <input
-                id="symbol"
-                type="text"
-                formControlName="symbol"
-                placeholder="e.g. AAPL or TCS.NS"
-                class="input symbol-input"
-                autocomplete="off"
-                data-testid="order-symbol"
+              <span class="field-label" id="symbol-label">Symbol</span>
+              <app-symbol-picker
+                class="symbol-input"
+                [options]="symbolOptions()"
+                [value]="symbolValue()"
+                (valueChange)="setSymbol($event)"
+                [freeText]="true"
+                label="Symbol"
+                placeholder="Search a symbol or company, e.g. AAPL"
+                testId="order-symbol"
               />
               @if (form.controls.symbol.invalid && form.controls.symbol.touched) {
                 <p class="field-error" data-testid="order-symbol-error">{{ symbolError() }}</p>

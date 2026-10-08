@@ -67,6 +67,16 @@ describe('OrderingComponent', () => {
             reviewOrder,
             orderHistory,
             quote: vi.fn().mockReturnValue(of(null)),
+            getInstruments: vi
+              .fn()
+              .mockReturnValue(
+                of({
+                  instruments: [{ symbol: 'AAPL', name: 'Apple Inc.' }],
+                  total: 1,
+                  pageSize: 1000,
+                  offset: 0,
+                }),
+              ),
           },
         },
         { provide: ActivatedRoute, useValue: { queryParams } },
@@ -710,7 +720,16 @@ describe('OrderingComponent price suggestion', () => {
       providers: [
         { provide: Session, useValue: { accountId: signal(3) } },
         provideStubPreferences(),
-        { provide: TradeApi, useValue: { placeOrder: vi.fn(), quote } },
+        {
+          provide: TradeApi,
+          useValue: {
+            placeOrder: vi.fn(),
+            quote,
+            getInstruments: vi
+              .fn()
+              .mockReturnValue(of({ instruments: [], total: 0, pageSize: 1000, offset: 0 })),
+          },
+        },
         { provide: ActivatedRoute, useValue: { queryParams: of(params) } },
         { provide: Router, useValue: { navigate: vi.fn().mockResolvedValue(true) } },
         { provide: Location, useValue: { back: vi.fn() } },

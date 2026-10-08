@@ -33,6 +33,7 @@ import { MoneyPipe } from '../../core/format/money.pipe';
 import { errorMessage } from '../../core/errors/error-message';
 import { rejectionText } from '../../core/format/rejection-reason';
 import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
+import { SymbolOption, SymbolPickerComponent } from '../strategies/symbol-picker.component';
 
 /** The contract's PlaceOrderRequest.symbol limit. */
 export const SYMBOL_MAX_LENGTH = 20;
@@ -101,7 +102,14 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-ordering',
-  imports: [ReactiveFormsModule, DatePipe, MoneyPipe, RouterLink, OrderStatusBadgeComponent],
+  imports: [
+    ReactiveFormsModule,
+    DatePipe,
+    MoneyPipe,
+    RouterLink,
+    OrderStatusBadgeComponent,
+    SymbolPickerComponent,
+  ],
   templateUrl: './ordering.component.html',
   styleUrls: ['./ordering.component.css'],
 })
@@ -137,6 +145,10 @@ export class OrderingComponent {
 
   /** The latest quote for the symbol on the ticket, shown under the price. */
   readonly quote = signal<InstrumentQuote | null>(null);
+  /** Every tradable instrument, for the symbol search on the ticket. */
+  readonly symbolOptions = signal<SymbolOption[]>([]);
+  /** The symbol on the ticket, mirrored for the picker. */
+  readonly symbolValue = signal('');
   /** The limit price the current quote and side suggest. */
   readonly suggestedPrice = computed(() => suggestedLimitPrice(this.quote(), this.side()));
   readonly bufferPercent = LIMIT_BUFFER * 100;
@@ -186,6 +198,17 @@ export class OrderingComponent {
   private pendingKey: string | null = null;
 
   constructor() {
+    this.tradeApi.getInstruments(1000, 0).subscribe({
+      next: (page) =>
+        this.symbolOptions.set(page.instruments.map((i) => ({ symbol: i.symbol, name: i.name }))),
+      error: () => {
+        // Typing a symbol still works; the list only suggests.
+      },
+    });
+    this.form.controls.symbol.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe((symbol) => this.symbolValue.set(symbol ?? ''));
+
     inject(DestroyRef).onDestroy(() => clearTimeout(this.followTimer));
 
     this.form.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
@@ -292,6 +315,13 @@ export class OrderingComponent {
     if (suggested !== null && !this.form.controls.price.dirty) {
       this.form.controls.price.setValue(suggested);
     }
+  }
+
+  /** The picker chose or the customer typed a symbol. */
+  setSymbol(symbol: string): void {
+    if (symbol === this.form.controls.symbol.value) return;
+    this.form.controls.symbol.setValue(symbol);
+    this.form.controls.symbol.markAsDirty();
   }
 
   useSuggestedPrice(): void {

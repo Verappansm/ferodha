@@ -26,26 +26,20 @@
   @if (isLoading() && !funds()) {
     <div class="tiles" aria-hidden="true">
       <div class="tile"><div class="skeleton"></div><div class="skeleton lg"></div></div>
-      <div class="tile"><div class="skeleton"></div><div class="skeleton lg"></div></div>
     </div>
     <span class="visually-hidden">Loading your linked funds…</span>
   } @else if (funds(); as current) {
     <section class="tiles" aria-label="Account balances">
-      <div class="tile">
-        <p class="tile-label">Bank balance</p>
-        <p class="tile-value" data-testid="bank-balance">
-          {{ current.bankBalance | money: '1.2-2' : 'balance'
-          }}<span class="ccy">{{ current.currency }}</span>
-        </p>
-        <span class="tile-hint">Linked account {{ maskedAccount() }}</span>
-      </div>
       <div class="tile tile-primary">
         <p class="tile-label">Trading balance</p>
         <p class="tile-value">
           {{ current.tradingBalance | money: '1.2-2' : 'balance'
           }}<span class="ccy">{{ current.currency }}</span>
         </p>
-        <span class="tile-hint">As of {{ current.asOf | date: 'd MMM, HH:mm' }}</span>
+        <span class="tile-hint"
+          >Linked bank account {{ maskedAccount() }} · as of
+          {{ current.asOf | date: 'd MMM, HH:mm' }}</span
+        >
       </div>
     </section>
 
@@ -99,20 +93,18 @@
               />
               <span class="suffix">{{ current.currency }}</span>
             </div>
-            <p class="field-hint" data-testid="bank-available">
-              Available:
-              {{
-                (transactionType() === 'DEPOSIT' ? current.bankBalance : current.availableToWithdraw)
-                  | money: '1.2-2' : 'balance'
-              }}
-              {{ current.currency }}
-              @if (
-                transactionType() === 'WITHDRAWAL' &&
-                current.availableToWithdraw < current.tradingBalance
-              ) {
-                <span>· the rest is held for open buy orders</span>
-              }
-            </p>
+            @if (transactionType() === 'WITHDRAWAL') {
+              <p class="field-hint" data-testid="bank-available">
+                Available to withdraw:
+                {{ current.availableToWithdraw | money: '1.2-2' : 'balance' }}
+                {{ current.currency }}
+                @if (current.availableToWithdraw < current.tradingBalance) {
+                  <span>· the rest is held for open buy orders</span>
+                }
+              </p>
+            } @else {
+              <p class="field-hint">Taken from your linked bank account.</p>
+            }
           </div>
           <div class="field">
             <label class="field-label" for="bank-pin">Bank PIN</label>

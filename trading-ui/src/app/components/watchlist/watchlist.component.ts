@@ -233,7 +233,7 @@ export class WatchlistComponent implements OnDestroy {
           return snapshot?.stale ? `${text} (stale)` : text;
         },
         cellClass: (params: any) =>
-          this.priceMap().get(params.data?.symbol || '')?.stale ? 'wl-num wl-stale' : 'wl-num',
+          this.priceMap().get(params.data?.symbol || '')?.stale ? 'ag-right-aligned-cell wl-num wl-stale' : 'ag-right-aligned-cell wl-num',
       },
       {
         field: 'dayChangePercent',
@@ -250,8 +250,8 @@ export class WatchlistComponent implements OnDestroy {
         },
         cellClass: (params: any) => {
           const pct = params.value as number;
-          if (!pct || !params.data?.lastPrice) return 'wl-num';
-          return pct > 0 ? 'wl-num wl-up' : 'wl-num wl-down';
+          if (!pct || !params.data?.lastPrice) return 'ag-right-aligned-cell wl-num';
+          return pct > 0 ? 'ag-right-aligned-cell wl-num wl-up' : 'ag-right-aligned-cell wl-num wl-down';
         },
       },
       {
@@ -281,7 +281,7 @@ export class WatchlistComponent implements OnDestroy {
           min: 0,
         },
         cellClass: (params: any) =>
-          params.data?.alertStatus === 'CANCELLED' ? 'wl-num wl-muted' : 'wl-num',
+          params.data?.alertStatus === 'CANCELLED' ? 'ag-right-aligned-cell wl-num wl-muted' : 'ag-right-aligned-cell wl-num',
         onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
           this.onAlertPriceChanged(event);
         },

@@ -28,16 +28,6 @@
   gap: 18px;
 }
 
-.symbol-input {
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.symbol-input::placeholder {
-  font-weight: 400;
-  text-transform: none;
-}
-
 .quote-box {
   display: grid;
   gap: 8px;

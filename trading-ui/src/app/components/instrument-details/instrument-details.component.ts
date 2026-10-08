@@ -16,6 +16,7 @@ import {
   ChartRange,
   InstrumentQuote,
   InstrumentResponse,
+  InstrumentSignal,
   PricePoint,
   TradeApi,
 } from '../../api/trade-api';
@@ -72,6 +73,9 @@ export class InstrumentDetailsComponent implements OnInit {
   readonly points = signal<PricePoint[] | null>(null);
   readonly historyError = signal<string | null>(null);
   readonly showTable = signal(false);
+  /** The buy, sell or hold view (Sprint 10 stretch); null while loading. */
+  readonly tradeSignal = signal<InstrumentSignal | null>(null);
+  readonly signalError = signal<string | null>(null);
 
   readonly rangeLabel = computed(() => RANGES.find((r) => r.value === this.range())?.label ?? '');
 
@@ -136,6 +140,7 @@ export class InstrumentDetailsComponent implements OnInit {
       this.loadInstrument();
       this.loadQuote();
       this.loadHistory();
+      this.loadSignal();
     });
     const timer = setInterval(() => this.loadQuote(), QUOTE_REFRESH_MS);
     this.destroyRef.onDestroy(() => clearInterval(timer));
@@ -183,6 +188,15 @@ export class InstrumentDetailsComponent implements OnInit {
     this.tradeApi.history(this.symbol(), this.range()).subscribe({
       next: (history) => this.points.set(history.points),
       error: (error: unknown) => this.historyError.set(errorMessage(error)),
+    });
+  }
+
+  loadSignal(): void {
+    this.tradeSignal.set(null);
+    this.signalError.set(null);
+    this.tradeApi.signal(this.symbol()).subscribe({
+      next: (s) => this.tradeSignal.set(s),
+      error: (error: unknown) => this.signalError.set(errorMessage(error)),
     });
   }
 

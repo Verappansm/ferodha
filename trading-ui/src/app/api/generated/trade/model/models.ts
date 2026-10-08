@@ -9,6 +9,7 @@ export * from './error-response';
 export * from './instrument-filters';
 export * from './instrument-quote';
 export * from './instrument-response';
+export * from './instrument-signal';
 export * from './instrument-type';
 export * from './order-history-entry';
 export * from './order-response';

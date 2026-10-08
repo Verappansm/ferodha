@@ -658,6 +658,31 @@ paths:
         '404':
           $ref: '#/components/responses/InstrumentNotFound'
 
+  /api/v1/instruments/{symbol}/signal:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentSignal
+      summary: A buy, sell or hold view from past daily prices (Sprint 10 stretch)
+      description: |
+        Trade advice and signals. The 20-day simple moving average against the 50-day one gives
+        the trend, the 14-day RSI filters out a stretched move, and the gap between the averages
+        gives the strength. Computed from the stored daily candles (no Fauxnance call), cached
+        per symbol for an hour. Fewer than 50 closes is HOLD with that reason. It informs; it
+        never places an order.
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string, maxLength: 20 }
+      responses:
+        '200':
+          description: The signal, with the numbers and the sentence that produced it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstrumentSignal' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '404': { $ref: '#/components/responses/InstrumentNotFound' }
+
   /api/v1/instruments/{symbol}/history:
     get:
       tags: [Instruments]
@@ -1063,6 +1088,27 @@ components:
         total: { type: integer, format: int64 }
         limit: { type: integer, format: int32 }
         offset: { type: integer, format: int32 }
+
+    InstrumentSignal:
+      type: object
+      additionalProperties: false
+      required: [symbol, direction, strength, reason, closesUsed, computedAt, disclaimer]
+      properties:
+        symbol: { type: string }
+        direction: { type: string, enum: [BUY, SELL, HOLD] }
+        strength: { type: string, enum: [WEAK, MODERATE, STRONG] }
+        reason: { type: string, description: The sentence saying what produced the signal. }
+        sma20: { type: [number, 'null'], format: double }
+        sma50: { type: [number, 'null'], format: double }
+        rsi14: { type: [number, 'null'], format: double }
+        lastClose: { type: [number, 'null'], format: double }
+        closesUsed: { type: integer, format: int32 }
+        asOf:
+          type: [string, 'null']
+          format: date-time
+          description: The date of the latest daily close used.
+        computedAt: { type: string, format: date-time }
+        disclaimer: { type: string }
 
     InstrumentFilters:
       type: object

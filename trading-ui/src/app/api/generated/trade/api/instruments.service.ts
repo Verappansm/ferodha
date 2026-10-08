@@ -25,6 +25,8 @@ import { InstrumentQuote } from '../model/instrument-quote';
 // @ts-ignore
 import { InstrumentResponse } from '../model/instrument-response';
 // @ts-ignore
+import { InstrumentSignal } from '../model/instrument-signal';
+// @ts-ignore
 import { InstrumentType } from '../model/instrument-type';
 // @ts-ignore
 import { PaginatedInstrumentsResponse } from '../model/paginated-instruments-response';
@@ -357,6 +359,66 @@ export class InstrumentsService extends BaseService {
         let localVarPath = `/api/v1/instruments/${this.configuration.encodeParam({name: "symbol", value: symbol, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: undefined})}/quote`;
         const { basePath, withCredentials } = this.configuration;
         return this.httpClient.request<InstrumentQuote>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * A buy, sell or hold view from past daily prices (Sprint 10 stretch)
+     * Trade advice and signals. The 20-day simple moving average against the 50-day one gives the trend, the 14-day RSI filters out a stretched move, and the gap between the averages gives the strength. Computed from the stored daily candles (no Fauxnance call), cached per symbol for an hour. Fewer than 50 closes is HOLD with that reason. It informs; it never places an order. 
+     * @endpoint get /api/v1/instruments/{symbol}/signal
+     * @param symbol 
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public getInstrumentSignal(symbol: string, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<InstrumentSignal>;
+    public getInstrumentSignal(symbol: string, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<InstrumentSignal>>;
+    public getInstrumentSignal(symbol: string, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<InstrumentSignal>>;
+    public getInstrumentSignal(symbol: string, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (symbol === null || symbol === undefined) {
+            throw new Error('Required parameter symbol was null or undefined when calling getInstrumentSignal.');
+        }
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/instruments/${this.configuration.encodeParam({name: "symbol", value: symbol, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: undefined})}/signal`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<InstrumentSignal>('get', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 responseType: <any>responseType_,

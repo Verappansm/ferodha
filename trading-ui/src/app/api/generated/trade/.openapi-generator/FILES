@@ -16,6 +16,7 @@ model/error-response.ts
 model/instrument-filters.ts
 model/instrument-quote.ts
 model/instrument-response.ts
+model/instrument-signal.ts
 model/instrument-type.ts
 model/models.ts
 model/order-history-entry.ts

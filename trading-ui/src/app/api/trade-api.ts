@@ -12,6 +12,7 @@ import { BankFundsResponse } from './generated/trade/model/bank-funds-response';
 import { BankTransactionsResponse } from './generated/trade/model/bank-transactions-response';
 import { BankTransferRequest } from './generated/trade/model/bank-transfer-request';
 import { InstrumentFilters } from './generated/trade/model/instrument-filters';
+import { InstrumentSignal } from './generated/trade/model/instrument-signal';
 import { InstrumentType } from './generated/trade/model/instrument-type';
 import { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
 import { OrderResponse } from './generated/trade/model/order-response';
@@ -46,6 +47,7 @@ export type { BankTransaction } from './generated/trade/model/bank-transaction';
 export type { BankTransactionsResponse } from './generated/trade/model/bank-transactions-response';
 export type { BankTransferRequest } from './generated/trade/model/bank-transfer-request';
 export type { InstrumentFilters } from './generated/trade/model/instrument-filters';
+export type { InstrumentSignal } from './generated/trade/model/instrument-signal';
 export type { OrderHistoryEntry } from './generated/trade/model/order-history-entry';
 export type { OrderResponse } from './generated/trade/model/order-response';
 export type { PlaceOrderRequest } from './generated/trade/model/place-order-request';
@@ -199,6 +201,11 @@ export class TradeApi {
 
   history(symbol: string, range: ChartRange): Observable<PriceHistory> {
     return this.instruments.getInstrumentHistory(symbol, range);
+  }
+
+  /** A buy, sell or hold view from past daily prices, with the reason (Sprint 10 stretch). */
+  signal(symbol: string): Observable<InstrumentSignal> {
+    return this.instruments.getInstrumentSignal(symbol);
   }
 
   /**
