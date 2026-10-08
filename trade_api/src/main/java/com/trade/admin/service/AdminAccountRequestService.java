@@ -47,19 +47,22 @@ public class AdminAccountRequestService {
         // and the bank holds an account under that same email: that account, and only
         // that one, is theirs. Operators cannot create or pick a bank account.
         if (!mapper.isEmailVerified(request.userId())) {
-            throw AdminException.conflict("the applicant has not verified their email yet");
+            throw AdminException.refused("The applicant has not verified their email yet. They enter the "
+                    + "code mailed at sign-up; approve once they have.");
         }
         BankAccountRow bank = mapper.findBankAccountByEmail(request.applicantEmail());
         if (bank == null) {
-            throw AdminException.conflict("the bank holds no account under " + request.applicantEmail());
+            throw AdminException.refused("The bank holds no account under " + request.applicantEmail()
+                    + ". The bank side adds one (Third_Party_Bank) before the account can be opened.");
         }
         String bankAccount = bank.bankAccountNumber();
         String named = body.bankAccountNumber() == null ? "" : body.bankAccountNumber().trim();
         if (!named.isEmpty() && !named.equals(bankAccount)) {
-            throw AdminException.conflict("bank account " + named + " is not the one held under the applicant's email");
+            throw AdminException.refused("Bank account " + named + " is not the one held under the applicant's email.");
         }
         if (mapper.countAccountsOnBank(bankAccount) > 0) {
-            throw AdminException.conflict("bank account " + bankAccount + " is already linked to an account");
+            throw AdminException.refused("The bank account held under " + request.applicantEmail()
+                    + " (" + bankAccount + ") is already linked to another trading account.");
         }
 
         // Money moves one for one between the bank and the trading account, so the
@@ -67,7 +70,7 @@ public class AdminAccountRequestService {
         String currency = bank.currency();
         String namedCurrency = body.currency() == null ? "" : body.currency().trim();
         if (!namedCurrency.isEmpty() && !namedCurrency.equals(currency)) {
-            throw AdminException.conflict("the bank account is held in " + currency + ", not " + namedCurrency);
+            throw AdminException.refused("The bank account is held in " + currency + ", not " + namedCurrency + ".");
         }
         long accountId = mapper.insertAccount(request.userId(), bankAccount, currency);
         if (mapper.approveAccountRequest(requestId.toString(), admin.userId().toString(),

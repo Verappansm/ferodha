@@ -15,6 +15,10 @@ export interface ErrorResponse {
      * For a developer reading a log. Never branch on it.
      */
     message: string;
+    /**
+     * Present only on an ADM-409 a business rule raised (an approval the applicant or the bank side has to act on first). A sentence written for the operator, naming nothing they cannot already see; the console shows it as given. 
+     */
+    reason?: string;
 }
 export namespace ErrorResponse {
     export const ErrorCodeEnum = {
