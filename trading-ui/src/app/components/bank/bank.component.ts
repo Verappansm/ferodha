@@ -3,7 +3,12 @@ import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import { BankFundsResponse, BankTransferType, TradeApi } from '../../api/trade-api';
+import {
+  BankFundsResponse,
+  BankTransaction,
+  BankTransferType,
+  TradeApi,
+} from '../../api/trade-api';
 import { MoneyPipe } from '../../core/format/money.pipe';
 import { Session } from '../../core/session/session';
 import { errorMessage } from '../../core/errors/error-message';
@@ -15,6 +20,14 @@ import bcrypt from 'bcryptjs';
  * bcryptjs throws "Illegal salt length" before any request is sent.
  */
 export const PIN_PROOF_SALT = '$2b$12$D6aOfmGWG4oQpLdkJ0PV.e';
+
+const TRANSACTION_LABELS: Record<string, string> = {
+  DEPOSIT: 'Deposit from bank',
+  WITHDRAWAL: 'Withdrawal to bank',
+  BUY_SETTLEMENT: 'Buy settled',
+  SELL_SETTLEMENT: 'Sell settled',
+  DIVIDEND: 'Dividend',
+};
 
 const OUTCOME_UNKNOWN =
   'We could not confirm whether the transfer went through. Check your balances, or press the button again: retrying this same transfer can never move the money twice.';
@@ -56,8 +69,34 @@ export class BankComponent implements OnInit {
    */
   private pendingKey: string | null = null;
 
+  /** LEAP-019: every cash movement on the account, newest first. */
+  readonly transactions = signal<BankTransaction[] | null>(null);
+  readonly transactionsError = signal('');
+
   ngOnInit(): void {
     void this.loadFunds();
+    void this.loadTransactions();
+  }
+
+  async loadTransactions(): Promise<void> {
+    const accountId = this.session.accountId();
+    if (accountId == null) return;
+    this.transactionsError.set('');
+    try {
+      const page = await firstValueFrom(this.api.bankTransactions(accountId, 50, 0));
+      this.transactions.set(page.transactions);
+    } catch (error) {
+      this.transactionsError.set(errorMessage(error));
+    }
+  }
+
+  /** Money into the trading account reads +, money out −, with the word beside it. */
+  isInflow(type: string): boolean {
+    return type === 'DEPOSIT' || type === 'SELL_SETTLEMENT' || type === 'DIVIDEND';
+  }
+
+  transactionLabel(type: string): string {
+    return TRANSACTION_LABELS[type] ?? type;
   }
 
   setType(type: BankTransferType): void {
@@ -113,6 +152,7 @@ export class BankComponent implements OnInit {
       );
       this.pendingKey = null;
       this.funds.set(result);
+      void this.loadTransactions();
       this.pin.set('');
       this.amount.set(null);
       this.success.set(

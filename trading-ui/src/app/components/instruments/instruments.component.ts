@@ -1,20 +1,35 @@
-import { Component, computed, DestroyRef, effect, inject, signal, untracked } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { TradeApi, InstrumentResponse, InstrumentType, PriceSnapshot } from '../../api/trade-api';
+import { catchError, map, of, Subject, switchMap, tap, timer } from 'rxjs';
+import {
+  InstrumentFilters,
+  InstrumentQuery,
+  InstrumentResponse,
+  InstrumentType,
+  PaginatedInstrumentsResponse,
+  PriceSnapshot,
+  TradeApi,
+} from '../../api/trade-api';
+import { errorMessage } from '../../core/errors/error-message';
 import { suggestedLimitPrice } from '../../core/format/limit-price';
 import { MoneyPipe } from '../../core/format/money.pipe';
 
 /** How often the prices of the rows on screen are re-read. */
 export const PRICE_REFRESH_MS = 15_000;
 
+/** How long typing pauses before the search is sent. */
+export const SEARCH_DEBOUNCE_MS = 300;
+
 /** How long a moved price keeps its up or down flash. */
 const FLASH_MS = 1_000;
 
 /**
- * The market list (LEAP-015): every tradable instrument, searchable by ticker
- * or name and filterable by exchange, sector and type. The search and filters
- * live in the URL, so a filtered list can be bookmarked or shared.
+ * The market list (LEAP-015): the tradable instruments, searched by ticker or name and
+ * filtered by exchange, sector and type on the server, a page at a time. The filter choices
+ * come from the data (GET /instruments/filters). The search and filters live in the URL, so a
+ * filtered list can be bookmarked or shared.
  */
 @Component({
   selector: 'app-instruments',
@@ -27,14 +42,14 @@ export class InstrumentsComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  // Pagination
   readonly pageSize = 20;
   readonly currentOffset = signal(0);
-  readonly totalCount = signal(0);
 
-  // Data
-  readonly allInstruments = signal<InstrumentResponse[]>([]);
+  // The page on screen and how many match in all.
+  readonly paginatedInstruments = signal<InstrumentResponse[]>([]);
+  readonly totalFilteredCount = signal(0);
   readonly isLoading = signal(false);
+  readonly hasLoaded = signal(false);
   readonly errorMessage = signal('');
 
   // Filters
@@ -43,119 +58,107 @@ export class InstrumentsComponent {
   readonly selectedSector = signal('');
   readonly selectedType = signal('');
 
-  // Available filter options
-  readonly exchanges = computed(() => {
-    const exch = new Set(this.allInstruments().map((i) => i.exchange));
-    return Array.from(exch).sort();
-  });
+  // The choices, from the data.
+  readonly filterOptions = signal<InstrumentFilters>({ exchanges: [], sectors: [], types: [] });
+  readonly exchanges = computed(() => this.filterOptions().exchanges);
+  readonly sectors = computed(() => this.filterOptions().sectors);
+  readonly types = computed(() => this.filterOptions().types);
 
-  readonly sectors = computed(() => {
-    const sec = new Set(
-      this.allInstruments()
-        .filter((i) => i.sector)
-        .map((i) => i.sector!),
-    );
-    return Array.from(sec).sort();
-  });
-
-  readonly types = computed(() => {
-    const t = new Set(this.allInstruments().map((i) => i.type));
-    return Array.from(t).sort();
-  });
-
-  // Filtered instruments
-  readonly filteredInstruments = computed(() => {
-    const query = this.searchQuery().toLowerCase();
-    const exchange = this.selectedExchange();
-    const sector = this.selectedSector();
-    const type = this.selectedType();
-
-    return this.allInstruments().filter((instrument) => {
-      // Search by symbol or name
-      if (
-        query &&
-        !instrument.symbol.toLowerCase().includes(query) &&
-        !instrument.name.toLowerCase().includes(query)
-      ) {
-        return false;
-      }
-
-      // Filter by exchange
-      if (exchange && instrument.exchange !== exchange) {
-        return false;
-      }
-
-      // Filter by sector
-      if (sector && instrument.sector !== sector) {
-        return false;
-      }
-
-      // Filter by type
-      if (type && instrument.type !== type) {
-        return false;
-      }
-
-      return true;
-    });
-  });
-
-  // Paginated results from filtered instruments
-  readonly paginatedInstruments = computed(() => {
-    const filtered = this.filteredInstruments();
-    const start = this.currentOffset();
-    const end = start + this.pageSize;
-    return filtered.slice(start, end);
-  });
-
-  readonly totalFilteredCount = computed(() => this.filteredInstruments().length);
-
-  readonly currentPageNum = computed(() => {
-    if (this.totalFilteredCount() === 0) return 1;
-    return Math.floor(this.currentOffset() / this.pageSize) + 1;
-  });
-
-  readonly totalPages = computed(() => {
-    if (this.totalFilteredCount() === 0) return 1;
-    return Math.ceil(this.totalFilteredCount() / this.pageSize);
-  });
-
-  readonly hasNextPage = computed(() => {
-    const nextOffset = this.currentOffset() + this.pageSize;
-    return nextOffset < this.totalFilteredCount();
-  });
-
-  readonly hasPrevPage = computed(() => this.currentOffset() > 0);
-
-  /** The latest price per symbol, for the rows on screen. */
-  readonly prices = signal<ReadonlyMap<string, PriceSnapshot>>(new Map());
-  /** Symbols whose price just moved, and which way, for a brief flash. */
-  readonly moves = signal<ReadonlyMap<string, 'up' | 'down'>>(new Map());
   readonly hasFilters = computed(
     () =>
       !!(this.searchQuery() || this.selectedExchange() || this.selectedSector() || this.selectedType()),
   );
 
+  readonly currentPageNum = computed(() => Math.floor(this.currentOffset() / this.pageSize) + 1);
+  readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(this.totalFilteredCount() / this.pageSize)),
+  );
+  readonly hasNextPage = computed(
+    () => this.currentOffset() + this.pageSize < this.totalFilteredCount(),
+  );
+  readonly hasPrevPage = computed(() => this.currentOffset() > 0);
+  /** The first and last row numbers on this page, for "1–20 of 95". */
+  readonly rangeStart = computed(() =>
+    this.totalFilteredCount() === 0 ? 0 : this.currentOffset() + 1,
+  );
+  readonly rangeEnd = computed(() =>
+    Math.min(this.currentOffset() + this.pageSize, this.totalFilteredCount()),
+  );
+
+  /** The latest price per symbol, for the rows on screen. */
+  readonly prices = signal<ReadonlyMap<string, PriceSnapshot>>(new Map());
+  /** Symbols whose price just moved, and which way, for a brief flash. */
+  readonly moves = signal<ReadonlyMap<string, 'up' | 'down'>>(new Map());
+
+  /** Each request for a page; only the latest one's answer is shown. */
+  private readonly pageRequests = new Subject<{ debounce: boolean }>();
+
   constructor() {
     this.readFiltersFromUrl();
 
-    // Load all instruments once when component initializes
-    this.loadAllInstruments();
-
-    // Price the rows on screen whenever they change (page, search, filters)...
-    effect(() => {
-      const symbols = this.paginatedInstruments().map((i) => i.symbol);
-      untracked(() => this.loadPrices(symbols));
+    this.tradeApi.instrumentFilters().subscribe({
+      next: (filters) => this.filterOptions.set(filters),
+      error: () => {
+        // The list still works without the choices; the filters just stay at "All".
+      },
     });
-    // ...and keep them current while the page is open.
-    const timer = setInterval(
+
+    this.pageRequests
+      .pipe(
+        switchMap(({ debounce }) =>
+          (debounce ? timer(SEARCH_DEBOUNCE_MS) : of(0)).pipe(
+            tap(() => {
+              this.isLoading.set(true);
+              this.errorMessage.set('');
+            }),
+            switchMap(() =>
+              this.tradeApi.getInstruments(this.pageSize, this.currentOffset(), this.query()).pipe(
+                map((page): PaginatedInstrumentsResponse | Error => page),
+                catchError((error: unknown) => of(error instanceof Error ? error : new Error(errorMessage(error)))),
+              ),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe((result) => {
+        this.isLoading.set(false);
+        this.hasLoaded.set(true);
+        if (result instanceof Error) {
+          this.errorMessage.set('The instruments could not be loaded. Please try again.');
+          return;
+        }
+        this.paginatedInstruments.set(result.instruments);
+        this.totalFilteredCount.set(result.total);
+        this.loadPrices(result.instruments.map((i) => i.symbol));
+      });
+
+    this.loadPage(false);
+
+    // Keep the prices on screen current while the page is open.
+    const priceTimer = setInterval(
       () => this.loadPrices(this.paginatedInstruments().map((i) => i.symbol)),
       PRICE_REFRESH_MS,
     );
-    inject(DestroyRef).onDestroy(() => clearInterval(timer));
+    inject(DestroyRef).onDestroy(() => clearInterval(priceTimer));
   }
 
   priceOf(symbol: string): PriceSnapshot | undefined {
     return this.prices().get(symbol);
+  }
+
+  /** The search and filters as the API takes them. */
+  private query(): InstrumentQuery {
+    return {
+      search: this.searchQuery() || undefined,
+      exchange: this.selectedExchange() || undefined,
+      sector: this.selectedSector() || undefined,
+      type: (this.selectedType() || undefined) as InstrumentType | undefined,
+    };
+  }
+
+  private loadPage(debounce: boolean): void {
+    this.pageRequests.next({ debounce });
   }
 
   /** One request for every symbol on screen; a failure keeps the last prices shown. */
@@ -192,25 +195,6 @@ export class InstrumentsComponent {
     return price === null ? { symbol, side } : { symbol, side, price };
   }
 
-  private loadAllInstruments(): void {
-    this.isLoading.set(true);
-    this.errorMessage.set('');
-
-    // Load all tradable instruments at once for client-side filtering and pagination
-    this.tradeApi.getInstruments(1000, 0).subscribe({
-      next: (response) => {
-        this.allInstruments.set(response.instruments);
-        this.totalCount.set(response.total);
-        this.isLoading.set(false);
-      },
-      error: (err) => {
-        this.isLoading.set(false);
-        this.errorMessage.set('Failed to load instruments. Please try again.');
-        console.error('Error loading instruments:', err);
-      },
-    });
-  }
-
   /** A bookmarked or shared link opens with its search and filters applied. */
   private readFiltersFromUrl(): void {
     const params = this.route.snapshot.queryParamMap;
@@ -234,21 +218,30 @@ export class InstrumentsComponent {
     });
   }
 
+  /** Typing: back to the first page, after a pause. */
   onSearchChange(): void {
-    this.currentOffset.set(0); // Reset to first page
+    this.currentOffset.set(0);
     this.writeFiltersToUrl();
+    this.loadPage(true);
+  }
+
+  /** A filter choice: back to the first page, at once. */
+  onFilterChange(): void {
+    this.currentOffset.set(0);
+    this.writeFiltersToUrl();
+    this.loadPage(false);
   }
 
   onExchangeChange(): void {
-    this.onSearchChange();
+    this.onFilterChange();
   }
 
   onSectorChange(): void {
-    this.onSearchChange();
+    this.onFilterChange();
   }
 
   onTypeChange(): void {
-    this.onSearchChange();
+    this.onFilterChange();
   }
 
   clearFilters(): void {
@@ -256,43 +249,34 @@ export class InstrumentsComponent {
     this.selectedExchange.set('');
     this.selectedSector.set('');
     this.selectedType.set('');
-    this.onSearchChange();
+    this.onFilterChange();
   }
 
   nextPage(): void {
     if (this.hasNextPage()) {
       this.currentOffset.update((offset) => offset + this.pageSize);
+      this.loadPage(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
-  /** The first and last row numbers on this page, for "1–20 of 95". */
-  readonly rangeStart = computed(() =>
-    this.totalFilteredCount() === 0 ? 0 : this.currentOffset() + 1,
-  );
-  readonly rangeEnd = computed(() =>
-    Math.min(this.currentOffset() + this.pageSize, this.totalFilteredCount()),
-  );
-
   prevPage(): void {
     if (this.hasPrevPage()) {
-      this.currentOffset.update((offset) => offset - this.pageSize);
+      this.currentOffset.update((offset) => Math.max(0, offset - this.pageSize));
+      this.loadPage(false);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
   buyInstrument(symbol: string): void {
-    // Navigate to the order ticket with symbol and side pre-filled
     this.router.navigate(['/order'], { queryParams: this.ticketParams(symbol, 'BUY') });
   }
 
   sellInstrument(symbol: string): void {
-    // Navigate to the order ticket with symbol and side pre-filled
     this.router.navigate(['/order'], { queryParams: this.ticketParams(symbol, 'SELL') });
   }
 
   viewDetails(symbol: string): void {
-    // Navigate to instrument details page
     this.router.navigate(['/instruments', symbol]);
   }
 }

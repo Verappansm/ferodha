@@ -100,6 +100,10 @@ interface WatchlistRow {
   displayOrder: number;
   alertPrice: number | null;
   alertDirection: string | null;
+  /** ACTIVE, TRIGGERED or CANCELLED; null when no alert was ever set (LEAP-007). */
+  alertStatus: string | null;
+  alertTriggeredAt: string | null;
+  alertTriggeredPrice: number | null;
 }
 
 @Component({
@@ -276,19 +280,8 @@ export class WatchlistComponent implements OnDestroy {
           step: 0.01,
           min: 0,
         },
-        cellClass: (params: any) => {
-          const row = params.data;
-          if (row && row.alertPrice !== null && row.alertDirection) {
-            const currentPrice = this.priceMap().get(row.symbol)?.mid ?? row.lastPrice;
-            if (row.alertDirection === 'ABOVE' && currentPrice > row.alertPrice) {
-              return 'wl-num alert-triggered';
-            }
-            if (row.alertDirection === 'BELOW' && currentPrice < row.alertPrice) {
-              return 'wl-num alert-triggered';
-            }
-          }
-          return 'wl-num';
-        },
+        cellClass: (params: any) =>
+          params.data?.alertStatus === 'CANCELLED' ? 'wl-num wl-muted' : 'wl-num',
         onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
           this.onAlertPriceChanged(event);
         },
@@ -309,6 +302,38 @@ export class WatchlistComponent implements OnDestroy {
         },
         onCellValueChanged: (event: CellValueChangedEvent<WatchlistRow>) => {
           this.onAlertDirectionChanged(event);
+        },
+      },
+      {
+        field: 'alertStatus',
+        headerName: 'Alert state',
+        width: 150,
+        minWidth: 130,
+        // The state the server records, as a word (not colour alone).
+        cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
+          const row = params.data;
+          const span = document.createElement('span');
+          if (!row?.alertStatus) {
+            span.textContent = '—';
+            span.className = 'wl-muted';
+            return span;
+          }
+          span.className = `wl-state wl-state-${row.alertStatus.toLowerCase()}`;
+          span.textContent =
+            row.alertStatus === 'TRIGGERED'
+              ? 'Triggered'
+              : row.alertStatus === 'ACTIVE'
+                ? 'Active'
+                : 'Cancelled';
+          if (row.alertStatus === 'TRIGGERED' && row.alertTriggeredAt) {
+            const at = new Date(row.alertTriggeredAt);
+            const price =
+              row.alertTriggeredPrice != null
+                ? ` at ${formatNumber(row.alertTriggeredPrice, this.preferences.numberFormat(), '1.2-2')}`
+                : '';
+            span.title = `Triggered${price}, ${at.toLocaleString()}`;
+          }
+          return span;
         },
       },
       {
@@ -349,8 +374,9 @@ export class WatchlistComponent implements OnDestroy {
           // Edit alert button
           const editBtn = document.createElement('button');
           editBtn.className = 'wl-btn';
-          editBtn.textContent = params.data?.alertPrice != null ? 'Edit alert' : 'Set alert';
-          editBtn.title = params.data?.alertPrice != null ? 'Edit price alert' : 'Create price alert';
+          const active = params.data?.alertStatus === 'ACTIVE';
+          editBtn.textContent = active ? 'Edit alert' : 'Set alert';
+          editBtn.title = active ? 'Change the price alert' : 'Set a price alert';
           editBtn.type = 'button';
           editBtn.onclick = (e) => {
             e.stopPropagation();
@@ -358,11 +384,11 @@ export class WatchlistComponent implements OnDestroy {
           };
 
           // Delete alert button (only show if alert exists)
-          if (params.data?.alertPrice !== null) {
+          if (params.data?.alertStatus === 'ACTIVE') {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'wl-btn wl-btn-danger';
-            deleteBtn.textContent = 'Clear';
-            deleteBtn.title = 'Remove price alert';
+            deleteBtn.textContent = 'Cancel';
+            deleteBtn.title = 'Cancel the price alert';
             deleteBtn.type = 'button';
             deleteBtn.onclick = (e) => {
               e.stopPropagation();
@@ -460,8 +486,11 @@ export class WatchlistComponent implements OnDestroy {
           dayChangePercent: i.dayChangePercent,
           intradayData: i.intradayData,
           displayOrder: i.displayOrder,
-          alertPrice: i.alertPrice,
-          alertDirection: i.alertDirection,
+          alertPrice: i.alertPrice ?? null,
+          alertDirection: i.alertDirection ?? null,
+          alertStatus: i.alertStatus ?? null,
+          alertTriggeredAt: i.alertTriggeredAt ?? null,
+          alertTriggeredPrice: i.alertTriggeredPrice ?? null,
         }));
         this.editRows.set(rows);
         // Fetch real prices and intraday data
@@ -892,7 +921,7 @@ export class WatchlistComponent implements OnDestroy {
 
     this.tradeApi.deletePriceAlert(watchlistId, itemId).subscribe({
       next: () => {
-        this.showNotification('Price alert removed', 'success');
+        this.showNotification('Price alert cancelled', 'success');
         this.loadItems(watchlistId);
       },
       error: (err) => {

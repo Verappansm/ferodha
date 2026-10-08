@@ -268,9 +268,43 @@
   color: var(--warning);
 }
 
-:host ::ng-deep .alert-triggered {
+:host ::ng-deep .wl-muted {
+  color: var(--ink-500);
+}
+
+/* LEAP-007: the alert's recorded state, a word on a tinted pill. */
+:host ::ng-deep .wl-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 18px;
+  border-radius: 999px;
+}
+
+:host ::ng-deep .wl-state::before {
+  width: 6px;
+  height: 6px;
+  content: '';
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+:host ::ng-deep .wl-state-active {
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+:host ::ng-deep .wl-state-triggered {
   color: var(--warning);
+  background: var(--warning-bg);
+}
+
+:host ::ng-deep .wl-state-cancelled {
+  color: var(--ink-500);
+  background: var(--ink-100);
 }
 
 :host ::ng-deep .wl-row-editing {

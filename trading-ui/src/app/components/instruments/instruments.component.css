@@ -3,6 +3,12 @@
   cursor: pointer;
 }
 
+/* A new page or search on its way: the old rows dim instead of the table blanking. */
+.table.refreshing {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
 .name {
   max-width: 320px;
   overflow: hidden;

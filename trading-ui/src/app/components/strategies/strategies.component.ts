@@ -259,7 +259,7 @@ export class StrategiesComponent {
       maxOrders: s.maxOrders,
       maxFailures: s.maxFailures,
       dryRun: s.dryRun,
-      expiresAt: toLocalInput(s.expiresAt),
+      expiresAt: toLocalInput(s.expiresAt ?? null),
     });
     this.showForm.set(true);
     void this.loadHoldings();

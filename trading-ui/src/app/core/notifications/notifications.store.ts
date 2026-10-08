@@ -1,40 +1,22 @@
-import { HttpClient } from '@angular/common/http';
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, effect, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { NotificationsService } from '../../api/generated/notifications/api/notifications.service';
+import { NotificationResponse } from '../../api/generated/notifications/model/notification-response';
+import { NotificationEventType } from '../../api/generated/notifications/model/notification-event-type';
 import { errorMessage } from '../errors/error-message';
 import { Session } from '../session/session';
 
-export type NotificationType =
-  'ORDER_FILLED' | 'ORDER_REJECTED' | 'ORDER_CANCELLED' | 'PRICE_ALERT';
+export type NotificationType = NotificationEventType;
 
-export interface AppNotification {
-  notificationId: string;
-  eventType: NotificationType;
-  orderId: string | null;
-  symbol: string | null;
-  resolvedChannel: 'IN_APP' | 'EMAIL';
-  message: string;
-  status: string;
-  createdAt: string;
-  /** When the customer read it; null while unread. */
-  readAt: string | null;
-}
-
-interface NotificationsResponse {
-  notifications: AppNotification[];
-  total: number;
-  unread: number;
-}
+/** A notification as design/notifications-api.yaml describes it. */
+export type AppNotification = NotificationResponse;
 
 /** How often the bell's count is refreshed while someone is signed in. */
 export const POLL_MS = 30_000;
 
 /** How long a toast for a new notification stays on screen. */
 export const TOAST_MS = 6_000;
-
-const URL = `${environment.tradeApiUrl}/api/v1/notifications`;
 
 /**
  * The signed-in customer's notifications (the bell and the notifications page). The server
@@ -46,7 +28,7 @@ const URL = `${environment.tradeApiUrl}/api/v1/notifications`;
  */
 @Injectable({ providedIn: 'root' })
 export class NotificationsStore {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(NotificationsService);
   private readonly session = inject(Session);
 
   readonly items = signal<AppNotification[]>([]);
@@ -92,9 +74,7 @@ export class NotificationsStore {
   async refresh(showErrors = true): Promise<void> {
     this.loading.set(true);
     try {
-      const response = await firstValueFrom(
-        this.http.get<NotificationsResponse>(URL, { params: { limit: 50 } }),
-      );
+      const response = await firstValueFrom(this.api.listNotifications(50, 0));
       this.raiseToasts(response.notifications);
       this.items.set(response.notifications);
       this.unread.set(response.unread);
@@ -110,7 +90,7 @@ export class NotificationsStore {
     const target = this.items().find((n) => n.notificationId === id);
     if (!target || target.readAt) return;
     try {
-      await firstValueFrom(this.http.patch<void>(`${URL}/${id}/read`, null));
+      await firstValueFrom(this.api.markNotificationRead(id));
       const now = new Date().toISOString();
       this.items.update((all) =>
         all.map((n) => (n.notificationId === id ? { ...n, readAt: now } : n)),
@@ -124,7 +104,7 @@ export class NotificationsStore {
 
   async markAllRead(): Promise<void> {
     try {
-      await firstValueFrom(this.http.post<void>(`${URL}/read-all`, null));
+      await firstValueFrom(this.api.markAllNotificationsRead());
       const now = new Date().toISOString();
       this.items.update((all) => all.map((n) => (n.readAt ? n : { ...n, readAt: now })));
       this.unread.set(0);

@@ -72,7 +72,7 @@
       }
     </div>
 
-    @if (isLoading()) {
+    @if (isLoading() && !hasLoaded()) {
       <div class="card-body" aria-hidden="true">
         @for (i of [1, 2, 3, 4, 5, 6]; track i) {
           <div class="skeleton"></div>
@@ -81,7 +81,7 @@
       <span class="visually-hidden">Loading instruments…</span>
     } @else if (paginatedInstruments().length > 0) {
       <div class="table-wrap">
-        <table class="table">
+        <table class="table" [class.refreshing]="isLoading()">
           <thead>
             <tr>
               <th>Instrument</th>
@@ -151,8 +151,8 @@
           </tbody>
         </table>
       </div>
-    } @else if (allInstruments().length > 0) {
-      <p class="state">
+    } @else if (hasFilters() && !errorMessage()) {
+      <p class="state" data-testid="instruments-no-match">
         <strong>No instruments match</strong>
         Try a different search, or clear the filters.
       </p>
@@ -160,7 +160,7 @@
       <p class="state">No instruments are available to trade right now.</p>
     }
 
-    @if (!isLoading() && totalFilteredCount() > 0) {
+    @if (hasLoaded() && totalFilteredCount() > 0) {
       <div class="pager">
         <span class="pager-range"
           >{{ rangeStart() }}–{{ rangeEnd() }} of {{ totalFilteredCount() }} instruments</span

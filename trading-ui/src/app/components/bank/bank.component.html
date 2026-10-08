@@ -99,13 +99,19 @@
               />
               <span class="suffix">{{ current.currency }}</span>
             </div>
-            <p class="field-hint">
+            <p class="field-hint" data-testid="bank-available">
               Available:
               {{
-                (transactionType() === 'DEPOSIT' ? current.bankBalance : current.tradingBalance)
+                (transactionType() === 'DEPOSIT' ? current.bankBalance : current.availableToWithdraw)
                   | money: '1.2-2' : 'balance'
               }}
               {{ current.currency }}
+              @if (
+                transactionType() === 'WITHDRAWAL' &&
+                current.availableToWithdraw < current.tradingBalance
+              ) {
+                <span>· the rest is held for open buy orders</span>
+              }
             </p>
           </div>
           <div class="field">
@@ -138,4 +144,47 @@
       </form>
     </section>
   }
+
+  <section class="card" aria-labelledby="transactions-title" data-testid="bank-transactions">
+    <header class="card-header">
+      <h2 id="transactions-title">Transactions</h2>
+      <span class="muted">Newest first</span>
+    </header>
+    @if (transactionsError()) {
+      <p class="state field-error" role="alert">{{ transactionsError() }}</p>
+    } @else if (transactions() === null) {
+      <div class="card-body" aria-hidden="true">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+    } @else if (transactions()!.length === 0) {
+      <p class="state" data-testid="bank-transactions-empty">
+        No money has moved yet. A deposit or withdrawal appears here.
+      </p>
+    } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of transactions(); track t.transactionId) {
+              <tr data-testid="bank-transaction">
+                <td>{{ t.at | date: 'd MMM y, HH:mm' }}</td>
+                <td>{{ transactionLabel(t.type) }}</td>
+                <td class="num" [class]="isInflow(t.type) ? 'num gain' : 'num loss'">
+                  {{ isInflow(t.type) ? '+' : '−' }}{{ t.amount | money: '1.2-2' : 'balance' }}
+                  <span class="muted">{{ t.currency }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 </div>

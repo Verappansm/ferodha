@@ -12,26 +12,52 @@ const FUNDS = {
   bankAccountNumber: 'BANK-100001',
   tradingBalance: 2500.5,
   bankBalance: 25000,
+  // 500 is held for an open buy order.
+  availableToWithdraw: 2000.5,
   currency: 'USD',
   asOf: '2026-10-07T10:00:00Z',
+};
+
+const MOVEMENTS = {
+  transactions: [
+    {
+      transactionId: 't2',
+      type: 'WITHDRAWAL',
+      amount: 100,
+      currency: 'USD',
+      at: '2026-10-07T09:00:00Z',
+    },
+    {
+      transactionId: 't1',
+      type: 'DEPOSIT',
+      amount: 1000,
+      currency: 'USD',
+      at: '2026-10-06T09:00:00Z',
+    },
+  ],
+  total: 2,
+  limit: 50,
+  offset: 0,
 };
 
 describe('BankComponent', () => {
   let fixture: ComponentFixture<BankComponent>;
   let bankFunds: ReturnType<typeof vi.fn>;
   let bankTransfer: ReturnType<typeof vi.fn>;
+  let bankTransactions: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     bankFunds = vi.fn().mockReturnValue(of(FUNDS));
     bankTransfer = vi
       .fn()
       .mockReturnValue(of({ ...FUNDS, tradingBalance: 2550.5, bankBalance: 24950 }));
+    bankTransactions = vi.fn().mockReturnValue(of(MOVEMENTS));
     await TestBed.configureTestingModule({
       imports: [BankComponent],
       providers: [
         provideStubPreferences(),
         { provide: Session, useValue: { accountId: () => 3 } },
-        { provide: TradeApi, useValue: { bankFunds, bankTransfer } },
+        { provide: TradeApi, useValue: { bankFunds, bankTransfer, bankTransactions } },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(BankComponent);
@@ -51,6 +77,28 @@ describe('BankComponent', () => {
     expect(bankFunds).toHaveBeenCalledWith(3);
     expect(fixture.nativeElement.textContent).toContain('2,500.50');
     expect(fixture.nativeElement.textContent).toContain('25,000.00');
+  });
+
+  it('lists every movement newest first, with a sign and a word', () => {
+    expect(bankTransactions).toHaveBeenCalledWith(3, 50, 0);
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('[data-testid="bank-transaction"]'),
+      (row) => row.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(rows[0]).toContain('Withdrawal to bank');
+    expect(rows[0]).toContain('−100.00');
+    expect(rows[1]).toContain('Deposit from bank');
+    expect(rows[1]).toContain('+1,000.00');
+  });
+
+  it('a withdrawal offers only the cash no open buy order is holding', () => {
+    fixture.componentInstance.setType('WITHDRAWAL');
+    fixture.detectChanges();
+    const available = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="bank-available"]',
+    )!.textContent;
+    expect(available).toContain('2,000.50');
+    expect(available).toContain('held for open buy orders');
   });
 
   it('asks for an amount and a PIN before sending anything', async () => {

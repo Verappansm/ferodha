@@ -7,7 +7,7 @@ import {
   ValidationErrors,
   Validators,
 } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { AuthApi } from '../../api/auth-api';
 import { errorMessage } from '../../core/errors/error-message';
@@ -43,9 +43,15 @@ function isPasswordChangeRequired(error: unknown): boolean {
   );
 }
 
+/** Sentences for the reasons Settings sends a customer back to sign in. */
+const NOTICES: Record<string, string> = {
+  'password-changed': 'Your password is changed. Sign in with the new one.',
+  'signed-out-everywhere': 'You are signed out on every device. Sign in again to continue.',
+};
+
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, AuthLayoutComponent],
+  imports: [ReactiveFormsModule, RouterLink, AuthLayoutComponent],
   templateUrl: './login.component.html',
 })
 export class LoginComponent {
@@ -65,6 +71,9 @@ export class LoginComponent {
   readonly isLoading = signal(false);
   readonly error = signal('');
   readonly showPassword = signal(false);
+
+  /** Why the user was sent here, when Settings ended the session on purpose. */
+  readonly notice = NOTICES[this.route.snapshot.queryParamMap.get('notice') ?? ''] ?? null;
 
   /**
    * An administrator forced a reset: the password was right, but a new one
