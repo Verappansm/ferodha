@@ -24,6 +24,15 @@ export const routes: Routes = [
       ),
   },
   {
+    // LEAP-012: where a registration stands, for someone who cannot sign in yet.
+    path: 'account-status',
+    title: 'Account request · Ferodha',
+    loadComponent: () =>
+      import('./components/account-status/account-status.component').then(
+        (m) => m.AccountStatusComponent,
+      ),
+  },
+  {
     path: 'help',
     title: 'Help · Ferodha',
     loadComponent: () => import('./components/help/help.component').then((m) => m.HelpComponent),
@@ -105,6 +114,15 @@ export const routes: Routes = [
     title: 'Strategies · Ferodha',
     loadComponent: () =>
       import('./components/strategies/strategies.component').then((m) => m.StrategiesComponent),
+    canActivate: [authGuard],
+  },
+  {
+    path: 'notifications',
+    title: 'Notifications · Ferodha',
+    loadComponent: () =>
+      import('./components/notifications/notifications.component').then(
+        (m) => m.NotificationsComponent,
+      ),
     canActivate: [authGuard],
   },
   {

@@ -28,7 +28,15 @@ public interface WatchlistItemMapper {
 
     void updateDisplayOrder(@Param("itemId") UUID itemId, @Param("displayOrder") int displayOrder);
 
-    void updateAlert(@Param("itemId") UUID itemId, @Param("alertPrice") BigDecimal alertPrice, @Param("alertDirection") String alertDirection);
+    int armAlert(@Param("itemId") UUID itemId, @Param("alertPrice") BigDecimal alertPrice,
+                 @Param("alertDirection") String alertDirection);
+
+    int cancelAlert(@Param("itemId") UUID itemId);
+
+    List<ActiveAlertRow> findActiveAlertsForSymbol(@Param("symbol") String symbol);
+
+    int markTriggered(@Param("itemId") UUID itemId, @Param("armedAt") java.time.OffsetDateTime armedAt,
+                      @Param("price") BigDecimal price);
 
     void updateDisplayOrders(@Param("watchlistId") UUID watchlistId, @Param("itemOrderMap") Map<UUID, Integer> itemOrderMap);
 }

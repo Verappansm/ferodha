@@ -62,9 +62,16 @@ public class AdminAccountRequestService {
             throw AdminException.conflict("bank account " + bankAccount + " is already linked to an account");
         }
 
-        long accountId = mapper.insertAccount(request.userId(), bankAccount, body.currency());
+        // Money moves one for one between the bank and the trading account, so the
+        // trading account holds its cash in the bank's currency.
+        String currency = bank.currency();
+        String namedCurrency = body.currency() == null ? "" : body.currency().trim();
+        if (!namedCurrency.isEmpty() && !namedCurrency.equals(currency)) {
+            throw AdminException.conflict("the bank account is held in " + currency + ", not " + namedCurrency);
+        }
+        long accountId = mapper.insertAccount(request.userId(), bankAccount, currency);
         if (mapper.approveAccountRequest(requestId.toString(), admin.userId().toString(),
-                bankAccount, body.currency(), accountId) != 1) {
+                bankAccount, currency, accountId) != 1) {
             throw AdminException.conflict("request " + requestId + " was decided concurrently");
         }
         audit.record(admin, "ACCOUNT_REQUEST_APPROVED", "ACCOUNT_REQUEST", requestId.toString(),

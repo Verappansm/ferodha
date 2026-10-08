@@ -40,7 +40,10 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
                 item.getDisplayOrder(),
                 item.getAddedAt(),
                 item.getAlertPrice(),
-                item.getAlertDirection()
+                item.getAlertDirection(),
+                item.getAlertStatus(),
+                item.getAlertTriggeredAt(),
+                item.getAlertTriggeredPrice()
         );
         watchlistItemMapper.insert(row);
         return item;
@@ -73,8 +76,13 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
     }
 
     @Override
-    public void updateAlert(UUID itemId, BigDecimal alertPrice, String alertDirection) {
-        watchlistItemMapper.updateAlert(itemId, alertPrice, alertDirection);
+    public void armAlert(UUID itemId, BigDecimal alertPrice, String alertDirection) {
+        watchlistItemMapper.armAlert(itemId, alertPrice, alertDirection);
+    }
+
+    @Override
+    public void cancelAlert(UUID itemId) {
+        watchlistItemMapper.cancelAlert(itemId);
     }
 
     @Override
@@ -84,6 +92,7 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
 
     private WatchlistItem toDomain(WatchlistItemRow row) {
         return new WatchlistItem(row.itemId(), row.watchlistId(), row.instrumentId(), row.displayOrder(), row.addedAt(),
-                row.alertPrice(), row.alertDirection());
+                row.alertPrice(), row.alertDirection(), row.alertStatus(), row.alertTriggeredAt(),
+                row.alertTriggeredPrice());
     }
 }

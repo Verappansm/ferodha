@@ -6,8 +6,9 @@ import { RegisterRequest } from './generated/auth/model/register-request';
 import { passwordDigest } from '../core/auth/password-digest';
 import { TokenResponse } from './generated/auth/model/token-response';
 import { UserResponse } from './generated/auth/model/user-response';
+import { AccountStatusResponse } from './generated/auth/model/account-status-response';
 
-export type { TokenResponse, UserResponse };
+export type { TokenResponse, UserResponse, AccountStatusResponse };
 
 /**
  * The Auth service as the rest of the application uses it, over the client
@@ -62,6 +63,19 @@ export class AuthApi {
   /** Mails a new code (the server allows one a minute and always answers 204). */
   resendCode(username: string): Observable<void> {
     return this.auth.resendVerificationCode({ username }) as Observable<void>;
+  }
+
+  /**
+   * The state of the account-opening request, for someone who cannot sign in yet
+   * (LEAP-012). The password leaves as its digest, as at sign-in (B23).
+   */
+  accountStatus(username: string, password: string): Observable<AccountStatusResponse> {
+    return this.auth.accountStatus({ username, password: passwordDigest(username, password) });
+  }
+
+  /** Sign out everywhere (LEAP-010): every refresh token of the user is revoked. */
+  logoutAll(): Observable<void> {
+    return this.auth.logoutAll() as Observable<void>;
   }
 
   refresh(refreshToken: string): Observable<TokenResponse> {

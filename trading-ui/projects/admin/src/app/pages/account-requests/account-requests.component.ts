@@ -182,7 +182,7 @@ export class AccountRequestsComponent {
     if (!details) return;
     await this.decide(request, async () => {
       const done = await firstValueFrom(
-        this.api.approveRequest(request.requestId, details.currency, details.note || undefined),
+        this.api.approveRequest(request.requestId, details.note || undefined),
       );
       return `Approved ${request.applicantName}: account #${done.accountId ?? '—'} is open.`;
     });

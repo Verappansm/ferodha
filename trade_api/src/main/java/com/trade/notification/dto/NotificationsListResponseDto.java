@@ -17,6 +17,16 @@ public class NotificationsListResponseDto {
 
     @JsonProperty("offset")
     private int offset;
+    @JsonProperty("unread")
+    private long unread;
+
+    public long getUnread() {
+        return unread;
+    }
+
+    public void setUnread(long unread) {
+        this.unread = unread;
+    }
 
     public NotificationsListResponseDto() {
     }

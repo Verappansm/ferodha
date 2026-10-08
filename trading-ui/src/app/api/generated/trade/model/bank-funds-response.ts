@@ -14,6 +14,13 @@ export interface BankFundsResponse {
     bankAccountNumber: string;
     tradingBalance: number;
     bankBalance: number;
+    /**
+     * The trading balance less what open buy orders may still spend (unfilled quantity at the limit price, plus the fee). Never below zero.
+     */
+    availableToWithdraw: number;
+    /**
+     * The account\'s currency, which is also the linked bank account\'s.
+     */
     currency: string;
     asOf: string;
 }

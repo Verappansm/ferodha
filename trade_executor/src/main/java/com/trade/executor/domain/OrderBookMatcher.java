@@ -1,5 +1,6 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.settlement.InsufficientFundsAtSettlementException;
 import com.trade.executor.currency.ApiSuppliedRates;
 import com.trade.executor.enums.OrderSide;
 import com.trade.executor.event.TradeEventPublisher;
@@ -138,10 +139,17 @@ public class OrderBookMatcher {
                 BigDecimal incomingCashDelta = MoneyRounding.toMoneyScale(incomingSide == OrderSide.BUY
                         ? incomingTradeValue.add(incomingFee) : incomingTradeValue.subtract(incomingFee));
 
-                MatchOutcome outcome = settlementService.settleMatch(
-                        resting, restingAccount, restingSide, restingCashDelta, restingFee,
-                        incoming, incomingAccount, incomingSide, incomingCashDelta,
-                        matchQuantity, executionPrice, restingNewStatus);
+                MatchOutcome outcome;
+                try {
+                    outcome = settlementService.settleMatch(
+                            resting, restingAccount, restingSide, restingCashDelta, restingFee,
+                            incoming, incomingAccount, incomingSide, incomingCashDelta,
+                            matchQuantity, executionPrice, restingNewStatus);
+                } catch (InsufficientFundsAtSettlementException e) {
+                    // One side's cash went under the match; it rolled back, nothing moved.
+                    log.info("Match of resting order {} skipped: {}", resting.orderId(), e.getMessage());
+                    continue;
+                }
 
                 if (outcome.result() == MatchOutcome.Result.CONTENDED) {
                     log.info("Resting order {} was matched by a concurrent delivery first - skipping", resting.orderId());

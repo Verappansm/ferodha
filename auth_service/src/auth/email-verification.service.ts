@@ -66,18 +66,14 @@ export class EmailVerificationService {
     if (await this.users.isEmailVerified(user.id)) {
       return;
     }
-    const otp = await this.otps.find(user.id);
-    if (
-      !otp ||
-      otp.expiresAt.getTime() <= Date.now() ||
-      otp.attempts >= MAX_ATTEMPTS
-    ) {
+    // The guess is counted first, atomically: concurrent guesses cannot exceed the budget.
+    const codeHash = await this.otps.claimAttempt(user.id, MAX_ATTEMPTS);
+    if (!codeHash) {
       throw invalidInput();
     }
-    const expected = Buffer.from(otp.codeHash, 'hex');
+    const expected = Buffer.from(codeHash, 'hex');
     const given = Buffer.from(hashCode(user.id, code), 'hex');
     if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
-      await this.otps.recordFailedAttempt(user.id);
       this.logger.warn(`Wrong verification code for user ${user.id}`);
       throw invalidInput();
     }

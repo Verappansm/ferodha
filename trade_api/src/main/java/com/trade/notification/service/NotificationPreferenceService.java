@@ -1,56 +1,45 @@
 package com.trade.notification.service;
 
+import com.trade.exception.AccountNotActiveException;
 import com.trade.notification.domain.NotificationPreference;
-import com.trade.notification.domain.NotificationPreferenceRepository;
 import com.trade.notification.enums.NotificationChannel;
-import com.trade.notification.exception.PreferencesNotFoundException;
+import com.trade.preferences.PreferenceDtos.PreferencesResponse;
+import com.trade.preferences.PreferenceDtos.PreferencesUpdateRequest;
+import com.trade.preferences.PreferencesService;
 import org.springframework.stereotype.Service;
+
 import java.time.Instant;
 
+// The delivery channel lives in the customer's one set of preferences (Settings), read and
+// written through PreferencesService. This module keeps no preference table of its own, so
+// the two can never disagree about where a customer wants to be told.
 @Service
 public class NotificationPreferenceService {
 
-    private final NotificationPreferenceRepository repository;
+    private final PreferencesService preferences;
 
-    public NotificationPreferenceService(NotificationPreferenceRepository repository) {
-        this.repository = repository;
+    public NotificationPreferenceService(PreferencesService preferences) {
+        this.preferences = preferences;
     }
 
-    /**
-     * Get notification preference for an account.
-     * Returns a default IN_APP preference if none exists.
-     */
-    public NotificationPreference getPreference(Long accountId) {
-        return repository.findByAccountId(accountId)
-                .orElse(new NotificationPreference(accountId, NotificationChannel.IN_APP));
+    /** The account's channel: IN_APP until the customer picks another. */
+    public NotificationPreference getPreference(Long accountId) throws AccountNotActiveException {
+        PreferencesResponse stored = preferences.get(accountId, accountId);
+        return toPreference(accountId, stored);
     }
 
-    /**
-     * Get notification preference, throwing if not found.
-     */
-    public NotificationPreference getPreferenceOrThrow(Long accountId) throws PreferencesNotFoundException {
-        return repository.findByAccountId(accountId)
-                .orElseThrow(() -> new PreferencesNotFoundException("Notification preferences not found for account " + accountId));
+    public NotificationPreference updatePreference(Long accountId, NotificationChannel channel)
+            throws AccountNotActiveException {
+        PreferencesResponse updated = preferences.update(accountId, accountId, new PreferencesUpdateRequest(
+                com.trade.preferences.PreferenceDtos.NotificationChannel.valueOf(channel.name()),
+                null, null, null, null, null, null));
+        return toPreference(accountId, updated);
     }
 
-    /**
-     * Create or update notification preference for an account.
-     */
-    public NotificationPreference updatePreference(Long accountId, NotificationChannel channel) {
-        NotificationPreference preference = repository.findByAccountId(accountId)
-                .orElse(new NotificationPreference(accountId, channel));
-
-        if (repository.findByAccountId(accountId).isPresent()) {
-            preference.setNotificationChannel(channel);
-            preference.setUpdatedAt(Instant.now());
-            repository.update(preference);
-        } else {
-            preference.setNotificationChannel(channel);
-            preference.setCreatedAt(Instant.now());
-            preference.setUpdatedAt(Instant.now());
-            repository.save(preference);
-        }
-
+    private static NotificationPreference toPreference(Long accountId, PreferencesResponse response) {
+        NotificationPreference preference = new NotificationPreference(accountId,
+                NotificationChannel.valueOf(response.notificationChannel().name()));
+        preference.setUpdatedAt(Instant.now());
         return preference;
     }
 }

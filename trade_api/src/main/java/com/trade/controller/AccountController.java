@@ -3,6 +3,7 @@ package com.trade.controller;
 import com.trade.dto.AccountResponseDto;
 import com.trade.dto.BalanceResponseDto;
 import com.trade.dto.BankFundsResponseDto;
+import com.trade.dto.BankTransactionsResponseDto;
 import com.trade.dto.BankTransferRequestDto;
 import com.trade.dto.OrderHistoryEntryDto;
 import com.trade.dto.PositionResponseDto;
@@ -58,6 +59,14 @@ public class AccountController {
     public BankFundsResponseDto getBankFunds(@PathVariable long id,
             @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal) throws DomainException {
         return bankFundsService.funds(id, principal.accountId());
+    }
+
+    @GetMapping("/{id}/bank-funds/transactions")
+    public BankTransactionsResponseDto getBankTransactions(@PathVariable long id,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal) throws DomainException {
+        return bankFundsService.transactions(id, principal.accountId(), limit, offset);
     }
 
     @PostMapping("/{id}/bank-funds/deposits")

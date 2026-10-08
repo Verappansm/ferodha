@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -54,10 +55,25 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         this.objectMapper = objectMapper;
     }
 
+    // The path routing will see: decoded, ;parameters removed, doubled slashes collapsed.
+    // Deciding on the raw URI instead let /api/v1;x/orders or /api/v1/%61dmin/... be judged
+    // as one route here and dispatched as another.
+    private static final UrlPathHelper PATHS = new UrlPathHelper();
+
+    static {
+        PATHS.setUrlDecode(true);
+        PATHS.setRemoveSemicolonContent(true);
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                      FilterChain filterChain) throws ServletException, IOException {
-        if (!request.getRequestURI().startsWith(PROTECTED_PREFIX)) {
+        String path = PATHS.getPathWithinApplication(request);
+        if (isSmuggled(request.getRequestURI())) {
+            writeError(response, HttpStatus.BAD_REQUEST, "VAL-422", "Malformed request path");
+            return;
+        }
+        if (!path.startsWith(PROTECTED_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -70,7 +86,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = header.substring(BEARER_PREFIX.length()).trim();
 
-        if (request.getRequestURI().startsWith(ADMIN_PREFIX)) {
+        if (path.startsWith(ADMIN_PREFIX)) {
             AdminPrincipal admin;
             try {
                 admin = jwtService.verifyAdmin(token);
@@ -103,7 +119,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         }
         if (principal.strategyId() != null) {
             // A delegated strategy token places orders and does nothing else.
-            if (!isOrderPlacement(request)) {
+            if (!isOrderPlacement(request, path)) {
                 writeError(response, HttpStatus.FORBIDDEN, "AUTH-403", "Forbidden");
                 return;
             }
@@ -118,8 +134,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private static boolean isOrderPlacement(HttpServletRequest request) {
-        return "POST".equals(request.getMethod()) && "/api/v1/orders".equals(request.getRequestURI());
+    private static boolean isOrderPlacement(HttpServletRequest request, String path) {
+        return "POST".equals(request.getMethod()) && "/api/v1/orders".equals(path);
+    }
+
+    /**
+     * A raw path no client of ours ever sends: path parameters, encoded slashes, backslashes
+     * or dot segments, written plainly or encoded. Refused outright rather than normalised,
+     * so no two layers can ever disagree about which route a request is for.
+     */
+    static boolean isSmuggled(String rawUri) {
+        if (rawUri == null) {
+            return false;
+        }
+        String lower = rawUri.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains(";") || lower.contains("%2f") || lower.contains("%5c") || lower.contains("\\")
+                || lower.contains("%2e") || lower.contains("/../") || lower.endsWith("/..")
+                || lower.contains("/./") || lower.endsWith("/.") || lower.contains("%25");
     }
 
     private static boolean isUuid(String value) {

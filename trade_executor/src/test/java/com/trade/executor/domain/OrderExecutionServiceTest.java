@@ -154,6 +154,25 @@ class OrderExecutionServiceTest {
     }
 
     @Test
+    @DisplayName("cash that went between the check and the write rejects the buy, it does not fail the message")
+    void cashGoneAtSettlementRejects() {
+        givenOrder(OrderSide.BUY, new BigDecimal("10.00"), 10);
+        givenTradableInstrument("USD");
+        givenAccount("ACTIVE", new BigDecimal("5000.00"), "USD");
+        when(quoteSource.fetchQuote("AAPL")).thenReturn(Optional.of(
+                new Quote("AAPL", new BigDecimal("9.00"), new BigDecimal("10.00"), "USD")));
+        when(settlementService.settleFill(any(), any(), any(), any(), any(), any(), any()))
+                .thenThrow(new com.trade.executor.settlement.InsufficientFundsAtSettlementException(1L));
+        when(settlementService.settleReject(any(), any())).thenReturn(
+                SettlementOutcome.rejected(RejectionReason.INSUFFICIENT_FUNDS));
+
+        orderExecutionService.process(placedEvent());
+
+        verify(tradeEventPublisher, never()).publishFilled(any(), any(), any());
+        verify(tradeEventPublisher).publishRejected(any(), org.mockito.ArgumentMatchers.eq(RejectionReason.INSUFFICIENT_FUNDS));
+    }
+
+    @Test
     @DisplayName("an INR account buying a USD instrument is checked in INR: the same buy that fits in dollars may not fit")
     void affordabilityIsCheckedInTheAccountCurrency() {
         // 100.00 USD x 90 = 9,000.00 INR plus the fee against 8,000.00 INR of cash.

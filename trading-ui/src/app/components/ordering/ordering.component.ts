@@ -1,7 +1,7 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ActivatedRoute, Params, Router } from '@angular/router';
+import { ActivatedRoute, Params, Router, RouterLink } from '@angular/router';
 import { Location } from '@angular/common';
 import {
   AbstractControl,
@@ -32,6 +32,7 @@ import { DatePipe } from '@angular/common';
 import { MoneyPipe } from '../../core/format/money.pipe';
 import { errorMessage } from '../../core/errors/error-message';
 import { rejectionText } from '../../core/format/rejection-reason';
+import { OrderStatusBadgeComponent } from '../order-status-badge/order-status-badge.component';
 
 /** The contract's PlaceOrderRequest.symbol limit. */
 export const SYMBOL_MAX_LENGTH = 20;
@@ -100,7 +101,7 @@ function priceValidator(control: AbstractControl): ValidationErrors | null {
 
 @Component({
   selector: 'app-ordering',
-  imports: [ReactiveFormsModule, DatePipe, MoneyPipe],
+  imports: [ReactiveFormsModule, DatePipe, MoneyPipe, RouterLink, OrderStatusBadgeComponent],
   templateUrl: './ordering.component.html',
   styleUrls: ['./ordering.component.css'],
 })

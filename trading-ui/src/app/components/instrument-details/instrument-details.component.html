@@ -1,185 +1,237 @@
-<section class="instrument">
-  <nav class="crumbs" aria-label="Breadcrumb">
-    <a routerLink="/instruments">Markets</a> / <span>{{ symbol() }}</span>
-  </nav>
-
+<div class="page">
   @if (instrumentError()) {
-    <p class="error" role="alert" data-testid="instrument-error">{{ instrumentError() }}</p>
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a routerLink="/instruments">Markets</a> / <span>{{ symbol() }}</span>
+    </nav>
+    <p class="notice notice-error" role="alert" data-testid="instrument-error">
+      {{ instrumentError() }}
+    </p>
   } @else {
     <header class="head">
-      <div>
-        <h2>
+      <div class="head-main">
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <a routerLink="/instruments">Markets</a> / <span>{{ symbol() }}</span>
+        </nav>
+        <h1>
           {{ instrument()?.name ?? symbol() }} <span class="ticker">{{ symbol() }}</span>
-        </h2>
+        </h1>
         @if (instrument(); as i) {
           <p class="meta">
-            {{ i.exchange }} · {{ i.type }} · {{ i.currency }}
+            <span class="chip">{{ i.type }}</span>
+            {{ i.exchange }} · {{ i.currency }}
             @if (i.sector) {
               · {{ i.sector }}
             }
           </p>
         }
       </div>
-      <div class="actions">
-        <button type="button" class="buy" data-testid="buy" (click)="trade('BUY')">Buy</button>
-        <button type="button" class="sell" data-testid="sell" (click)="trade('SELL')">Sell</button>
+      <div class="head-price">
+        @if (quote()?.mid != null) {
+          <p class="last">
+            {{ quote()!.mid | money: '1.2-2' }} <span class="ccy">{{ quote()!.currency }}</span>
+          </p>
+          @if (dayChange(); as d) {
+            <p class="change" [class]="'change ' + direction(d.change)">
+              {{ sign(d.change) }}{{ abs(d.change) | money: '1.2-2' }} ({{ sign(d.change)
+              }}{{ abs(d.percent) | money: '1.2-2' }}%) {{ word(d.change) }} today
+            </p>
+          }
+        }
+        <div class="actions">
+          <button type="button" class="btn btn-buy" data-testid="buy" (click)="trade('BUY')">
+            Buy
+          </button>
+          <button type="button" class="btn btn-sell" data-testid="sell" (click)="trade('SELL')">
+            Sell
+          </button>
+        </div>
       </div>
     </header>
 
-    <div class="cards">
-      <section class="card" aria-labelledby="quote-title" data-testid="quote">
-        <h3 id="quote-title">Latest quote</h3>
-        @if (quoteError()) {
-          <p class="error" role="alert">{{ quoteError() }}</p>
-        } @else if (quote(); as q) {
-          @if (q.mid != null) {
-            <p class="price" data-testid="quote-mid">
-              {{ q.mid | money: '1.2-4' }} {{ q.currency }}
+    <div class="layout">
+      <section class="card chart-card" aria-labelledby="chart-title">
+        <header class="card-header">
+          <h2 id="chart-title">Price history</h2>
+          <div class="segmented" role="group" aria-label="Chart range">
+            @for (r of ranges; track r.value) {
+              <button
+                type="button"
+                [attr.aria-pressed]="range() === r.value"
+                [attr.data-testid]="'range-' + r.value"
+                [attr.aria-label]="r.label"
+                (click)="selectRange(r.value)"
+              >
+                {{ r.value }}
+              </button>
+            }
+          </div>
+        </header>
+
+        <div class="card-body">
+          @if (historyError()) {
+            <p class="notice notice-error" role="alert" data-testid="history-error">
+              {{ historyError() }}
             </p>
-            <dl class="pairs">
-              <div>
-                <dt>Bid</dt>
-                <dd>{{ q.bid != null ? (q.bid | money: '1.2-4') : '–' }}</dd>
-              </div>
-              <div>
-                <dt>Ask</dt>
-                <dd>{{ q.ask != null ? (q.ask | money: '1.2-4') : '–' }}</dd>
-              </div>
-            </dl>
-          } @else {
-            <p class="muted">No price yet.</p>
-          }
-          @if (q.stale) {
-            <p class="stale" data-testid="quote-stale">
-              @if (q.asOf) {
-                Stale: last priced {{ q.asOf | date: 'medium' }}
-              } @else {
-                Stale: no price has been received
+          } @else if (points() === null) {
+            <div class="chart chart-loading" aria-hidden="true"><div class="skeleton"></div></div>
+            <span class="visually-hidden">Loading chart…</span>
+          } @else if (points()!.length === 0) {
+            <p class="state" data-testid="history-empty">
+              No price history for this range yet.
+              @if (range() === '1D') {
+                Intraday prices are recorded from the live feed as it runs.
               }
             </p>
-          } @else if (q.asOf) {
-            <p class="muted" data-testid="quote-time">
-              Live, as of {{ q.asOf | date: 'mediumTime' }}
-            </p>
-          }
-        } @else {
-          <p class="muted">Loading quote…</p>
-        }
-      </section>
-
-      <section class="card" aria-labelledby="stats-title" data-testid="stats">
-        <h3 id="stats-title">Key statistics</h3>
-        @if (quote(); as q) {
-          <dl class="pairs">
-            @if (q.dayLow != null && q.dayHigh != null) {
-              <div>
-                <dt>Day range</dt>
-                <dd>{{ q.dayLow | money: '1.2-2' }} – {{ q.dayHigh | money: '1.2-2' }}</dd>
-              </div>
+          } @else {
+            <div class="chart"><canvas #chartCanvas aria-hidden="true"></canvas></div>
+            @if (summary(); as s) {
+              <p class="summary" data-testid="chart-summary">
+                Over the last {{ rangeLabel() }}, {{ symbol() }} traded between
+                {{ s.low | money: '1.2-2' }} and {{ s.high | money: '1.2-2' }}, moving from
+                {{ s.first | money: '1.2-2' }} to {{ s.last | money: '1.2-2' }}:
+                <span [class]="direction(s.change)"
+                  >{{ sign(s.change) }}{{ abs(s.change) | money: '1.2-2' }}
+                  @if (s.changePercent != null) {
+                    ({{ sign(s.change) }}{{ abs(s.changePercent) | money: '1.2-2' }}%)
+                  }
+                  {{ word(s.change) }}</span
+                >.
+              </p>
             }
-            @if (q.previousClose != null) {
-              <div>
-                <dt>Previous close</dt>
-                <dd>{{ q.previousClose | money: '1.2-2' }}</dd>
-              </div>
-            }
-            @if (q.week52Low != null && q.week52High != null) {
-              <div>
-                <dt>52-week range</dt>
-                <dd>{{ q.week52Low | money: '1.2-2' }} – {{ q.week52High | money: '1.2-2' }}</dd>
-              </div>
-            }
-          </dl>
-          @if (q.dayLow == null && q.previousClose == null && q.week52Low == null) {
-            <p class="muted">No history is stored for this instrument yet.</p>
-          }
-        }
-      </section>
-    </div>
-
-    <section class="card chart-card" aria-labelledby="chart-title">
-      <div class="chart-head">
-        <h3 id="chart-title">Price history</h3>
-        <div class="ranges" role="group" aria-label="Chart range">
-          @for (r of ranges; track r.value) {
-            <button
-              type="button"
-              [attr.aria-pressed]="range() === r.value"
-              [attr.data-testid]="'range-' + r.value"
-              (click)="selectRange(r.value)"
-            >
-              {{ r.value }}
-            </button>
+            <details class="data-table" (toggle)="showTable.set($any($event.target).open)">
+              <summary>Show the data as a table</summary>
+              @if (showTable()) {
+                <div class="table-scroll">
+                  <table class="table" data-testid="history-table">
+                    <caption class="visually-hidden">
+                      {{
+                        symbol()
+                      }}
+                      prices,
+                      {{
+                        range()
+                      }}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Time</th>
+                        <th scope="col" class="num">Open</th>
+                        <th scope="col" class="num">High</th>
+                        <th scope="col" class="num">Low</th>
+                        <th scope="col" class="num">Close</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (p of points(); track p.time) {
+                        <tr>
+                          <td>{{ label(p.time) }}</td>
+                          <td class="num">{{ p.open | money: '1.2-2' }}</td>
+                          <td class="num">{{ p.high | money: '1.2-2' }}</td>
+                          <td class="num">{{ p.low | money: '1.2-2' }}</td>
+                          <td class="num">{{ p.close | money: '1.2-2' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </details>
           }
         </div>
-      </div>
+      </section>
 
-      @if (historyError()) {
-        <p class="error" role="alert" data-testid="history-error">{{ historyError() }}</p>
-      } @else if (points() === null) {
-        <p class="muted">Loading chart…</p>
-      } @else if (points()!.length === 0) {
-        <p class="muted" data-testid="history-empty">
-          No price history for this range yet.
-          @if (range() === '1D') {
-            Intraday prices are recorded from the live feed as it runs.
-          }
-        </p>
-      } @else {
-        <div class="chart"><canvas #chartCanvas aria-hidden="true"></canvas></div>
-        @if (summary(); as s) {
-          <p class="summary" data-testid="chart-summary">
-            Over the last {{ rangeLabel() }}, {{ symbol() }} traded between
-            {{ s.low | money: '1.2-2' }} and {{ s.high | money: '1.2-2' }}, moving from
-            {{ s.first | money: '1.2-2' }} to {{ s.last | money: '1.2-2' }}:
-            <span [class]="direction(s.change)"
-              >{{ sign(s.change) }}{{ abs(s.change) | money: '1.2-2' }}
-              @if (s.changePercent != null) {
-                ({{ sign(s.change) }}{{ abs(s.changePercent) | money: '1.2-2' }}%)
+      <div class="side">
+        <section class="card" aria-labelledby="quote-title" data-testid="quote">
+          <header class="card-header">
+            <h2 id="quote-title">Latest quote</h2>
+            @if (quote(); as q) {
+              @if (q.stale) {
+                <span class="pill pill-warning">Stale</span>
+              } @else if (q.asOf) {
+                <span class="pill pill-positive">Live</span>
               }
-              {{ word(s.change) }}</span
-            >.
-          </p>
-        }
-        <details (toggle)="showTable.set($any($event.target).open)">
-          <summary>Show the data as a table</summary>
-          @if (showTable()) {
-            <div class="table-scroll">
-              <table data-testid="history-table">
-                <caption class="visually-hidden">
-                  {{
-                    symbol()
-                  }}
-                  prices,
-                  {{
-                    range()
-                  }}
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Time</th>
-                    <th scope="col" class="num">Open</th>
-                    <th scope="col" class="num">High</th>
-                    <th scope="col" class="num">Low</th>
-                    <th scope="col" class="num">Close</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (p of points(); track p.time) {
-                    <tr>
-                      <td>{{ label(p.time) }}</td>
-                      <td class="num">{{ p.open | money: '1.2-2' }}</td>
-                      <td class="num">{{ p.high | money: '1.2-2' }}</td>
-                      <td class="num">{{ p.low | money: '1.2-2' }}</td>
-                      <td class="num">{{ p.close | money: '1.2-2' }}</td>
-                    </tr>
+            }
+          </header>
+          <div class="card-body">
+            @if (quoteError()) {
+              <p class="field-error" role="alert">{{ quoteError() }}</p>
+            } @else if (quote(); as q) {
+              @if (q.mid != null) {
+                <p class="price" data-testid="quote-mid">
+                  {{ q.mid | money: '1.2-4' }} {{ q.currency }}
+                </p>
+                <dl class="kv">
+                  <div>
+                    <dt>Bid</dt>
+                    <dd>{{ q.bid != null ? (q.bid | money: '1.2-4') : '–' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Ask</dt>
+                    <dd>{{ q.ask != null ? (q.ask | money: '1.2-4') : '–' }}</dd>
+                  </div>
+                </dl>
+              } @else {
+                <p class="muted">No price yet.</p>
+              }
+              @if (q.stale) {
+                <p class="stale-note" data-testid="quote-stale">
+                  @if (q.asOf) {
+                    Stale: last priced {{ q.asOf | date: 'medium' }}
+                  } @else {
+                    Stale: no price has been received
                   }
-                </tbody>
-              </table>
-            </div>
-          }
-        </details>
-      }
-    </section>
+                </p>
+              } @else if (q.asOf) {
+                <p class="time" data-testid="quote-time">
+                  <span class="live-dot" aria-hidden="true"></span>
+                  Live, as of {{ q.asOf | date: 'mediumTime' }}
+                </p>
+              }
+            } @else {
+              <div class="skeleton lg" aria-hidden="true"></div>
+              <p class="muted">Loading quote…</p>
+            }
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="stats-title" data-testid="stats">
+          <header class="card-header">
+            <h2 id="stats-title">Key statistics</h2>
+          </header>
+          <div class="card-body">
+            @if (quote(); as q) {
+              <dl class="kv">
+                @if (q.dayLow != null && q.dayHigh != null) {
+                  <div>
+                    <dt>Day range</dt>
+                    <dd>{{ q.dayLow | money: '1.2-2' }} – {{ q.dayHigh | money: '1.2-2' }}</dd>
+                  </div>
+                }
+                @if (q.previousClose != null) {
+                  <div>
+                    <dt>Previous close</dt>
+                    <dd>{{ q.previousClose | money: '1.2-2' }}</dd>
+                  </div>
+                }
+                @if (q.week52Low != null && q.week52High != null) {
+                  <div>
+                    <dt>52-week range</dt>
+                    <dd>
+                      {{ q.week52Low | money: '1.2-2' }} – {{ q.week52High | money: '1.2-2' }}
+                    </dd>
+                  </div>
+                }
+              </dl>
+              @if (q.dayLow == null && q.previousClose == null && q.week52Low == null) {
+                <p class="muted">No history is stored for this instrument yet.</p>
+              }
+            } @else {
+              <div class="skeleton" aria-hidden="true"></div>
+              <div class="skeleton" aria-hidden="true"></div>
+            }
+          </div>
+        </section>
+      </div>
+    </div>
   }
-</section>
+</div>

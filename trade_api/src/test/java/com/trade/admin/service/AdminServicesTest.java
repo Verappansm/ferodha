@@ -63,6 +63,25 @@ class AdminServicesTest {
     }
 
     @Test
+    @DisplayName("The account opens in the bank account's currency; naming a different one is refused")
+    void accountTakesTheBankCurrency() {
+        givenVerifiedApplicantWithBank();
+        when(mapper.insertAccount(anyString(), anyString(), anyString())).thenReturn(4L);
+        when(mapper.approveAccountRequest(anyString(), anyString(), anyString(), anyString(), anyLong()))
+                .thenReturn(1);
+
+        requests.approve(REQUEST, new ApproveAccountRequest(null, null, null), ADMIN);
+        verify(mapper).insertAccount("77777777-7777-7777-7777-777777777771", "BANK-100004", "USD");
+    }
+
+    @Test
+    @DisplayName("An operator cannot open the account in another currency than the bank's")
+    void otherCurrencyThanTheBankIsRefused() {
+        givenVerifiedApplicantWithBank();
+        assertRefused(new ApproveAccountRequest(null, "INR", null));
+    }
+
+    @Test
     @DisplayName("A request already decided cannot be decided again")
     void decidedRequestIsAConflict() {
         when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("APPROVED"));
@@ -85,7 +104,7 @@ class AdminServicesTest {
         when(mapper.lockAccountRequest(REQUEST.toString())).thenReturn(request("PENDING"));
         when(mapper.isEmailVerified("77777777-7777-7777-7777-777777777771")).thenReturn(true);
         when(mapper.findBankAccountByEmail("priya@example.com"))
-                .thenReturn(new BankAccountRow("BANK-100004", "priya@example.com"));
+                .thenReturn(new BankAccountRow("BANK-100004", "priya@example.com", "USD"));
     }
 
     private void assertRefused(ApproveAccountRequest body) {

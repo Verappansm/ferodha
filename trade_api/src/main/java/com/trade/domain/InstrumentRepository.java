@@ -15,7 +15,4 @@ public interface InstrumentRepository {
 
     long countTradable();
 
-    List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset);
-
-    long countTradableBySearch(String searchPattern);
 }

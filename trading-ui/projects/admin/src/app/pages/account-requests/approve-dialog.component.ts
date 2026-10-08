@@ -3,13 +3,13 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { AccountRequest } from '../../api/admin-api';
 
 export interface ApprovalDetails {
-  currency: string;
   note: string;
 }
 
-export const CURRENCIES = ['USD', 'INR', 'EUR', 'GBP'];
-
-/** Approving opens a trading account, so it asks for the bank account it settles to. */
+/**
+ * Approving opens a trading account on the bank account held under the applicant's
+ * verified email, in that bank account's currency: neither is chosen here.
+ */
 @Component({
   selector: 'adm-approve-dialog',
   imports: [ReactiveFormsModule],
@@ -25,24 +25,11 @@ export const CURRENCIES = ['USD', 'INR', 'EUR', 'GBP'];
           </p>
 
           <p class="dialog-text" data-testid="approve-bank-note">
-            The account settles to the bank account the bank holds under this email. It is not
-            chosen or created here, and approval is refused if the email is unverified, the bank has
-            none, or it is already linked.
+            The account settles to the bank account the bank holds under this email, and holds its
+            cash in that bank account's currency, so money moves between them one for one. Neither
+            is chosen or created here, and approval is refused if the email is unverified, the bank
+            has none, or it is already linked.
           </p>
-
-          <div class="field">
-            <label class="field-label" for="currency">Account currency</label>
-            <select
-              id="currency"
-              class="input"
-              formControlName="currency"
-              data-testid="approve-currency"
-            >
-              @for (c of currencies; track c) {
-                <option [value]="c">{{ c }}</option>
-              }
-            </select>
-          </div>
 
           <div class="field">
             <label class="field-label" for="note">Note for the audit log (optional)</label>
@@ -63,10 +50,8 @@ export const CURRENCIES = ['USD', 'INR', 'EUR', 'GBP'];
 export class ApproveDialogComponent {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   readonly request = signal<AccountRequest | null>(null);
-  readonly currencies = CURRENCIES;
 
   readonly form = inject(NonNullableFormBuilder).group({
-    currency: ['USD', Validators.required],
     note: ['', Validators.maxLength(500)],
   });
 
@@ -74,7 +59,7 @@ export class ApproveDialogComponent {
 
   ask(request: AccountRequest): Promise<ApprovalDetails | null> {
     this.request.set(request);
-    this.form.reset({ currency: request.currency || 'USD', note: '' });
+    this.form.reset({ note: '' });
     const element = this.dialog().nativeElement;
     if (typeof element.showModal === 'function') element.showModal();
     else element.setAttribute('open', '');
@@ -87,10 +72,7 @@ export class ApproveDialogComponent {
       return;
     }
     const value = this.form.getRawValue();
-    this.close({
-      currency: value.currency,
-      note: value.note.trim(),
-    });
+    this.close({ note: value.note.trim() });
   }
 
   close(details: ApprovalDetails | null): void {

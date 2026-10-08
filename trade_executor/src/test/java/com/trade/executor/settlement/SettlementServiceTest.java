@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -56,6 +57,26 @@ class SettlementServiceTest {
 
         verify(accountMapper, times(3)).updateBalanceWithVersion(any(), any(), anyInt());
         verify(orderMapper, never()).insertTrade(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a buy whose cash went in the meantime is refused, never written as a negative balance")
+    void buyNoLongerAffordableIsRefused() {
+        SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
+
+        OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
+        AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+        // The first write loses the race; the re-read finds a withdrawal took the cash.
+        when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(1);
+        when(accountMapper.updateBalanceWithVersion(any(), any(), anyInt())).thenReturn(0);
+        when(accountMapper.findById(1L)).thenReturn(java.util.Optional.of(
+                new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("50.00"), "ACTIVE", 1, "USD")));
+
+        assertThrows(InsufficientFundsAtSettlementException.class, () -> settlementService.settleFill(
+                order, account, new BigDecimal("10.00"), 10, new BigDecimal("0.10"), new BigDecimal("100.10"),
+                OrderSide.BUY));
+        verify(accountMapper, never()).updateBalanceWithVersion(any(), eq(new BigDecimal("-50.10")), anyInt());
     }
 
     @Test

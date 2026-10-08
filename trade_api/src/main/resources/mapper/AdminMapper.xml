@@ -101,11 +101,12 @@
         <constructor>
             <arg column="bank_account_number" javaType="java.lang.String"/>
             <arg column="email" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
 
     <select id="findBankAccountByEmail" resultMap="bankAccount">
-        SELECT bank_account_number, email
+        SELECT bank_account_number, email, currency
         FROM Third_Party_Bank
         WHERE lower(email) = lower(#{email})
     </select>

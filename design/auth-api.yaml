@@ -185,6 +185,48 @@ paths:
         '422':
           $ref: '#/components/responses/InvalidInput'
 
+  /auth/account-status:
+    post:
+      tags: [Auth]
+      operationId: accountStatus
+      security: []
+      summary: The state of the account-opening request, for someone who cannot sign in yet
+      description: |
+        LEAP-012. Checked with the email and password exactly as a login is, so a wrong password and
+        an unknown email are the same `AUTH-401`, and failures count towards the login throttle. No
+        token is issued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: The latest request's state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /auth/logout-all:
+    post:
+      tags: [Auth]
+      operationId: logoutAll
+      summary: Sign out everywhere
+      description: |
+        LEAP-010. Revokes every refresh token the user holds, this device included, so every session
+        ends at its next refresh. The caller clears its own session at once.
+      responses:
+        '204':
+          description: Every refresh token is revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+
   /auth/verify-email:
     post:
       tags: [Auth]
@@ -367,6 +409,28 @@ components:
           type: string
           maxLength: 128
           writeOnly: true
+
+    AccountStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [status, reason, emailVerified, requestedAt, decidedAt]
+      properties:
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, NONE]
+          description: The latest account-opening request; NONE when none was ever filed.
+        reason:
+          type: [string, 'null']
+          description: Why the request was rejected; null otherwise.
+        emailVerified:
+          type: boolean
+          description: Whether the code mailed at registration has been entered. Approval waits for it.
+        requestedAt:
+          type: [string, 'null']
+          format: date-time
+        decidedAt:
+          type: [string, 'null']
+          format: date-time
 
     ChangePasswordRequest:
       type: object

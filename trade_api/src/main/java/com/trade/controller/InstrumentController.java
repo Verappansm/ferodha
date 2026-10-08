@@ -1,5 +1,6 @@
 package com.trade.controller;
 
+import com.trade.dto.InstrumentFiltersResponseDto;
 import com.trade.dto.InstrumentQuoteDto;
 import com.trade.dto.InstrumentResponseDto;
 import com.trade.dto.PaginatedInstrumentsResponseDto;
@@ -38,12 +39,27 @@ public class InstrumentController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(defaultValue = "0") long offset,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String exchange,
+            @RequestParam(required = false) String sector,
+            @RequestParam(required = false) String type,
             @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal)
             throws DomainException {
-        if (search != null && !search.isBlank()) {
-            return instrumentService.searchInstruments(search.trim(), pageSize, offset);
+        boolean filtered = hasText(search) || hasText(exchange) || hasText(sector) || hasText(type);
+        if (filtered) {
+            return instrumentService.searchInstruments(search, exchange, sector, type, pageSize, offset);
         }
         return instrumentService.getInstruments(pageSize, offset);
+    }
+
+    // A literal path, preferred over /{symbol}: the distinct exchanges, sectors and types.
+    @GetMapping("/filters")
+    public InstrumentFiltersResponseDto getFilters(
+            @RequestAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE) AuthenticatedPrincipal principal) {
+        return instrumentService.filters();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     // A literal path: Spring prefers it over /{symbol}, so it never reads as a ticker.

@@ -43,19 +43,6 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
         return instrumentMapper.countTradable();
     }
 
-    @Override
-    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
-        return instrumentMapper.findTradableBySearch(searchPattern, limit, (int) offset)
-                .stream()
-                .map(InstrumentRepositoryImpl::toDomain)
-                .toList();
-    }
-
-    @Override
-    public long countTradableBySearch(String searchPattern) {
-        return instrumentMapper.countTradableBySearch(searchPattern);
-    }
-
     private static Instrument toDomain(InstrumentRow row) {
         Instrument instrument = new Instrument(
                 row.instrumentId(),

@@ -36,6 +36,21 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     }
 
     @Override
+    public long countUnreadByAccountId(Long accountId) {
+        return mapper.countUnreadByAccountId(accountId);
+    }
+
+    @Override
+    public int markRead(Long accountId, UUID notificationId) {
+        return mapper.markRead(accountId, notificationId);
+    }
+
+    @Override
+    public int markAllRead(Long accountId) {
+        return mapper.markAllRead(accountId);
+    }
+
+    @Override
     public void save(Notification notification) {
         mapper.insert(notification);
     }
@@ -43,5 +58,10 @@ public class NotificationRepositoryImpl implements NotificationRepository {
     @Override
     public void update(Notification notification) {
         mapper.update(notification);
+    }
+
+    @Override
+    public List<Notification> findByStatus(com.trade.notification.enums.NotificationStatus status, int limit) {
+        return mapper.findByStatus(status.name(), limit);
     }
 }

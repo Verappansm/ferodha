@@ -9,6 +9,8 @@ public record BankFundsResponseDto(
         String bankAccountNumber,
         BigDecimal tradingBalance,
         BigDecimal bankBalance,
+        /** Trading cash less what open buy orders may still spend, never below zero. */
+        BigDecimal availableToWithdraw,
         String currency,
         OffsetDateTime asOf
 ) {

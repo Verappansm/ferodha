@@ -23,6 +23,7 @@ import { errorMessage } from '../../core/errors/error-message';
 import { pnlDirection, pnlSign, pnlWord } from '../../core/format/pnl';
 import { suggestedLimitPrice } from '../../core/format/limit-price';
 import { CHART_FACTORY, DrawnChart } from './price-chart';
+import { Theme } from '../../core/theme/theme';
 
 export const RANGES: { value: ChartRange; label: string }[] = [
   { value: '1D', label: '1 day' },
@@ -54,6 +55,7 @@ export class InstrumentDetailsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly drawChart = inject(CHART_FACTORY);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly theme = inject(Theme);
 
   protected readonly ranges = RANGES;
   protected readonly direction = pnlDirection;
@@ -92,9 +94,19 @@ export class InstrumentDetailsComponent implements OnInit {
     };
   });
 
+  /** The move since the previous close, when both prices are known. */
+  readonly dayChange = computed(() => {
+    const quote = this.quote();
+    if (quote?.mid == null || !quote.previousClose) return null;
+    const change = quote.mid - quote.previousClose;
+    return { change, percent: (change / quote.previousClose) * 100 };
+  });
+
   constructor() {
-    // Redraw whenever the points change and the canvas is on the page.
+    // Redraw whenever the points change and the canvas is on the page, and on a
+    // theme switch, since the chart's colours are read from the theme's tokens.
     effect(() => {
+      this.theme.choice();
       const points = this.points();
       const canvas = this.canvas()?.nativeElement;
       this.chart?.destroy();

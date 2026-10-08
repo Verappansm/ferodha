@@ -73,6 +73,10 @@
       <p>Sign in to your trading account.</p>
     </header>
 
+    @if (notice) {
+      <p class="notice notice-success" role="status" data-testid="login-notice">{{ notice }}</p>
+    }
+
     <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
       <div class="field">
         <label class="field-label" for="username">Email address</label>
@@ -142,6 +146,8 @@
       </button>
 
       <p class="field-hint footnote">
+        Registered but cannot sign in yet?
+        <a routerLink="/account-status" data-testid="account-status-link">Check your account request</a>.
         Forgotten your password? Contact support; self-service reset is not available yet.
       </p>
     </form>

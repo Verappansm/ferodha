@@ -12,6 +12,7 @@ import {
 import { formatNumber } from '../../core/format/number-format';
 import { PreferencesStore, PreferenceValues } from '../../core/preferences/preferences.store';
 import { Theme } from '../../core/theme/theme';
+import { SecuritySettingsComponent } from './security-settings.component';
 
 const START_PAGES: { value: StartPage; label: string }[] = [
   { value: 'DASHBOARD', label: 'Dashboard' },
@@ -27,7 +28,7 @@ const START_PAGES: { value: StartPage; label: string }[] = [
  */
 @Component({
   selector: 'app-settings',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, SecuritySettingsComponent],
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.css'],
 })

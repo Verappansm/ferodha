@@ -9,8 +9,11 @@ model/account-response.ts
 model/account-status.ts
 model/balance-response.ts
 model/bank-funds-response.ts
+model/bank-transaction.ts
+model/bank-transactions-response.ts
 model/bank-transfer-request.ts
 model/error-response.ts
+model/instrument-filters.ts
 model/instrument-quote.ts
 model/instrument-response.ts
 model/instrument-type.ts

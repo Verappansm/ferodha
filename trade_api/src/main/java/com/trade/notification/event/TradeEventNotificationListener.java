@@ -2,11 +2,8 @@ package com.trade.notification.event;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.trade.notification.dto.RecordNotificationRequestDto;
 import com.trade.notification.enums.NotificationEventType;
 import com.trade.notification.service.NotificationService;
-import com.trade.preferences.PreferenceDtos.AlertType;
-import com.trade.preferences.PreferencesService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -26,13 +23,10 @@ public class TradeEventNotificationListener {
 
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
-    private final PreferencesService preferences;
 
-    public TradeEventNotificationListener(ObjectMapper objectMapper, NotificationService notificationService,
-                                          PreferencesService preferences) {
+    public TradeEventNotificationListener(ObjectMapper objectMapper, NotificationService notificationService) {
         this.objectMapper = objectMapper;
         this.notificationService = notificationService;
-        this.preferences = preferences;
     }
 
     @KafkaListener(
@@ -67,26 +61,8 @@ public class TradeEventNotificationListener {
             // Map to notification event type
             NotificationEventType notificationEventType = mapEventType(eventType);
 
-            // The customer's own settings decide whether they hear about this kind of
-            // event at all (Settings > notify on filled / rejected / cancelled).
-            if (!preferences.resolveChannel(accountId, AlertType.valueOf(notificationEventType.name())).deliver()) {
-                log.debug("Account {} turned {} alerts off - no notification for event {}",
-                        accountId, notificationEventType, eventId);
-                return;
-            }
-
-            // Record notification (idempotent on eventId)
-            try {
-                notificationService.recordNotification(accountId, eventId, notificationEventType, orderId, symbol);
-                log.debug("Recorded notification for {} event: {}", eventType, eventId);
-            } catch (IllegalArgumentException e) {
-                if (e.getMessage().contains("already recorded")) {
-                    log.debug("Idempotent duplicate: notification already recorded for event {}", eventId);
-                    // Still return success to allow offset to be committed
-                } else {
-                    throw e;
-                }
-            }
+            // The service applies the customer's settings, stores it once per event, and delivers it.
+            notificationService.notify(accountId, eventId, notificationEventType, orderId, symbol, null);
         } catch (Exception e) {
             log.error("Error processing trade-event for notification", e);
             // Do not crash the consumer; malformed events are skipped and offset is committed

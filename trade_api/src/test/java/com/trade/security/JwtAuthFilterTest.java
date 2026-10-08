@@ -176,6 +176,39 @@ class JwtAuthFilterTest {
         assertRefused(request);
     }
 
+    @Test
+    @DisplayName("Path parameters, encoded slashes and dot segments are refused before any route is chosen")
+    void smuggledPathsAreRefused() throws Exception {
+        for (String uri : new String[] {"/api/v1;x/orders", "/api/v1/accounts/1;jsessionid=1",
+                "/api/v1/accounts%2F1", "/api/v1/accounts/../admin/accounts", "/api/v1/%2e%2e/admin",
+                "/api/v1/./orders"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", uri);
+            request.addHeader("Authorization", "Bearer " + JwtTestFixture.validToken(1L));
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilter(request, response, chain);
+
+            verify(chain, never()).doFilter(request, response);
+            assertEquals(400, response.getStatus(), uri);
+        }
+    }
+
+    @Test
+    @DisplayName("An encoded admin path is judged as the admin route it decodes to: a customer token is refused")
+    void encodedAdminPathIsAnAdminRoute() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/%61dmin/accounts");
+        request.addHeader("Authorization", "Bearer " + JwtTestFixture.validToken(1L));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(request, response);
+        assertEquals(403, response.getStatus());
+        assertNull(request.getAttribute(JwtAuthFilter.PRINCIPAL_ATTRIBUTE));
+    }
+
     private MockHttpServletRequest protectedRequest() {
         return new MockHttpServletRequest("GET", "/api/v1/accounts/1");
     }

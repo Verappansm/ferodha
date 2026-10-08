@@ -1,5 +1,6 @@
 package com.trade.executor.domain;
 
+import com.trade.executor.settlement.InsufficientFundsAtSettlementException;
 import com.trade.executor.consumer.PoisonMessageException;
 import com.trade.executor.currency.ApiSuppliedRates;
 import com.trade.executor.enums.OrderSide;
@@ -161,8 +162,17 @@ public class OrderExecutionService {
             return;
         }
 
-        SettlementOutcome outcome = settlementService.settleFill(
-                order, account, executedPrice, order.quantity(), fee, totalCashDelta, side);
+        SettlementOutcome outcome;
+        try {
+            outcome = settlementService.settleFill(
+                    order, account, executedPrice, order.quantity(), fee, totalCashDelta, side);
+        } catch (InsufficientFundsAtSettlementException e) {
+            // The cash went between the check above and the write: the fill rolled back, so
+            // the order is still NEW and is rejected the ordinary way.
+            log.info("Order {}: {}", order.orderId(), e.getMessage());
+            settleAndPublishReject(order, RejectionReason.INSUFFICIENT_FUNDS);
+            return;
+        }
         if (outcome.result() == SettlementOutcome.Result.ALREADY_PROCESSED) {
             log.info("Order {} was already settled by a prior delivery - not republishing", order.orderId());
             return;

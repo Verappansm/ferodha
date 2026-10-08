@@ -32,6 +32,8 @@ add a new entry that supersedes it. Don't edit the old one.
 | [0009](0009-new-users-wait-for-admin-approval-before-an-account.md) | New users wait for admin approval before getting an account | Onboarding |
 | [0010](0010-executor-idempotency-by-conditional-update.md) | Executor idempotency through a guarded UPDATE | Executor / data |
 | [0011](0011-client-side-password-digest.md) | The browser sends a salted SHA-256 digest of the password | Auth / UI |
+| [0012](0012-bank-linking-by-verified-email.md) | A trading account is linked to the bank account held under the user's verified email | Onboarding / bank |
+| [0013](0013-notifications-one-path-one-preference.md) | Notifications: one entry point, the Settings preferences, real SMTP, an in-app list | Notifications |
 
 Related: [`story_docs/contract-breach.md`](../story_docs/contract-breach.md)
 records each departure from the Neueda contracts. The

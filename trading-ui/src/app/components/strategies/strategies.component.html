@@ -1,15 +1,20 @@
-<div class="strategies-container">
-  <div class="strategies-header">
+<div class="page">
+  <header class="page-header">
     <div>
-      <h2>Strategies</h2>
+      <h1>Strategies</h1>
       <p class="intro">
         A strategy places an order for you when a price reaches a level, with nobody confirming it.
         A new strategy starts disabled, and disabling one stops it at once and cancels its working
         orders. Try a <strong>dry run</strong> first: it logs what it would do and places nothing.
       </p>
     </div>
-    <div class="header-actions">
-      <button type="button" class="refresh" data-testid="strategies-refresh" (click)="refresh()">
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="strategies-refresh"
+        (click)="refresh()"
+      >
         Refresh
       </button>
       <button
@@ -22,7 +27,7 @@
         + New strategy
       </button>
     </div>
-  </div>
+  </header>
 
   @if (strategies().length > 0) {
     <div class="strip" data-testid="strategy-counts">
@@ -35,7 +40,7 @@
   }
 
   @if (notice()) {
-    <p class="notice" role="status" data-testid="strategy-notice">{{ notice() }}</p>
+    <p class="notice notice-success" role="status" data-testid="strategy-notice">{{ notice() }}</p>
   }
   @if (error()) {
     <p class="form-error" role="alert" data-testid="strategy-error">{{ error() }}</p>

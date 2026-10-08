@@ -1,67 +1,124 @@
-<div class="bank-container">
-  <section class="bank-heading">
+<div class="page page-narrow">
+  <header class="page-header">
     <div>
-      <p class="eyebrow">Linked bank</p>
-      <h1>Move money securely</h1>
-      <p>Transfer funds between your verified bank account and your trading account.</p>
+      <h1>Bank</h1>
+      <p>Move money between your linked bank account and your trading account.</p>
     </div>
-    <button type="button" class="secondary" (click)="loadFunds()" [disabled]="isLoading()">
-      {{ isLoading() ? 'Refreshing…' : 'Refresh balances' }}
-    </button>
-  </section>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        (click)="loadFunds()"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Refreshing…' : 'Refresh balances' }}
+      </button>
+    </div>
+  </header>
+
   @if (error()) {
-    <p class="message error" role="alert">{{ error() }}</p>
+    <p class="notice notice-error" role="alert">{{ error() }}</p>
   }
   @if (success()) {
-    <p class="message success" role="status">{{ success() }}</p>
+    <p class="notice notice-success" role="status">{{ success() }}</p>
   }
+
   @if (isLoading() && !funds()) {
-    <p class="loading">Loading your linked funds…</p>
+    <div class="tiles" aria-hidden="true">
+      <div class="tile"><div class="skeleton"></div><div class="skeleton lg"></div></div>
+      <div class="tile"><div class="skeleton"></div><div class="skeleton lg"></div></div>
+    </div>
+    <span class="visually-hidden">Loading your linked funds…</span>
   } @else if (funds(); as current) {
-    <section class="balances" aria-label="Account balances">
-      <article>
-        <span>Bank balance</span
-        ><strong data-testid="bank-balance"
-          >{{ current.bankBalance | money: '1.2-2' : 'balance' }} {{ current.currency }}</strong
-        >
-      </article>
-      <article>
-        <span>Trading balance</span
-        ><strong
-          >{{ current.tradingBalance | money: '1.2-2' : 'balance' }} {{ current.currency }}</strong
-        >
-      </article>
-    </section>
-    <section class="transfer-card" aria-labelledby="transfer-title">
-      <div>
-        <h2 id="transfer-title">Transfer funds</h2>
-        <p>Your PIN is bcrypt-hashed in this browser before it is sent.</p>
+    <section class="tiles" aria-label="Account balances">
+      <div class="tile">
+        <p class="tile-label">Bank balance</p>
+        <p class="tile-value" data-testid="bank-balance">
+          {{ current.bankBalance | money: '1.2-2' : 'balance'
+          }}<span class="ccy">{{ current.currency }}</span>
+        </p>
+        <span class="tile-hint">Linked account {{ maskedAccount() }}</span>
       </div>
-      <form (ngSubmit)="submit()">
-        <fieldset [disabled]="isSubmitting()">
-          <label
-            >Direction<select
-              [ngModel]="transactionType()"
-              (ngModelChange)="transactionType.set($event)"
-              name="transactionType"
-            >
-              <option value="DEPOSIT">Add Funds</option>
-              <option value="WITHDRAWAL">Withdraw Funds</option>
-            </select></label
+      <div class="tile tile-primary">
+        <p class="tile-label">Trading balance</p>
+        <p class="tile-value">
+          {{ current.tradingBalance | money: '1.2-2' : 'balance'
+          }}<span class="ccy">{{ current.currency }}</span>
+        </p>
+        <span class="tile-hint">As of {{ current.asOf | date: 'd MMM, HH:mm' }}</span>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="transfer-title">
+      <header class="card-header">
+        <h2 id="transfer-title">Transfer funds</h2>
+        <div class="segmented" role="group" aria-label="Direction">
+          <button
+            type="button"
+            [attr.aria-pressed]="transactionType() === 'DEPOSIT'"
+            data-testid="bank-deposit"
+            (click)="setType('DEPOSIT')"
           >
-          <label
-            >Amount ({{ current.currency }})<input
-              type="number"
-              min="0.01"
-              step="0.01"
-              inputmode="decimal"
-              [ngModel]="amount()"
-              (ngModelChange)="amount.set($event === '' ? null : +$event)"
-              name="amount"
-              required
-          /></label>
-          <label
-            >Bank PIN<input
+            Add funds
+          </button>
+          <button
+            type="button"
+            [attr.aria-pressed]="transactionType() === 'WITHDRAWAL'"
+            data-testid="bank-withdraw"
+            (click)="setType('WITHDRAWAL')"
+          >
+            Withdraw
+          </button>
+        </div>
+      </header>
+
+      <form class="card-body" (ngSubmit)="submit()" novalidate>
+        <p class="direction">
+          @if (transactionType() === 'DEPOSIT') {
+            From your bank <span aria-hidden="true">→</span> to your trading account
+          } @else {
+            From your trading account <span aria-hidden="true">→</span> to your bank
+          }
+        </p>
+        <fieldset class="form-grid" [disabled]="isSubmitting()">
+          <div class="field">
+            <label class="field-label" for="bank-amount">Amount</label>
+            <div class="amount">
+              <input
+                id="bank-amount"
+                class="input"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="0.00"
+                [ngModel]="amount()"
+                (ngModelChange)="setAmount($event)"
+                name="amount"
+                required
+              />
+              <span class="suffix">{{ current.currency }}</span>
+            </div>
+            <p class="field-hint" data-testid="bank-available">
+              Available:
+              {{
+                (transactionType() === 'DEPOSIT' ? current.bankBalance : current.availableToWithdraw)
+                  | money: '1.2-2' : 'balance'
+              }}
+              {{ current.currency }}
+              @if (
+                transactionType() === 'WITHDRAWAL' &&
+                current.availableToWithdraw < current.tradingBalance
+              ) {
+                <span>· the rest is held for open buy orders</span>
+              }
+            </p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="bank-pin">Bank PIN</label>
+            <input
+              id="bank-pin"
+              class="input"
               type="password"
               inputmode="numeric"
               autocomplete="one-time-code"
@@ -69,8 +126,12 @@
               (ngModelChange)="pin.set($event)"
               name="pin"
               required
-          /></label>
-          <button type="submit" class="primary">
+            />
+            <p class="field-hint">Checked in this browser and never sent as typed.</p>
+          </div>
+        </fieldset>
+        <div class="submit-row">
+          <button type="submit" class="btn btn-primary btn-lg" [disabled]="isSubmitting()">
             {{
               isSubmitting()
                 ? 'Processing…'
@@ -79,8 +140,51 @@
                   : 'Withdraw funds'
             }}
           </button>
-        </fieldset>
+        </div>
       </form>
     </section>
   }
+
+  <section class="card" aria-labelledby="transactions-title" data-testid="bank-transactions">
+    <header class="card-header">
+      <h2 id="transactions-title">Transactions</h2>
+      <span class="muted">Newest first</span>
+    </header>
+    @if (transactionsError()) {
+      <p class="state field-error" role="alert">{{ transactionsError() }}</p>
+    } @else if (transactions() === null) {
+      <div class="card-body" aria-hidden="true">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+    } @else if (transactions()!.length === 0) {
+      <p class="state" data-testid="bank-transactions-empty">
+        No money has moved yet. A deposit or withdrawal appears here.
+      </p>
+    } @else {
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th class="num">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (t of transactions(); track t.transactionId) {
+              <tr data-testid="bank-transaction">
+                <td>{{ t.at | date: 'd MMM y, HH:mm' }}</td>
+                <td>{{ transactionLabel(t.type) }}</td>
+                <td class="num" [class]="isInflow(t.type) ? 'num gain' : 'num loss'">
+                  {{ isInflow(t.type) ? '+' : '−' }}{{ t.amount | money: '1.2-2' : 'balance' }}
+                  <span class="muted">{{ t.currency }}</span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 </div>

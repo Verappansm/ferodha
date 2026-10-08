@@ -1,177 +1,240 @@
-<section class="portfolio">
-  <header class="portfolio-header">
-    <h2>Portfolio</h2>
-    <button type="button" class="refresh" data-testid="portfolio-refresh" (click)="refresh()">
-      Refresh
-    </button>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Portfolio</h1>
+      <p>What you hold, what it is worth now, and the profit and loss on it.</p>
+    </div>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="portfolio-refresh"
+        (click)="refresh()"
+      >
+        Refresh
+      </button>
+    </div>
   </header>
 
   @if (summaryError()) {
-    <p class="error" role="alert" data-testid="portfolio-summary-error">{{ summaryError() }}</p>
+    <p class="notice notice-error" role="alert" data-testid="portfolio-summary-error">
+      {{ summaryError() }}
+    </p>
   } @else if (summary(); as s) {
     @if (s.partial) {
-      <p class="note" data-testid="portfolio-partial">
+      <p class="notice notice-warning" data-testid="portfolio-partial">
         Some holdings could not be priced, so the totals leave them out.
       </p>
     }
-    <dl class="cards" data-testid="portfolio-summary">
-      <div class="card">
-        <dt>Total value</dt>
-        <dd data-testid="portfolio-total">
+    <dl class="tiles" data-testid="portfolio-summary">
+      <div class="tile tile-primary">
+        <dt class="tile-label">Total value</dt>
+        <dd class="tile-value" data-testid="portfolio-total">
           {{ s.totalValue | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}
         </dd>
-        <span class="hint">Cash plus holdings</span>
+        <span class="tile-hint">Cash plus holdings</span>
       </div>
-      <div class="card">
-        <dt>Cash</dt>
-        <dd>{{ s.cashBalance | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}</dd>
+      <div class="tile">
+        <dt class="tile-label">Cash</dt>
+        <dd class="tile-value">
+          {{ s.cashBalance | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}
+        </dd>
+        <a class="tile-hint" routerLink="/bank">Add or withdraw</a>
       </div>
-      <div class="card">
-        <dt>Holdings value</dt>
-        <dd>{{ s.marketValue | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}</dd>
-        <span class="hint">Invested {{ s.costBasis | money: '1.2-2' : 'balance' }}</span>
+      <div class="tile">
+        <dt class="tile-label">Holdings value</dt>
+        <dd class="tile-value">
+          {{ s.marketValue | money: '1.2-2' : 'balance' }} {{ s.baseCurrency }}
+        </dd>
+        <span class="tile-hint">Invested {{ s.costBasis | money: '1.2-2' : 'balance' }}</span>
       </div>
-      <div class="card">
-        <dt>Unrealised P&amp;L</dt>
-        <dd [class]="direction(s.unrealisedPnl)" data-testid="portfolio-unrealised">
+      <div class="tile">
+        <dt class="tile-label">Unrealised P&amp;L</dt>
+        <dd
+          [class]="'tile-value ' + direction(s.unrealisedPnl)"
+          data-testid="portfolio-unrealised"
+        >
           {{ sign(s.unrealisedPnl) }}{{ abs(s.unrealisedPnl) | money: '1.2-2' : 'balance' }}
           {{ s.baseCurrency }}
         </dd>
-        <span class="hint">
+        <span class="tile-hint">
           {{ word(s.unrealisedPnl) }}
           @if (s.unrealisedPnlPercent != null) {
             ({{ sign(s.unrealisedPnlPercent) }}{{ abs(s.unrealisedPnlPercent) | money: '1.2-2' }}%)
           }
         </span>
       </div>
-      <div class="card">
-        <dt>Realised P&amp;L</dt>
-        <dd [class]="direction(s.realisedPnl)" data-testid="portfolio-realised">
+      <div class="tile">
+        <dt class="tile-label">Realised P&amp;L</dt>
+        <dd
+          [class]="'tile-value ' + direction(s.realisedPnl)"
+          data-testid="portfolio-realised"
+        >
           {{ sign(s.realisedPnl) }}{{ abs(s.realisedPnl) | money: '1.2-2' : 'balance' }}
           {{ s.baseCurrency }}
         </dd>
-        <span class="hint">{{ word(s.realisedPnl) }}, booked at each sale</span>
+        <span class="tile-hint">{{ word(s.realisedPnl) }}, booked at each sale</span>
       </div>
     </dl>
   } @else {
-    <p class="note">Loading totals…</p>
-  }
-
-  <h3>Holdings</h3>
-  @if (holdingsError()) {
-    <p class="error" role="alert" data-testid="portfolio-holdings-error">{{ holdingsError() }}</p>
-  } @else if (holdings() === null) {
-    <p class="note">Loading holdings…</p>
-  } @else if (sortedHoldings().length === 0) {
-    <p class="note" data-testid="portfolio-empty">
-      You do not hold anything yet. <a routerLink="/instruments">Browse the market</a> to place your
-      first order; filled buys appear here.
-    </p>
-  } @else {
-    <div class="table-scroll">
-      <table data-testid="portfolio-holdings">
-        <thead>
-          <tr>
-            <th [attr.aria-sort]="ariaSort('symbol')">
-              <button type="button" (click)="sort('symbol')">Symbol</button>
-            </th>
-            <th class="num">Quantity</th>
-            <th class="num">Average cost</th>
-            <th class="num">Invested</th>
-            <th class="num">Last price</th>
-            <th class="num" [attr.aria-sort]="ariaSort('value')">
-              <button type="button" (click)="sort('value')">Market value</button>
-            </th>
-            <th class="num" [attr.aria-sort]="ariaSort('pnl')">
-              <button type="button" (click)="sort('pnl')">Unrealised P&amp;L</button>
-            </th>
-            <th class="num">Total return</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (h of sortedHoldings(); track h.symbol) {
-            <tr data-testid="portfolio-row">
-              <td class="symbol">{{ h.symbol }}</td>
-              <td class="num">{{ h.quantity | money: '1.0-0' }}</td>
-              <td class="num">{{ h.averageCost | money: '1.2-2' }}</td>
-              <td class="num">{{ h.costBasis | money: '1.2-2' : 'balance' }} {{ h.currency }}</td>
-              <td class="num">
-                @if (h.lastPrice != null) {
-                  {{ h.lastPrice | money: '1.2-2' }}
-                } @else {
-                  <span class="muted">No price</span>
-                }
-                @if (h.stale) {
-                  <span class="stale" data-testid="portfolio-stale">
-                    @if (h.priceAsOf) {
-                      Stale, priced {{ h.priceAsOf | date: 'short' }}
-                    } @else {
-                      Not priced
-                    }
-                  </span>
-                }
-              </td>
-              <td class="num">
-                @if (h.marketValue != null) {
-                  {{ h.marketValue | money: '1.2-2' : 'balance' }} {{ h.currency }}
-                } @else {
-                  <span class="muted">–</span>
-                }
-              </td>
-              <td class="num" [class]="direction(h.unrealisedPnl)">
-                @if (h.unrealisedPnl != null) {
-                  {{ sign(h.unrealisedPnl) }}{{ abs(h.unrealisedPnl) | money: '1.2-2' : 'balance' }}
-                  {{ word(h.unrealisedPnl) }}
-                } @else {
-                  <span class="muted">–</span>
-                }
-              </td>
-              <td class="num" [class]="direction(h.unrealisedPnlPercent)">
-                @if (h.unrealisedPnlPercent != null) {
-                  {{ sign(h.unrealisedPnlPercent)
-                  }}{{ abs(h.unrealisedPnlPercent) | money: '1.2-2' }}%
-                } @else {
-                  <span class="muted">–</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
+    <div class="tiles" aria-hidden="true">
+      @for (i of [1, 2, 3, 4, 5]; track i) {
+        <div class="tile"><div class="skeleton"></div><div class="skeleton lg"></div></div>
+      }
     </div>
+    <span class="visually-hidden">Loading totals…</span>
   }
 
-  <h3>Profit and loss</h3>
-  @if (pnlError()) {
-    <p class="error" role="alert" data-testid="portfolio-pnl-error">{{ pnlError() }}</p>
-  } @else if (pnl(); as p) {
-    <dl class="cards" data-testid="portfolio-pnl">
-      <div class="card">
-        <dt>Realised</dt>
-        <dd [class]="direction(p.realisedPnl)">
-          {{ sign(p.realisedPnl) }}{{ abs(p.realisedPnl) | money: '1.2-2' : 'balance' }}
-          {{ p.baseCurrency }}
-        </dd>
-        <span class="hint">{{ word(p.realisedPnl) }}, locked in by sales</span>
+  <section class="card" aria-labelledby="holdings-title">
+    <header class="card-header">
+      <h2 id="holdings-title">Holdings</h2>
+      @if (sortedHoldings().length > 0) {
+        <span class="muted">{{ sortedHoldings().length }} positions</span>
+      }
+    </header>
+    @if (holdingsError()) {
+      <p class="state notice-error" role="alert" data-testid="portfolio-holdings-error">
+        {{ holdingsError() }}
+      </p>
+    } @else if (holdings() === null) {
+      <p class="state">Loading holdings…</p>
+    } @else if (sortedHoldings().length === 0) {
+      <p class="state" data-testid="portfolio-empty">
+        <strong>You do not hold anything yet</strong>
+        <a routerLink="/instruments">Browse the market</a> to place your first order; filled buys
+        appear here.
+      </p>
+    } @else {
+      <div class="table-wrap">
+        <table class="table" data-testid="portfolio-holdings">
+          <thead>
+            <tr>
+              <th [attr.aria-sort]="ariaSort('symbol')">
+                <button type="button" class="sort" (click)="sort('symbol')">Symbol</button>
+              </th>
+              <th class="num">Quantity</th>
+              <th class="num">Average cost</th>
+              <th class="num">Invested</th>
+              <th class="num">Last price</th>
+              <th class="num" [attr.aria-sort]="ariaSort('value')">
+                <button type="button" class="sort" (click)="sort('value')">Market value</button>
+              </th>
+              <th class="num" [attr.aria-sort]="ariaSort('pnl')">
+                <button type="button" class="sort" (click)="sort('pnl')">Unrealised P&amp;L</button>
+              </th>
+              <th class="num">Total return</th>
+              <th><span class="visually-hidden">Trade</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (h of sortedHoldings(); track h.symbol) {
+              <tr data-testid="portfolio-row">
+                <td>
+                  <a class="symbol symbol-link" [routerLink]="['/instruments', h.symbol]">{{
+                    h.symbol
+                  }}</a>
+                </td>
+                <td class="num">{{ h.quantity | money: '1.0-0' }}</td>
+                <td class="num">{{ h.averageCost | money: '1.2-2' }}</td>
+                <td class="num">
+                  {{ h.costBasis | money: '1.2-2' : 'balance' }}
+                  <span class="muted">{{ h.currency }}</span>
+                </td>
+                <td class="num">
+                  @if (h.lastPrice != null) {
+                    {{ h.lastPrice | money: '1.2-2' }}
+                  } @else {
+                    <span class="muted">No price</span>
+                  }
+                  @if (h.stale) {
+                    <span class="stale" data-testid="portfolio-stale">
+                      @if (h.priceAsOf) {
+                        Stale, priced {{ h.priceAsOf | date: 'short' }}
+                      } @else {
+                        Not priced
+                      }
+                    </span>
+                  }
+                </td>
+                <td class="num">
+                  @if (h.marketValue != null) {
+                    {{ h.marketValue | money: '1.2-2' : 'balance' }}
+                    <span class="muted">{{ h.currency }}</span>
+                  } @else {
+                    <span class="muted">–</span>
+                  }
+                </td>
+                <td class="num" [class]="'num ' + direction(h.unrealisedPnl)">
+                  @if (h.unrealisedPnl != null) {
+                    {{ sign(h.unrealisedPnl) }}{{ abs(h.unrealisedPnl) | money: '1.2-2' : 'balance' }}
+                    {{ word(h.unrealisedPnl) }}
+                  } @else {
+                    <span class="muted">–</span>
+                  }
+                </td>
+                <td class="num" [class]="'num ' + direction(h.unrealisedPnlPercent)">
+                  @if (h.unrealisedPnlPercent != null) {
+                    {{ sign(h.unrealisedPnlPercent)
+                    }}{{ abs(h.unrealisedPnlPercent) | money: '1.2-2' }}%
+                  } @else {
+                    <span class="muted">–</span>
+                  }
+                </td>
+                <td class="num">
+                  <a
+                    class="btn btn-secondary btn-sm"
+                    routerLink="/order"
+                    [queryParams]="{ symbol: h.symbol, side: 'SELL' }"
+                    [attr.aria-label]="'Sell ' + h.symbol"
+                    >Sell</a
+                  >
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
       </div>
-      <div class="card">
-        <dt>Unrealised</dt>
-        <dd [class]="direction(p.unrealisedPnl)">
-          {{ sign(p.unrealisedPnl) }}{{ abs(p.unrealisedPnl) | money: '1.2-2' : 'balance' }}
-          {{ p.baseCurrency }}
-        </dd>
-        <span class="hint">{{ word(p.unrealisedPnl) }} at today's prices</span>
-      </div>
-      <div class="card">
-        <dt>Total</dt>
-        <dd [class]="direction(p.totalPnl)" data-testid="portfolio-total-pnl">
-          {{ sign(p.totalPnl) }}{{ abs(p.totalPnl) | money: '1.2-2' : 'balance' }}
-          {{ p.baseCurrency }}
-        </dd>
-        <span class="hint">{{ word(p.totalPnl) }}</span>
-      </div>
-    </dl>
-  } @else {
-    <p class="note">Loading profit and loss…</p>
-  }
-</section>
+    }
+  </section>
+
+  <section class="card" aria-labelledby="pnl-title">
+    <header class="card-header">
+      <h2 id="pnl-title">Profit and loss</h2>
+      <span class="muted">All time</span>
+    </header>
+    @if (pnlError()) {
+      <p class="state notice-error" role="alert" data-testid="portfolio-pnl-error">
+        {{ pnlError() }}
+      </p>
+    } @else if (pnl(); as p) {
+      <dl class="pnl-grid" data-testid="portfolio-pnl">
+        <div>
+          <dt class="tile-label">Realised</dt>
+          <dd [class]="'tile-value ' + direction(p.realisedPnl)">
+            {{ sign(p.realisedPnl) }}{{ abs(p.realisedPnl) | money: '1.2-2' : 'balance' }}
+            {{ p.baseCurrency }}
+          </dd>
+          <span class="tile-hint">{{ word(p.realisedPnl) }}, locked in by sales</span>
+        </div>
+        <div>
+          <dt class="tile-label">Unrealised</dt>
+          <dd [class]="'tile-value ' + direction(p.unrealisedPnl)">
+            {{ sign(p.unrealisedPnl) }}{{ abs(p.unrealisedPnl) | money: '1.2-2' : 'balance' }}
+            {{ p.baseCurrency }}
+          </dd>
+          <span class="tile-hint">{{ word(p.unrealisedPnl) }} at today's prices</span>
+        </div>
+        <div>
+          <dt class="tile-label">Total</dt>
+          <dd [class]="'tile-value ' + direction(p.totalPnl)" data-testid="portfolio-total-pnl">
+            {{ sign(p.totalPnl) }}{{ abs(p.totalPnl) | money: '1.2-2' : 'balance' }}
+            {{ p.baseCurrency }}
+          </dd>
+          <span class="tile-hint">{{ word(p.totalPnl) }}</span>
+        </div>
+      </dl>
+    } @else {
+      <p class="state">Loading profit and loss…</p>
+    }
+  </section>
+</div>

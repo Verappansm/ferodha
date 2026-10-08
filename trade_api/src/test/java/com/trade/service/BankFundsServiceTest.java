@@ -1,7 +1,14 @@
 package com.trade.service;
 
 import com.trade.dto.BankFundsResponseDto;
+import com.trade.dto.BankTransactionDto;
+import com.trade.dto.BankTransactionsResponseDto;
 import com.trade.dto.BankTransferRequestDto;
+import com.trade.exception.InvalidParameterException;
+import com.trade.exception.UnsupportedCurrencyException;
+import com.trade.mapper.OpenBuyReservationRow;
+import java.time.OffsetDateTime;
+import java.util.List;
 import com.trade.exception.AccountNotActiveException;
 import com.trade.exception.BankTransferException;
 import com.trade.exception.ConcurrentUpdateException;
@@ -46,8 +53,13 @@ class BankFundsServiceTest {
     private final BankFundsService service = new BankFundsService(bank, accounts, new AccountAccessGuard());
 
     private static BankFundsRow row(String pinHash, String trading, String bankBalance, String status) {
+        return row(pinHash, trading, bankBalance, status, "USD");
+    }
+
+    private static BankFundsRow row(String pinHash, String trading, String bankBalance, String status,
+                                    String bankCurrency) {
         return new BankFundsRow(1L, ACCOUNT_UUID, "BANK-100001", pinHash, new BigDecimal(trading),
-                new BigDecimal(bankBalance), "USD", status, 7);
+                new BigDecimal(bankBalance), "USD", bankCurrency, status, 7);
     }
 
     private static BankTransferRequestDto request(String amount, String proof) {
@@ -138,5 +150,55 @@ class BankFundsServiceTest {
         when(bank.findAndLockByAccountId(1L)).thenReturn(row(STORED, "100.0000", "1000.0000", "SUSPENDED"));
         assertThrows(AccountNotActiveException.class, () -> service.deposit(1L, 1L, request("5.00", PROOF_OF_1234)));
         verify(bank, never()).debitBank(eq("BANK-100001"), any());
+    }
+
+    @Test
+    @DisplayName("Cash an open buy order may still spend cannot be withdrawn, and the balance says so")
+    void openBuysHoldCashBack() throws Exception {
+        // 5 units at 10.00 with a 0.1% fee: 50.05 held back from the 100.00 balance.
+        when(bank.openBuyReservations(ACCOUNT_UUID)).thenReturn(List.of(new OpenBuyReservationRow(
+                new BigDecimal("10.00"), new BigDecimal("5"), new BigDecimal("0.001"), "USD")));
+
+        assertEquals(new BigDecimal("49.95"), service.funds(1L, 1L).availableToWithdraw());
+        assertThrows(BankTransferException.class, () -> service.withdraw(1L, 1L, request("50.00", PROOF_OF_1234)));
+        verify(bank, never()).creditBank(anyString(), any());
+
+        service.withdraw(1L, 1L, request("49.95", PROOF_OF_1234));
+        verify(bank).creditBank("BANK-100001", new BigDecimal("49.9500"));
+    }
+
+    @Test
+    @DisplayName("An INR order on a USD account holds back its value converted at the fixed rate")
+    void openBuysInAnotherCurrency() throws Exception {
+        // 90 INR is 1 USD: 900 INR at a zero fee holds back 10.00 USD.
+        when(bank.openBuyReservations(ACCOUNT_UUID)).thenReturn(List.of(new OpenBuyReservationRow(
+                new BigDecimal("90.00"), new BigDecimal("10"), BigDecimal.ZERO, "INR")));
+
+        assertEquals(new BigDecimal("90.00"), service.funds(1L, 1L).availableToWithdraw());
+    }
+
+    @Test
+    @DisplayName("A bank held in another currency than the account is refused: money never moves one for one across currencies")
+    void currencyMismatch() {
+        when(bank.findAndLockByAccountId(1L)).thenReturn(row(STORED, "100.0000", "1000.0000", "ACTIVE", "INR"));
+        assertThrows(UnsupportedCurrencyException.class,
+                () -> service.deposit(1L, 1L, request("50.00", PROOF_OF_1234)));
+        verify(bank, never()).debitBank(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("Transactions are a page of the account's movements, only for its own customer")
+    void transactions() throws Exception {
+        BankTransactionDto movement = new BankTransactionDto(UUID.randomUUID(), "DEPOSIT",
+                new BigDecimal("50.0000"), "USD", OffsetDateTime.parse("2026-10-08T10:00:00Z"));
+        when(bank.findTransactions(1L, 20, 0)).thenReturn(List.of(movement));
+        when(bank.countTransactions(1L)).thenReturn(1L);
+
+        BankTransactionsResponseDto page = service.transactions(1L, 1L, 20, 0);
+        assertEquals(List.of(movement), page.transactions());
+        assertEquals(1L, page.total());
+
+        assertThrows(AccountNotActiveException.class, () -> service.transactions(1L, 2L, 20, 0));
+        assertThrows(InvalidParameterException.class, () -> service.transactions(1L, 1L, 0, 0));
     }
 }

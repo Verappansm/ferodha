@@ -123,6 +123,9 @@ public class SettlementService {
             BigDecimal newBalance = MoneyRounding.toMoneyScale(side == OrderSide.BUY
                     ? current.cashBalance().subtract(delta)
                     : current.cashBalance().add(delta));
+            if (newBalance.signum() < 0) {
+                throw new InsufficientFundsAtSettlementException(current.id());
+            }
 
             if (accountMapper.updateBalanceWithVersion(current.id(), newBalance, current.version()) == 1) {
                 return;

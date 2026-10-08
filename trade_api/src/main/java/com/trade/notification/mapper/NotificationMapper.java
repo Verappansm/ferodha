@@ -16,7 +16,7 @@ import java.util.UUID;
 public interface NotificationMapper {
 
     @Select("SELECT notification_id, account_id, event_id, event_type, order_id, symbol, " +
-            "resolved_channel, message, status, error_message, created_at, updated_at " +
+            "resolved_channel, message, status, error_message, created_at, updated_at, read_at " +
             "FROM notifications WHERE event_id = #{eventId}")
     @Results({
         @Result(property = "notificationId", column = "notification_id"),
@@ -30,12 +30,13 @@ public interface NotificationMapper {
         @Result(property = "status", column = "status"),
         @Result(property = "errorMessage", column = "error_message"),
         @Result(property = "createdAt", column = "created_at"),
-        @Result(property = "updatedAt", column = "updated_at")
+        @Result(property = "updatedAt", column = "updated_at"),
+        @Result(property = "readAt", column = "read_at")
     })
     Optional<Notification> findByEventId(@Param("eventId") UUID eventId);
 
     @Select("SELECT notification_id, account_id, event_id, event_type, order_id, symbol, " +
-            "resolved_channel, message, status, error_message, created_at, updated_at " +
+            "resolved_channel, message, status, error_message, created_at, updated_at, read_at " +
             "FROM notifications WHERE notification_id = #{notificationId}")
     @Results({
         @Result(property = "notificationId", column = "notification_id"),
@@ -49,12 +50,13 @@ public interface NotificationMapper {
         @Result(property = "status", column = "status"),
         @Result(property = "errorMessage", column = "error_message"),
         @Result(property = "createdAt", column = "created_at"),
-        @Result(property = "updatedAt", column = "updated_at")
+        @Result(property = "updatedAt", column = "updated_at"),
+        @Result(property = "readAt", column = "read_at")
     })
     Optional<Notification> findById(@Param("notificationId") UUID notificationId);
 
     @Select("SELECT notification_id, account_id, event_id, event_type, order_id, symbol, " +
-            "resolved_channel, message, status, error_message, created_at, updated_at " +
+            "resolved_channel, message, status, error_message, created_at, updated_at, read_at " +
             "FROM notifications WHERE account_id = #{accountId} ORDER BY created_at DESC LIMIT #{limit} OFFSET #{offset}")
     @Results({
         @Result(property = "notificationId", column = "notification_id"),
@@ -68,11 +70,44 @@ public interface NotificationMapper {
         @Result(property = "status", column = "status"),
         @Result(property = "errorMessage", column = "error_message"),
         @Result(property = "createdAt", column = "created_at"),
-        @Result(property = "updatedAt", column = "updated_at")
+        @Result(property = "updatedAt", column = "updated_at"),
+        @Result(property = "readAt", column = "read_at")
     })
     List<Notification> findByAccountIdOrderByCreatedDesc(@Param("accountId") Long accountId,
                                                           @Param("limit") int limit,
                                                           @Param("offset") int offset);
+
+    @Select("SELECT notification_id, account_id, event_id, event_type, order_id, symbol, " +
+            "resolved_channel, message, status, error_message, created_at, updated_at, read_at " +
+            "FROM notifications WHERE status = #{status}::notification_status_enum " +
+            "ORDER BY created_at LIMIT #{limit}")
+    @Results({
+        @Result(property = "notificationId", column = "notification_id"),
+        @Result(property = "accountId", column = "account_id"),
+        @Result(property = "eventId", column = "event_id"),
+        @Result(property = "eventType", column = "event_type"),
+        @Result(property = "orderId", column = "order_id"),
+        @Result(property = "symbol", column = "symbol"),
+        @Result(property = "resolvedChannel", column = "resolved_channel"),
+        @Result(property = "message", column = "message"),
+        @Result(property = "status", column = "status"),
+        @Result(property = "errorMessage", column = "error_message"),
+        @Result(property = "createdAt", column = "created_at"),
+        @Result(property = "updatedAt", column = "updated_at"),
+        @Result(property = "readAt", column = "read_at")
+    })
+    List<Notification> findByStatus(@Param("status") String status, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM notifications WHERE account_id = #{accountId} AND read_at IS NULL")
+    long countUnreadByAccountId(@Param("accountId") Long accountId);
+
+    // Only the owner's own, and only the first time: a repeat changes nothing.
+    @Update("UPDATE notifications SET read_at = now() WHERE notification_id = #{notificationId} " +
+            "AND account_id = #{accountId} AND read_at IS NULL")
+    int markRead(@Param("accountId") Long accountId, @Param("notificationId") UUID notificationId);
+
+    @Update("UPDATE notifications SET read_at = now() WHERE account_id = #{accountId} AND read_at IS NULL")
+    int markAllRead(@Param("accountId") Long accountId);
 
     @Select("SELECT COUNT(*) FROM notifications WHERE account_id = #{accountId}")
     long countByAccountId(@Param("accountId") Long accountId);

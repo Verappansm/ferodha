@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Session } from '../../core/session/session';
 
 /** Where a customer writes for help. Change here; the page and its test read it. */
 export const SUPPORT_EMAIL = 'support@ferodha.example';
@@ -12,54 +13,85 @@ export const SUPPORT_EMAIL = 'support@ferodha.example';
   selector: 'app-help',
   imports: [RouterLink],
   styles: `
-    .help {
-      max-width: 44rem;
-      margin: 2rem auto;
-      padding: 0 1rem;
-    }
-    h1 {
-      margin: 0 0 0.25rem;
-      color: var(--ink-900);
-    }
-    .lead {
-      color: var(--ink-700);
-      margin: 0 0 1.5rem;
+    .faq {
+      overflow: hidden;
     }
     details {
-      background: var(--surface);
-      border: 1px solid var(--ink-200);
-      border-radius: var(--radius);
-      padding: 0.75rem 1rem;
-      margin-bottom: 0.75rem;
+      border-bottom: 1px solid var(--ink-200);
+    }
+    details:last-of-type {
+      border-bottom: 0;
     }
     summary {
-      cursor: pointer;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
       font-weight: 600;
       color: var(--ink-900);
+      list-style: none;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
     }
-    summary:focus-visible,
-    a:focus-visible {
-      outline: 3px solid var(--brand-500);
-      outline-offset: 2px;
+    summary::-webkit-details-marker {
+      display: none;
+    }
+    summary::after {
+      flex: none;
+      width: 8px;
+      height: 8px;
+      content: '';
+      border-right: 2px solid var(--ink-500);
+      border-bottom: 2px solid var(--ink-500);
+      transform: rotate(45deg);
+      transition: transform 0.2s ease;
+    }
+    details[open] summary::after {
+      transform: rotate(-135deg);
+    }
+    summary:hover {
+      background: var(--row-hover);
     }
     details p,
     details ol {
+      margin: 0;
+      padding: 0 18px 16px;
       color: var(--ink-700);
-      margin: 0.75rem 0 0;
+    }
+    details ol {
+      padding-left: 38px;
+    }
+    details[open] > :not(summary) {
+      animation: notice-in 0.18s ease-out both;
     }
     .contact {
-      margin-top: 2rem;
-      padding: 1rem;
-      border-radius: var(--radius);
-      background: var(--brand-100);
+      display: grid;
+      gap: 6px;
+      padding: 18px 20px;
       color: var(--ink-900);
+      background: var(--brand-100);
+      border: 1px solid var(--brand-200);
+      border-radius: var(--radius);
+    }
+    .contact h2 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .contact p {
+      margin: 0;
     }
   `,
   template: `
-    <div class="help" data-testid="help">
-      <h1>Help and support</h1>
-      <p class="lead">Answers to the questions we hear most.</p>
+    <div class="page page-narrow" data-testid="help">
+      <header class="page-header">
+        <div>
+          <h1>Help and support</h1>
+          <p class="lead">Answers to the questions we hear most.</p>
+        </div>
+      </header>
 
+      <section class="card faq" aria-label="Common questions">
       <details data-testid="faq-order">
         <summary>Why is my order still in process?</summary>
         <p>
@@ -112,6 +144,8 @@ export const SUPPORT_EMAIL = 'support@ferodha.example';
         </p>
       </details>
 
+      </section>
+
       <section class="contact" aria-labelledby="contact-title">
         <h2 id="contact-title">Still stuck?</h2>
         <p>
@@ -119,11 +153,16 @@ export const SUPPORT_EMAIL = 'support@ferodha.example';
           page you were on and what you expected. Please don't send your password or PIN; we will
           never ask for them.
         </p>
-        <p><a routerLink="/login">Back to sign in</a></p>
+        @if (session.isSignedIn()) {
+          <p><a routerLink="/dashboard">Back to your dashboard</a></p>
+        } @else {
+          <p><a routerLink="/login">Back to sign in</a></p>
+        }
       </section>
     </div>
   `,
 })
 export class HelpComponent {
   protected readonly email = SUPPORT_EMAIL;
+  protected readonly session = inject(Session);
 }

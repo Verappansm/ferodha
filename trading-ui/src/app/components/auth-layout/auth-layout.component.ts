@@ -2,7 +2,8 @@ import { Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ThemeToggleComponent } from '../theme-toggle/theme-toggle.component';
 
-export type AuthTab = 'signin' | 'register';
+/** Which tab is underlined; 'status' (the account-request page) underlines neither. */
+export type AuthTab = 'signin' | 'register' | 'status';
 
 /**
  * The frame around the sign-in and create-account forms: the brand panel and

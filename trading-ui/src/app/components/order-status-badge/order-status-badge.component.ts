@@ -29,24 +29,34 @@ const BADGES: Record<BlotterStatus, { label: string; symbol: string; css: string
 @Component({
   selector: 'app-order-status-badge',
   template: `<span [class]="'badge badge-' + badge().css" data-testid="order-status-badge"
-    ><span aria-hidden="true">{{ badge().symbol }}</span> {{ badge().label }}</span
+    ><span class="sym" aria-hidden="true">{{ badge().symbol }}</span> {{ badge().label }}</span
   >`,
   styles: `
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      padding: 0.15rem 0.55rem;
-      border: 1px solid currentColor;
+      gap: 5px;
+      padding: 2px 9px;
       border-radius: 999px;
-      font-size: 0.75rem;
+      font-size: 11.5px;
       font-weight: 600;
+      line-height: 18px;
       letter-spacing: 0.02em;
       white-space: nowrap;
     }
     .badge-new {
       color: var(--info);
       background: var(--info-bg);
+    }
+    /* A working order's symbol turns, so "still in process" reads at a glance. */
+    .badge-new .sym {
+      display: inline-block;
+      animation: spin 1.6s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
     .badge-filled {
       color: var(--positive);
