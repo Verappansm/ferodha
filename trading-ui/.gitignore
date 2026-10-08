@@ -3,6 +3,7 @@
 /.angular/
 /out-tsc/
 /test-results/
+/demo-results/
 /playwright-report/
 /blob-report/
 
