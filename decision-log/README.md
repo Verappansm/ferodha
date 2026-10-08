@@ -26,7 +26,7 @@ add a new entry that supersedes it. Don't edit the old one.
 | [0003](0003-fills-priced-at-the-live-ticker.md) | Fills priced at the live ticker | Executor / pricing |
 | [0004](0004-notifications-fall-back-to-in-app-when-preferences-do-not-answer.md) | When preferences don't answer, notifications fall back to IN_APP | **What notifications does when preferences doesn't answer** |
 | [0005](0005-modules-talk-over-kafka-and-tokens-are-verified-locally.md) | Services talk over Kafka; trade_api verifies tokens locally | **How one module calls another** |
-| [0006](0006-failed-deliveries-dead-letter-in-the-executor-and-queue-in-notifications.md) | Failed alerts are recorded as QUEUED; the executor dead-letters | **What happens to an alert whose delivery fails** |
+| [0006](0006-failed-deliveries-dead-letter-in-the-executor-and-queue-in-notifications.md) | Failed alerts are recorded first and retried by a sender; the executor dead-letters | **What happens to an alert whose delivery fails** |
 | [0007](0007-users-table-owns-contact-details-read-on-demand.md) | `Users.email` owns contact details; read on demand, never copied | **Which module owns the customer's contact details** |
 | [0008](0008-admin-tokens-separated-by-audience-on-one-key.md) | Admin tokens separated by audience on one key | Auth |
 | [0009](0009-new-users-wait-for-admin-approval-before-an-account.md) | New users wait for admin approval before getting an account | Onboarding |
@@ -34,6 +34,7 @@ add a new entry that supersedes it. Don't edit the old one.
 | [0011](0011-client-side-password-digest.md) | The browser sends a salted SHA-256 digest of the password | Auth / UI |
 | [0012](0012-bank-linking-by-verified-email.md) | A trading account is linked to the bank account held under the user's verified email | Onboarding / bank |
 | [0013](0013-notifications-one-path-one-preference.md) | Notifications: one entry point, the Settings preferences, real SMTP, an in-app list | Notifications |
+| [0014](0014-modules-call-each-other-through-named-interfaces.md) | Modules inside trade_api call each other through a named interface, not over HTTP | **How one module calls another (in process)** |
 
 Related: [`story_docs/contract-breach.md`](../story_docs/contract-breach.md)
 records each departure from the Neueda contracts. The

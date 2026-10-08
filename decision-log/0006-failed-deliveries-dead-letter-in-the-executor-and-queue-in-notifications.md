@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | accepted, with a known gap |
+| Status | accepted, one gap still open (see update) |
 | Date | 2026-10-07 |
 | Decided by | the team |
 
@@ -54,3 +54,24 @@ capped at 5 s), then sends the message to `orders.DLT`.
   fix is to give this listener the same `DefaultErrorHandler` and DLT setup as
   the executor.
 - Nothing alerts on the size of the DLTs (OWASP review O-15).
+
+## Update 2026-10-08
+
+The first gap above is closed by [0013](0013-notifications-one-path-one-preference.md):
+the sender and the retry now exist (`notification/service/NotificationDispatcher.java`).
+
+- **IN_APP:** marked `SENT` as soon as it is stored.
+- **EMAIL:** mailed on a separate executor *after the transaction commits*,
+  with 5-second SMTP timeouts.
+  - A failure is set to `RETRYING` with the reason, and retried every minute.
+  - It becomes `FAILED` after an hour, or straight away when no server or
+    address exists.
+  - A row stuck in `QUEUED` for 2 minutes is picked up again.
+- The design chosen above ("record first, send separately") is what was
+  built. The outbox option is still rejected.
+
+**The second gap is still open.** `TradeEventNotificationListener` still
+catches every exception and commits the offset
+(`TradeEventNotificationListener.java:66-69`). A fill whose notification
+can't be recorded is lost, not dead-lettered, and nothing writes to
+`trade-events.DLT`. This is tracked as S-3 in `INTEGRATION-SEAMS.md`.

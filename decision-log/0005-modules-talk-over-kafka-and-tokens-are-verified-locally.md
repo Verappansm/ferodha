@@ -52,3 +52,10 @@ and idempotency checks as a customer's order (see 0001).
   customer and admin tokens), so the team keeps internal calls in process. The
   leftover `/notifications/internal/*` routes are the exception and are slated
   for removal (O-1).
+
+## Update 2026-10-08
+
+The leftover `/notifications/internal/*` routes are removed. Calls inside the
+process now go through named interfaces only; see
+[0014](0014-modules-call-each-other-through-named-interfaces.md). OWASP item
+O-1 is closed.

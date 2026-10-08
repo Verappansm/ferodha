@@ -54,3 +54,18 @@ Muting is respected even in the fallback paths. Falling back only ever widens
   `ChannelRoute` is thrown away. The fix is to pass the `ChannelRoute` into
   `recordNotification` and remove the second lookup. It is tracked as a
   follow-up.
+
+## Update 2026-10-08
+
+The "known gap" above is closed by [0013](0013-notifications-one-path-one-preference.md):
+
+- `NotificationService.notify(...)` is now the only entry point.
+- It uses the `ChannelRoute` from `resolveChannel` directly
+  (`NotificationService.java:93`), so the channel is decided once and the
+  address is no longer thrown away.
+- The separate `notification_preferences` table is dropped (changelog 022).
+  `NotificationPreferenceService` is now a thin layer over `PreferencesService`
+  and keeps no data of its own.
+
+The fallback rules in this entry are unchanged. The full seam is recorded in
+[`INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md#2-seam-a-notifications--preferences).

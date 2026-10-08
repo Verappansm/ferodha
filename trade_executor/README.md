@@ -21,3 +21,13 @@ partial fills and TTL expiry of resting orders.
   `design/envelope-contract.md`.
 - The `market-sim` work (LEAP-003, LEAP-004) is in
   `story_docs/extension-stories.md`.
+
+## Kafka consumer group
+
+| Topic | Group ID |
+|---|---|
+| `orders` | `trade-executor` |
+
+The ID is set in `src/main/resources/application.yml` and in
+`OrderPlacedListener`, and no other module uses it. See
+[`../INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md#4-consumer-groups).
