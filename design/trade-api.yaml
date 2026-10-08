@@ -375,6 +375,32 @@ paths:
         '403': { $ref: '#/components/responses/AccountNotActive' }
         '404': { $ref: '#/components/responses/AccountNotFound' }
 
+  /api/v1/accounts/{id}/bank-funds/transactions:
+    get:
+      tags: [Accounts]
+      operationId: getBankTransactions
+      summary: The account's cash movements, newest first (LEAP-019)
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 100 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, format: int32, default: 0, minimum: 0 }
+      responses:
+        '200':
+          description: A page of movements.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankTransactionsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '422': { $ref: '#/components/responses/InvalidInput' }
+
   /api/v1/accounts/{id}/bank-funds/deposits:
     post:
       tags: [Accounts]
@@ -475,8 +501,9 @@ paths:
       operationId: getInstruments
       summary: Get tradable instruments
       description: |
-        Returns a paginated list of all tradable instruments. Filtering by exchange, sector, and
-        type is performed on the client side.
+        A page of the tradable instruments, by ticker (LEAP-015). Every filter is optional and
+        they combine; `search` matches part of the ticker or the name, case-insensitively. A
+        delisted instrument never appears.
       parameters:
         - name: pageSize
           in: query
@@ -504,6 +531,24 @@ paths:
           schema:
             type: string
             maxLength: 100
+        - name: exchange
+          in: query
+          required: false
+          description: Only this exchange (one of `GET /api/v1/instruments/filters`).
+          schema:
+            type: string
+        - name: sector
+          in: query
+          required: false
+          description: Only this sector.
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          description: Only this instrument type.
+          schema:
+            $ref: '#/components/schemas/InstrumentType'
       responses:
         '200':
           description: Paginated list of tradable instruments.
@@ -515,6 +560,22 @@ paths:
           $ref: '#/components/responses/Unauthorised'
         '422':
           $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/instruments/filters:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentFilters
+      summary: The exchanges, sectors and types of the tradable instruments
+      description: The choices for the market list's filters, from the data rather than a constant.
+      responses:
+        '200':
+          description: The distinct values, each sorted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentFilters'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
 
   /api/v1/instruments/prices:
     get:
@@ -961,14 +1022,62 @@ components:
     BankFundsResponse:
       type: object
       additionalProperties: false
-      required: [accountId, bankAccountNumber, tradingBalance, bankBalance, currency, asOf]
+      required: [accountId, bankAccountNumber, tradingBalance, bankBalance, availableToWithdraw, currency, asOf]
       properties:
         accountId: { type: integer, format: int64 }
         bankAccountNumber: { type: string }
         tradingBalance: { type: number, format: double }
         bankBalance: { type: number, format: double }
-        currency: { type: string }
+        availableToWithdraw:
+          type: number
+          format: double
+          description: >-
+            The trading balance less what open buy orders may still spend (unfilled quantity at
+            the limit price, plus the fee). Never below zero.
+        currency:
+          type: string
+          description: The account's currency, which is also the linked bank account's.
         asOf: { type: string, format: date-time }
+
+    BankTransaction:
+      type: object
+      additionalProperties: false
+      required: [transactionId, type, amount, currency, at]
+      properties:
+        transactionId: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, BUY_SETTLEMENT, SELL_SETTLEMENT, DIVIDEND]
+        amount: { type: number, format: double }
+        currency: { type: string }
+        at: { type: string, format: date-time }
+
+    BankTransactionsResponse:
+      type: object
+      additionalProperties: false
+      required: [transactions, total, limit, offset]
+      properties:
+        transactions:
+          type: array
+          items: { $ref: '#/components/schemas/BankTransaction' }
+        total: { type: integer, format: int64 }
+        limit: { type: integer, format: int32 }
+        offset: { type: integer, format: int32 }
+
+    InstrumentFilters:
+      type: object
+      additionalProperties: false
+      required: [exchanges, sectors, types]
+      properties:
+        exchanges:
+          type: array
+          items: { type: string }
+        sectors:
+          type: array
+          items: { type: string }
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/InstrumentType' }
 
     BalanceResponse:
       type: object

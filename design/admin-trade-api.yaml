@@ -671,7 +671,6 @@ components:
     ApproveAccountRequest:
       type: object
       additionalProperties: false
-      required: [currency]
       properties:
         bankAccountNumber:
           type: string
@@ -685,6 +684,9 @@ components:
           type: string
           pattern: '^[A-Z]{3}$'
           example: USD
+          description: >-
+            Optional. The account opens in the currency of the bank account it is linked to, so
+            money moves between them one for one. If given, it must be that currency.
         note:
           type: string
           maxLength: 500
