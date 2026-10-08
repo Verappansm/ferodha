@@ -21,6 +21,10 @@ public record WatchlistItemResponse(
         int displayOrder,
         List<IntradayPricePoint> intradayData,
         BigDecimal alertPrice,
-        String alertDirection
+        String alertDirection,
+        /** ACTIVE, TRIGGERED or CANCELLED; null when no alert was ever set (LEAP-007). */
+        String alertStatus,
+        OffsetDateTime alertTriggeredAt,
+        BigDecimal alertTriggeredPrice
 ) {
 }

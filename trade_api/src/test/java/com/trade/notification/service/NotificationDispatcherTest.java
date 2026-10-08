@@ -36,7 +36,7 @@ class NotificationDispatcherTest {
     private final NotificationRepository repository = mock(NotificationRepository.class);
     private final NotificationMailer mailer = mock(NotificationMailer.class);
     private final PreferencesService preferences = mock(PreferencesService.class);
-    private final NotificationDispatcher dispatcher = new NotificationDispatcher(repository, mailer, preferences);
+    private final NotificationDispatcher dispatcher = new NotificationDispatcher(repository, mailer, preferences, Runnable::run);
 
     @BeforeEach
     void emailOnFile() {
@@ -129,5 +129,21 @@ class NotificationDispatcherTest {
         assertEquals(NotificationStatus.SENT, fresh.getStatus());
         assertEquals(NotificationStatus.FAILED, stale.getStatus());
         verify(mailer).send(anyString(), anyString(), anyString());   // only the fresh one
+    }
+
+    @Test
+    @DisplayName("an email is sent on the mail executor, never on the caller's thread")
+    void emailGoesThroughTheExecutor() {
+        java.util.List<Runnable> queued = new java.util.ArrayList<>();
+        NotificationDispatcher deferred = new NotificationDispatcher(repository, mailer, preferences, queued::add);
+        Notification n = notification(NotificationChannel.EMAIL, Instant.now());
+
+        deferred.deliver(n);
+
+        verify(mailer, never()).send(anyString(), anyString(), anyString());
+        assertEquals(1, queued.size());
+        queued.get(0).run();
+        verify(mailer).send("priya@example.com", "Ferodha: your order was filled", n.getMessage());
+        assertEquals(NotificationStatus.SENT, n.getStatus());
     }
 }

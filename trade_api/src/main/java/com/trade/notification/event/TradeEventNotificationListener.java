@@ -2,7 +2,6 @@ package com.trade.notification.event;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.trade.notification.dto.RecordNotificationRequestDto;
 import com.trade.notification.enums.NotificationEventType;
 import com.trade.notification.service.NotificationService;
 import org.slf4j.Logger;

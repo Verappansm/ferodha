@@ -56,13 +56,13 @@ public class OrderController {
         OrderPlacedPayload orderPlacedPayload = new OrderPlacedPayload(
                 placed.orderId(),
                 accountId,
-                request.symbol(),
+                placed.symbol(),
                 request.side(),
                 request.quantity(),
                 request.price(),
                 request.idempotencyKey(),
                 Instant.now(),
-                orderService.instrumentToAccountRates(request.symbol()));
+                orderService.instrumentToAccountRates(placed.symbol()));
         orderPlacedPublisher.publish(orderPlacedPayload);
 
         // returns order with "NEW" here as per story 3

@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.Properties;
 
@@ -16,6 +17,22 @@ import java.util.Properties;
 public class NotificationMailConfig {
 
     private static final int CONNECT_TIMEOUT_MS = 5_000;
+
+    // Mail goes out on its own small pool, so an order cancel or a price alert never waits on
+    // the mail server. A full queue drops the attempt; the row stays QUEUED and the dispatcher's
+    // retry sweep sends it.
+    @Bean(name = "notificationMailExecutor")
+    public ThreadPoolTaskExecutor notificationMailExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(500);
+        executor.setThreadNamePrefix("notification-mail-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        return executor;
+    }
 
     @Bean(name = "notificationMailSender")
     @ConditionalOnExpression("!'${notification.mail.host:}'.isBlank()")

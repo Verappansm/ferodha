@@ -62,9 +62,11 @@ public class OrderService {
     public OrderResponseDto placeOrder(PlaceOrderRequestDto request, Long callerAccountId) throws DomainException {
         accessGuard.requireTokenMatches(request.accountId(), callerAccountId);
 
+        // The same symbol however it was typed, as the review step reads it ("aapl " is AAPL).
+        String symbol = request.symbol().trim().toUpperCase(java.util.Locale.ROOT);
         Order order = new Order();
         order.setAccountId(request.accountId());
-        order.setSymbol(request.symbol());
+        order.setSymbol(symbol);
         order.setSide(request.side());
         order.setQuantity(request.quantity());
         order.setPrice(request.price());
@@ -75,9 +77,9 @@ public class OrderService {
         AccountRow account = accountMapper.findById(request.accountId())
                 .orElseThrow(() -> new IllegalStateException(
                         "Account " + request.accountId() + " passed evaluation but is missing at write time"));
-        InstrumentRow instrument = instrumentMapper.findBySymbol(request.symbol())
+        InstrumentRow instrument = instrumentMapper.findBySymbol(symbol)
                 .orElseThrow(() -> new IllegalStateException(
-                        "Instrument " + request.symbol() + " passed evaluation but is missing at write time"));
+                        "Instrument " + symbol + " passed evaluation but is missing at write time"));
         // Both sides: a SELL needs the rate too, to settle its proceeds, and
         // the executor only has the rates this service puts on ORDER_PLACED.
         requireConvertible(instrument, account);

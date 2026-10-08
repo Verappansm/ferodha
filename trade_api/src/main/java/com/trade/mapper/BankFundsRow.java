@@ -12,6 +12,7 @@ public record BankFundsRow(
         BigDecimal tradingBalance,
         BigDecimal bankBalance,
         String currency,
+        String bankCurrency,
         String status,
         Integer version
 ) {

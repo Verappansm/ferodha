@@ -42,6 +42,7 @@
     <include file="db/changelog/018-notifications-cleanup.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/022-notifications-unify.sql" relativeToChangelogFile="false"/>
     <include file="db/changelog/023-notification-read-and-legacy.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/024-bank-currency-alert-state-instrument-search.sql" relativeToChangelogFile="false"/>
 
 
 </databaseChangeLog>

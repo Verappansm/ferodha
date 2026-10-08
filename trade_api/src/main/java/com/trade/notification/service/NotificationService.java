@@ -5,8 +5,6 @@ import com.trade.notification.domain.NotificationRepository;
 import com.trade.notification.dto.NotificationResponseDto;
 import com.trade.notification.enums.NotificationChannel;
 import com.trade.notification.enums.NotificationEventType;
-import com.trade.notification.enums.NotificationStatus;
-import com.trade.notification.exception.PreferencesNotFoundException;
 import com.trade.preferences.PreferenceDtos.AlertType;
 import com.trade.preferences.PreferenceDtos.ChannelRoute;
 import com.trade.preferences.PreferencesService;
@@ -14,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -115,20 +112,6 @@ public class NotificationService {
         }
     }
 
-    /**
-     * Records (without delivering) a notification for an order event, on the channel in the
-     * customer's settings. Idempotent on eventId: a repeat raises "already recorded".
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public NotificationResponseDto recordNotification(Long accountId, UUID eventId,
-                                                      NotificationEventType eventType,
-                                                      String orderId, String symbol)
-            throws PreferencesNotFoundException {
-        ChannelRoute route = preferences.resolveChannel(accountId, AlertType.valueOf(eventType.name()));
-        NotificationChannel channel = NotificationChannel.valueOf(route.channel().name());
-        return toDto(store(accountId, eventId, eventType, orderId, symbol, channel, null));
-    }
-
     private Notification store(Long accountId, UUID eventId, NotificationEventType eventType,
                                String orderId, String symbol, NotificationChannel channel, String message) {
         if (repository.findByEventId(eventId).isPresent()) {
@@ -143,28 +126,6 @@ public class NotificationService {
             throw new IllegalArgumentException("Notification already recorded for this event");
         }
         return notification;
-    }
-
-    /**
-     * Update notification status (sent, failed, retrying).
-     */
-    @Transactional
-    public NotificationResponseDto updateNotificationStatus(UUID notificationId, NotificationStatus status, String errorMessage) {
-        Notification notification = repository.findById(notificationId)
-                .orElseThrow(() -> new IllegalArgumentException("Notification not found"));
-        notification.setStatus(status);
-        notification.setErrorMessage(errorMessage);
-        notification.setUpdatedAt(Instant.now());
-        repository.update(notification);
-        return toDto(notification);
-    }
-
-    /**
-     * A customer's own watchlist alert, for their own account.
-     */
-    public NotificationResponseDto sendWatchlistAlert(Long accountId, String symbol, String message) throws PreferencesNotFoundException {
-        return notify(accountId, UUID.randomUUID(), NotificationEventType.PRICE_ALERT, null, symbol, message)
-                .orElseThrow(() -> new PreferencesNotFoundException("Price alerts are switched off for account " + accountId));
     }
 
     private NotificationResponseDto toDto(Notification notification) {

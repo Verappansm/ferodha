@@ -301,18 +301,6 @@ class OrderLogicTest {
                         // Not used in these tests
                         return 0;
                     }
-
-                    @Override
-                    public List<Instrument> findTradableBySearch(String searchPattern, int limit, long offset) {
-                        // Not used in these tests
-                        return List.of();
-                    }
-
-                    @Override
-                    public long countTradableBySearch(String searchPattern) {
-                        // Not used in these tests
-                        return 0;
-                    }
                 },
                 (accountId, symbol) -> Optional.ofNullable(positionsByKey.get(accountId + ":" + symbol)),
                 new IdempotencyKeyStore() {

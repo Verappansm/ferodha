@@ -21,7 +21,7 @@ Notifications are:
 com.trade.notification/
 ├── controller/
 │   ├── NotificationPreferenceController     # GET/PATCH preferences
-│   └── NotificationController               # GET/POST notifications, internal endpoints
+│   └── NotificationController               # GET notifications, read state (no write routes)
 ├── service/
 │   ├── NotificationPreferenceService        # Preference management
 │   └── NotificationService                  # Notification business logic
@@ -60,12 +60,9 @@ com.trade.notification/
 - `PATCH /api/v1/notification-preferences` - Update channel preference
 - `GET /api/v1/notifications` - Paginated notification history (owner-only)
 - `GET /api/v1/notifications/{notificationId}` - Single notification (owner-only)
-- `POST /api/v1/notifications/watchlist/alert` - Trigger watchlist alert
 
 #### Internal Routes (Kafka consumer)
 
-- `POST /api/v1/notifications/internal/record` - Record notification from trade event
-- `PATCH /api/v1/notifications/internal/{notificationId}/status` - Update delivery status
 
 ### Database Schema
 
@@ -111,7 +108,7 @@ CREATE TABLE notifications (
 
 ### From Watchlist Feature
 
-1. **Watchlist component** calls `POST /api/v1/notifications/watchlist/alert`
+1. **PriceAlertEvaluator** (the module's `market-data` consumer) moves a crossed alert to TRIGGERED and calls `NotificationService.notify` in-process
 2. **Notification service** resolves channel from preferences
 3. **Record notification** in database with status `QUEUED`
 4. **Async sender** delivers (future implementation)

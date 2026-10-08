@@ -9,33 +9,44 @@ import com.trade.preferences.PreferenceDtos.AlertType;
 import com.trade.preferences.PreferencesService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 // Delivers a recorded notification and keeps its status honest.
 //   IN_APP: the stored row is the delivery (the customer reads it in the app), so it is SENT at once.
-//   EMAIL : mailed to the address on file. A failure leaves it RETRYING with the reason, tried
-//           again every minute, and FAILED once it is older than MAX_AGE.
+//   EMAIL : mailed to the address on file, on the mail executor and only after the transaction
+//           that stored it commits, so no request or consumer ever waits on the mail server and
+//           no mail goes out for a row that was rolled back. A failure leaves it RETRYING with
+//           the reason, tried again every minute, and FAILED once it is older than MAX_AGE. A
+//           row still QUEUED after STUCK_AFTER (the process stopped before sending) is retried.
 @Component
 public class NotificationDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationDispatcher.class);
     static final Duration MAX_AGE = Duration.ofHours(1);
+    static final Duration STUCK_AFTER = Duration.ofMinutes(2);
     private static final int BATCH = 50;
 
     private final NotificationRepository repository;
     private final NotificationMailer mailer;
     private final PreferencesService preferences;
+    private final Executor mailExecutor;
 
     public NotificationDispatcher(NotificationRepository repository, NotificationMailer mailer,
-                                  PreferencesService preferences) {
+                                  PreferencesService preferences,
+                                  @Qualifier("notificationMailExecutor") Executor mailExecutor) {
         this.repository = repository;
         this.mailer = mailer;
         this.preferences = preferences;
+        this.mailExecutor = mailExecutor;
     }
 
     public void deliver(Notification notification) {
@@ -43,13 +54,35 @@ public class NotificationDispatcher {
             finish(notification, NotificationStatus.SENT, null);
             return;
         }
-        sendEmail(notification);
+        Runnable send = () -> {
+            try {
+                sendEmail(notification);
+            } catch (RuntimeException e) {
+                log.warn("Mail for notification {} could not be attempted", notification.getNotificationId(), e);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    mailExecutor.execute(send);
+                }
+            });
+        } else {
+            mailExecutor.execute(send);
+        }
     }
 
     // Retries the mail that did not go out the first time.
     @Scheduled(fixedDelayString = "${notification.retry-interval-ms:60000}", initialDelay = 60_000)
     public void retryPending() {
-        List<Notification> pending = repository.findByStatus(NotificationStatus.RETRYING, BATCH);
+        List<Notification> pending = new java.util.ArrayList<>(
+                repository.findByStatus(NotificationStatus.RETRYING, BATCH));
+        Instant stuckBefore = Instant.now().minus(STUCK_AFTER);
+        repository.findByStatus(NotificationStatus.QUEUED, BATCH).stream()
+                .filter(n -> n.getResolvedChannel() == NotificationChannel.EMAIL)
+                .filter(n -> n.getCreatedAt() != null && n.getCreatedAt().isBefore(stuckBefore))
+                .forEach(pending::add);
         for (Notification notification : pending) {
             try {
                 if (notification.getCreatedAt().isBefore(Instant.now().minus(MAX_AGE))) {

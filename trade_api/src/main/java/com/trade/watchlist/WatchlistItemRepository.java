@@ -15,5 +15,9 @@ public interface WatchlistItemRepository {
     int getMaxDisplayOrder(UUID watchlistId);
     void updateDisplayOrder(UUID itemId, int displayOrder);
     void updateDisplayOrders(UUID watchlistId, java.util.Map<UUID, Integer> itemOrderMap);
-    void updateAlert(UUID itemId, BigDecimal alertPrice, String alertDirection);
+    /** Sets the threshold and arms the alert (ACTIVE). */
+    void armAlert(UUID itemId, BigDecimal alertPrice, String alertDirection);
+
+    /** Stops the alert for good; its threshold stays readable. */
+    void cancelAlert(UUID itemId);
 }

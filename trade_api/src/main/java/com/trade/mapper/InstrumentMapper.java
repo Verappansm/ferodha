@@ -18,7 +18,17 @@ public interface InstrumentMapper {
 
     long countTradable();
 
-    List<InstrumentRow> findTradableBySearch(@Param("searchPattern") String searchPattern, @Param("limit") int limit, @Param("offset") long offset);
+    /** Every argument but limit and offset is optional (null means no filter). */
+    List<InstrumentRow> searchTradable(@Param("query") String likePattern, @Param("exchange") String exchange,
+                                       @Param("sector") String sector, @Param("type") String type,
+                                       @Param("limit") int limit, @Param("offset") long offset);
 
-    long countTradableBySearch(@Param("searchPattern") String searchPattern);
+    long countSearchTradable(@Param("query") String likePattern, @Param("exchange") String exchange,
+                             @Param("sector") String sector, @Param("type") String type);
+
+    List<String> distinctTradableExchanges();
+
+    List<String> distinctTradableSectors();
+
+    List<String> distinctTradableTypes();
 }

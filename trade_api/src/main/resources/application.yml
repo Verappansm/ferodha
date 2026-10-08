@@ -83,6 +83,14 @@ notification:
     password: ${SMTP_PASSWORD:}
     from: ${MAIL_FROM:Ferodha <no-reply@ferodha.local>}
 
+# LEAP-007: price alerts are checked against each market-data quote by the watchlist
+# module's own consumer group (a quote older than this is not acted on).
+watchlist:
+  alerts:
+    listen: ${WATCHLIST_ALERTS_LISTEN:true}
+    group-id: watchlist-alerts
+    max-quote-age-seconds: ${WATCHLIST_ALERT_MAX_QUOTE_AGE_SECONDS:900}
+
 strategy:
   listen: ${STRATEGY_LISTEN:true}
   group-id: strategy-service

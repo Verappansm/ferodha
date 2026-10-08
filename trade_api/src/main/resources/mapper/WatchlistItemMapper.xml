@@ -11,25 +11,30 @@
             <arg column="added_at" javaType="java.time.OffsetDateTime"/>
             <arg column="alert_price" javaType="java.math.BigDecimal"/>
             <arg column="alert_direction" javaType="java.lang.String"/>
+            <arg column="alert_status" javaType="java.lang.String"/>
+            <arg column="alert_triggered_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="alert_triggered_price" javaType="java.math.BigDecimal"/>
         </constructor>
     </resultMap>
 
     <select id="findById" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction,
+               alert_status, alert_triggered_at, alert_triggered_price
         FROM Watchlist_Items
         WHERE item_id = #{itemId}
     </select>
 
     <select id="findByWatchlistId" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction,
+               alert_status, alert_triggered_at, alert_triggered_price
         FROM Watchlist_Items
         WHERE watchlist_id = #{watchlistId}
         ORDER BY display_order ASC
     </select>
 
     <insert id="insert">
-        INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction)
-        VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt}, #{alertPrice}, #{alertDirection})
+        INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at)
+        VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt})
     </insert>
 
     <delete id="deleteById">
@@ -38,7 +43,8 @@
     </delete>
 
     <select id="findByWatchlistIdAndInstrumentId" resultMap="watchlistItemRow">
-        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction,
+               alert_status, alert_triggered_at, alert_triggered_price
         FROM Watchlist_Items
         WHERE watchlist_id = #{watchlistId} AND instrument_id = #{instrumentId}
     </select>
@@ -60,10 +66,48 @@
         WHERE item_id = #{itemId}
     </update>
 
-    <update id="updateAlert">
+    <!-- LEAP-007: setting or changing an alert arms it: ACTIVE, with a new armed_at. -->
+    <update id="armAlert">
         UPDATE Watchlist_Items
-        SET alert_price = #{alertPrice}, alert_direction = #{alertDirection}
+        SET alert_price = #{alertPrice}, alert_direction = #{alertDirection},
+            alert_status = 'ACTIVE', alert_armed_at = clock_timestamp(),
+            alert_triggered_at = NULL, alert_triggered_price = NULL
         WHERE item_id = #{itemId}
+    </update>
+
+    <!-- The threshold stays readable; a CANCELLED alert is never evaluated again. -->
+    <update id="cancelAlert">
+        UPDATE Watchlist_Items
+        SET alert_status = 'CANCELLED'
+        WHERE item_id = #{itemId} AND alert_status IS NOT NULL
+    </update>
+
+    <resultMap id="activeAlertRow" type="com.trade.mapper.ActiveAlertRow">
+        <constructor>
+            <arg column="item_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="user_id" javaType="java.util.UUID" typeHandler="com.trade.mapper.UuidTypeHandler"/>
+            <arg column="ticker" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="alert_price" javaType="java.math.BigDecimal"/>
+            <arg column="alert_direction" javaType="java.lang.String"/>
+            <arg column="alert_armed_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <!-- On the market-data hot path: one indexed lookup per quote (Liquibase 024). -->
+    <select id="findActiveAlertsForSymbol" resultMap="activeAlertRow">
+        SELECT wi.item_id, w.user_id, i.ticker, i.name, wi.alert_price, wi.alert_direction, wi.alert_armed_at
+        FROM Watchlist_Items wi
+        JOIN Watchlist w ON w.watchlist_id = wi.watchlist_id
+        JOIN Instruments i ON i.instrument_id = wi.instrument_id
+        WHERE i.ticker = #{symbol} AND wi.alert_status = 'ACTIVE'
+    </select>
+
+    <!-- Guarded: two quotes arriving together, or a change made meanwhile, cannot fire it twice. -->
+    <update id="markTriggered">
+        UPDATE Watchlist_Items
+        SET alert_status = 'TRIGGERED', alert_triggered_at = now(), alert_triggered_price = #{price}
+        WHERE item_id = #{itemId} AND alert_status = 'ACTIVE' AND alert_armed_at = #{armedAt}
     </update>
 
     <update id="updateDisplayOrders">

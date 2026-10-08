@@ -11,6 +11,9 @@ public record WatchlistItemRow(
         Integer displayOrder,
         OffsetDateTime addedAt,
         BigDecimal alertPrice,
-        String alertDirection
+        String alertDirection,
+        String alertStatus,
+        OffsetDateTime alertTriggeredAt,
+        BigDecimal alertTriggeredPrice
 ) {
 }

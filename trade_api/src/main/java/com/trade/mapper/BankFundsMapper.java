@@ -1,5 +1,7 @@
 package com.trade.mapper;
 
+import com.trade.dto.BankTransactionDto;
+import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -21,4 +23,12 @@ public interface BankFundsMapper {
                           @Param("type") String type,
                           @Param("amount") BigDecimal amount,
                           @Param("idempotencyKey") UUID idempotencyKey);
+
+    /** Open (NEW or PARTIALLY_FILLED) buy orders of the account, for the cash they hold back. */
+    List<OpenBuyReservationRow> openBuyReservations(@Param("accountUuid") UUID accountUuid);
+
+    List<BankTransactionDto> findTransactions(@Param("accountId") long accountId,
+                                              @Param("limit") int limit, @Param("offset") int offset);
+
+    long countTransactions(@Param("accountId") long accountId);
 }

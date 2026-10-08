@@ -23,7 +23,9 @@ public final class AdminDtos {
             // Optional: the account is the one the bank holds under the applicant's
             // email. If an operator names one, it has to be that one.
             @Size(min = 4, max = 50) String bankAccountNumber,
-            @NotBlank @Pattern(regexp = "^[A-Z]{3}$") String currency,
+            // Optional: the account opens in the bank account's currency. If an operator
+            // names one, it has to be that one.
+            @Pattern(regexp = "^[A-Z]{3}$") String currency,
             @Size(max = 500) String note) {
     }
 
