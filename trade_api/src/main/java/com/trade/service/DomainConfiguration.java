@@ -8,6 +8,7 @@ import com.trade.domain.PositionRepository;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+
 // OrderLogic is plain Sprint 5 domain code and deliberately carries no
 // Spring annotation of its own - the domain package must stay free of any
 // framework type. This is the one place it is wired into the application

@@ -16,12 +16,19 @@ class AuthLayoutStub {
 describe('RegistrationComponent', () => {
   let fixture: ComponentFixture<RegistrationComponent>;
   let register: ReturnType<typeof vi.fn>;
+  let verifyEmail: ReturnType<typeof vi.fn>;
+  let resendCode: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     register = vi.fn().mockReturnValue(of({}));
+    verifyEmail = vi.fn().mockReturnValue(of(undefined));
+    resendCode = vi.fn().mockReturnValue(of(undefined));
     await TestBed.configureTestingModule({
       imports: [RegistrationComponent],
-      providers: [provideRouter([]), { provide: AuthApi, useValue: { register } }],
+      providers: [
+        provideRouter([]),
+        { provide: AuthApi, useValue: { register, verifyEmail, resendCode } },
+      ],
     })
       .overrideComponent(RegistrationComponent, {
         remove: { imports: [AuthLayoutComponent] },
@@ -56,7 +63,14 @@ describe('RegistrationComponent', () => {
     fixture.detectChanges();
   }
 
-  it('a valid registration shows the awaiting-approval message', async () => {
+  async function enterCode(code: string): Promise<void> {
+    type('register-code', code);
+    el<HTMLButtonElement>('register-verify-submit')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('a valid registration asks for the emailed code before anything else', async () => {
     fill();
     await submit();
 
@@ -65,8 +79,43 @@ describe('RegistrationComponent', () => {
       'Priya.Menon@Example.com',
       'a long enough passphrase',
     );
+    expect(el('register-verify')?.textContent).toContain('priya.menon@example.com');
+    expect(el('register-success')).toBeNull();
+  });
+
+  it('the right code verifies the email, then shows the awaiting-approval message', async () => {
+    fill();
+    await submit();
+    await enterCode('123456');
+
+    expect(verifyEmail).toHaveBeenCalledWith('priya.menon@example.com', '123456');
     expect(el('register-success')?.textContent).toContain('priya.menon@example.com');
-    expect(el('register-success')?.textContent).toContain('under review');
+    expect(el('register-success')?.textContent).toContain('operations');
+  });
+
+  it('a malformed code is refused locally; a wrong one says so and stays on the step', async () => {
+    fill();
+    await submit();
+
+    await enterCode('12ab');
+    expect(verifyEmail).not.toHaveBeenCalled();
+    expect(el('register-code-error')?.textContent).toContain('6-digit');
+
+    verifyEmail.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 422 })));
+    await enterCode('000000');
+    expect(el('register-code-error')?.textContent).toContain('wrong or has expired');
+    expect(el('register-success')).toBeNull();
+  });
+
+  it('asks for a new code on request', async () => {
+    fill();
+    await submit();
+    el<HTMLButtonElement>('register-resend')!.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(resendCode).toHaveBeenCalledWith('priya.menon@example.com');
+    expect(el('register-resent')).not.toBeNull();
   });
 
   it('a taken email shows the AUTH-409 sentence', async () => {

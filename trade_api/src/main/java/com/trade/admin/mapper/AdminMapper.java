@@ -6,6 +6,7 @@ import com.trade.admin.dto.AdminDtos.AdminInstrumentDto;
 import com.trade.admin.dto.AdminDtos.AdminOrderDto;
 import com.trade.admin.dto.AdminDtos.AdminSummaryDto;
 import com.trade.admin.dto.AdminDtos.AuditEntryDto;
+import java.time.LocalDate;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -33,9 +34,15 @@ public interface AdminMapper {
     // deciding the same request cannot both succeed.
     AccountRequestDto lockAccountRequest(@Param("id") String requestId);
 
-    BankAccountRow findBankAccount(@Param("number") String bankAccountNumber);
+    // The bank account the simulated bank holds under this email, or null. The
+    // console never creates one: Third_Party_Bank rows are added in Postgres.
+    BankAccountRow findBankAccountByEmail(@Param("email") String email);
 
-    int insertBankAccount(@Param("number") String bankAccountNumber, @Param("email") String email);
+    // How many trading accounts already settle to this bank account (0 or 1).
+    int countAccountsOnBank(@Param("number") String bankAccountNumber);
+
+    // True once the user has entered the code mailed to their address.
+    boolean isEmailVerified(@Param("userId") String userId);
 
     // Opens the trading account and returns its numeric key (Accounts.id).
     long insertAccount(@Param("userId") String userId,
@@ -80,6 +87,23 @@ public interface AdminMapper {
     // 0 rows when the instrument is already in the requested state.
     int setTradable(@Param("id") String instrumentId, @Param("tradable") boolean tradable,
                     @Param("adminId") String adminId);
+
+    // Null when the ticker already exists (INSERT ... ON CONFLICT DO NOTHING).
+    String insertInstrument(@Param("ticker") String ticker, @Param("name") String name,
+                            @Param("exchange") String exchange, @Param("currency") String currency,
+                            @Param("type") String type, @Param("sector") String sector,
+                            @Param("adminId") String adminId);
+
+    // ---- Fees: commission on filled portal orders (Orders.fee_amount) ----
+    List<FeeCurrencyRow> feeTotalsByCurrency(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    List<FeeUserRow> feesByUser(@Param("from") LocalDate from, @Param("to") LocalDate to, @Param("q") String q,
+                                @Param("inrPerUsd") java.math.BigDecimal inrPerUsd,
+                                @Param("offset") int offset, @Param("limit") int limit);
+
+    long countFeeUsers(@Param("from") LocalDate from, @Param("to") LocalDate to, @Param("q") String q);
+
+    List<FeeInstrumentRow> feesByInstrument(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
     // ---- Orders ----
     List<AdminOrderDto> listOrders(@Param("accountId") Long accountId, @Param("symbol") String symbol,

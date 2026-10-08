@@ -11,6 +11,7 @@ public record UnpublishedOrderRow(
         UUID orderId,
         Long accountId,
         String symbol,
+        String instrumentCurrency,
         String side,
         Integer quantity,
         BigDecimal price,

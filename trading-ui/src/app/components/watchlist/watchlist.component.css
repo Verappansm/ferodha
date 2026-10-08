@@ -1,42 +1,454 @@
-.watchlist-container {
+/* Layout only: page, card, input, modal, btn and states are global (styles.css). */
+.wl-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+/* ---- Lists ------------------------------------------------------------------ */
+
+.wl-lists ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 8px;
+  list-style: none;
+}
+
+.wl-list {
   display: flex;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--ink-700);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.coming-soon-banner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  max-width: 400px;
-  padding: 48px 32px;
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
+.wl-list:hover {
+  color: var(--ink-900);
+  background: var(--ink-100);
 }
 
-.banner-icon {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 24px;
-  color: var(--brand-600);
-}
-
-.coming-soon-banner h1 {
-  margin: 0 0 12px;
-  font-size: 28px;
+.wl-list.active {
   font-weight: 600;
   color: var(--ink-900);
+  background: var(--brand-100);
 }
 
-.coming-soon-banner p {
-  margin: 0;
-  font-size: 14px;
+.wl-list-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wl-count {
+  min-width: 22px;
+  padding: 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
   color: var(--ink-500);
-  line-height: 1.6;
+  text-align: center;
+  background: var(--ink-100);
+  border-radius: 999px;
+}
+
+.wl-list.active .wl-count {
+  background: var(--surface);
+}
+
+.wl-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* ---- Main card ---------------------------------------------------------------- */
+
+.wl-main {
+  overflow: visible;
+}
+
+.wl-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.wl-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.wl-search {
+  position: relative;
+  width: 280px;
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  animation: menu-pop 0.14s ease-out both;
+}
+
+@keyframes menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+.popover.add {
+  left: auto;
+  width: 300px;
+  padding: 12px;
+}
+
+.result {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-900);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.result:hover,
+.result:focus-visible {
+  background: var(--ink-100);
+}
+
+.result-name {
+  overflow: hidden;
+  color: var(--ink-700);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popover-empty {
+  margin: 0;
+  padding: 14px;
+  color: var(--ink-500);
+  text-align: center;
+}
+
+.add-head {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ink-200);
+}
+
+.add-label {
+  margin: 10px 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.add-options {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.add-option {
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.add-option:hover {
+  background: var(--ink-100);
+}
+
+.add-new {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.add-create {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.add-create .input {
+  height: 30px;
+}
+
+.add-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ink-200);
+}
+
+.edit-hint {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 13px;
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-bottom: 1px solid var(--warning-border);
+}
+
+.grid-container {
+  overflow: hidden;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.watchlist-grid {
+  display: block;
+  width: 100%;
+}
+
+/* ---- Cells the grid renders (outside this component's view, hence ::ng-deep) ---- */
+
+:host ::ng-deep .wl-symbol {
+  font-weight: 700;
+}
+
+:host ::ng-deep .wl-name {
+  color: var(--ink-700);
+}
+
+:host ::ng-deep .wl-num {
+  font-variant-numeric: tabular-nums;
+}
+
+:host ::ng-deep .wl-up {
+  font-weight: 600;
+  color: var(--positive);
+}
+
+:host ::ng-deep .wl-down {
+  font-weight: 600;
+  color: var(--negative);
+}
+
+:host ::ng-deep .wl-stale {
+  color: var(--warning);
+}
+
+:host ::ng-deep .wl-muted {
+  color: var(--ink-500);
+}
+
+/* LEAP-007: the alert's recorded state, a word on a tinted pill. */
+:host ::ng-deep .wl-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  border-radius: 999px;
+}
+
+:host ::ng-deep .wl-state::before {
+  width: 6px;
+  height: 6px;
+  content: '';
+  background: currentcolor;
+  border-radius: 50%;
+}
+
+:host ::ng-deep .wl-state-active {
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+:host ::ng-deep .wl-state-triggered {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+:host ::ng-deep .wl-state-cancelled {
+  color: var(--ink-500);
+  background: var(--ink-100);
+}
+
+:host ::ng-deep .wl-row-editing {
+  background: var(--warning-bg);
+}
+
+:host ::ng-deep .wl-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+}
+
+:host ::ng-deep .wl-btn {
+  height: 28px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-900);
+  white-space: nowrap;
+  background: var(--surface);
+  border: 1px solid var(--ink-300);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+:host ::ng-deep .wl-btn:hover {
+  background: var(--ink-100);
+}
+
+:host ::ng-deep .wl-btn-danger {
+  color: var(--negative);
+  border-color: var(--negative-border);
+}
+
+:host ::ng-deep .wl-btn-danger:hover {
+  background: var(--negative-bg);
+}
+
+:host ::ng-deep .sparkline {
+  margin-top: 8px;
+}
+
+/* ---- Alerts section ------------------------------------------------------------ */
+
+.alerts-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.alerts-body p {
+  max-width: 64ch;
+  margin: 4px 0 0;
+}
+
+.instrument-display {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 9px 12px;
+  background: var(--ink-100);
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Feedback toasts (bottom left, clear of the app's notification toasts) ------- */
+
+.wl-toasts {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.wl-toast {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px 10px 14px;
+  font-size: 13px;
+  color: var(--ink-900);
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  animation: notice-in 0.2s ease-out both;
+}
+
+.wl-toast-success {
+  border-left-color: var(--positive);
+}
+
+.wl-toast-error {
+  border-left-color: var(--negative);
+}
+
+.wl-toast-msg {
+  flex: 1;
+}
+
+.toast-x {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--ink-500);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toast-x svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+@media (width <= 900px) {
+  .wl-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wl-tools {
+    flex-wrap: wrap;
+  }
+
+  .wl-search {
+    width: 100%;
+  }
 }

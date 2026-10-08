@@ -74,6 +74,8 @@ test.describe('Sign-in Journey', () => {
     await signIn(page, config.username, config.password);
     await expectSignedIn(page);
 
+    // Sign-out sits in the account menu.
+    await page.click('[data-testid="account-menu"]');
     await page.click('[data-testid="sign-out"]');
 
     await expect(page).toHaveURL(/\/login/);

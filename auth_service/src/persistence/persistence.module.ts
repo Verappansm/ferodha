@@ -3,6 +3,7 @@ import { AppConfigModule } from '../config/config.module';
 import { AppConfigService } from '../config/config.service';
 import { AccountsRepository } from './accounts.repository';
 import { createPool, DatabaseService, PG_POOL } from './database.service';
+import { EmailOtpsRepository } from './email-otps.repository';
 import { RefreshTokensRepository } from './refresh-tokens.repository';
 import { UsersRepository } from './users.repository';
 
@@ -21,12 +22,14 @@ import { UsersRepository } from './users.repository';
     UsersRepository,
     RefreshTokensRepository,
     AccountsRepository,
+    EmailOtpsRepository,
   ],
   exports: [
     PG_POOL,
     UsersRepository,
     RefreshTokensRepository,
     AccountsRepository,
+    EmailOtpsRepository,
   ],
 })
 export class PersistenceModule {}

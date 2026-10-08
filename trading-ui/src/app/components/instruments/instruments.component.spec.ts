@@ -1,7 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { InstrumentsComponent, PRICE_REFRESH_MS } from './instruments.component';
+import {
+  InstrumentsComponent,
+  PRICE_REFRESH_MS,
+  SEARCH_DEBOUNCE_MS,
+} from './instruments.component';
 import { InstrumentResponse, InstrumentType, PriceSnapshot, TradeApi } from '../../api/trade-api';
 
 function instrument(symbol: string): InstrumentResponse {
@@ -31,10 +35,19 @@ const PRICES: PriceSnapshot[] = [
 describe('InstrumentsComponent', () => {
   let fixture: ComponentFixture<InstrumentsComponent>;
   let prices: ReturnType<typeof vi.fn>;
+  let getInstruments: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.useFakeTimers();
     prices = vi.fn().mockReturnValue(of(PRICES));
+    getInstruments = vi.fn().mockReturnValue(
+      of({
+        instruments: [instrument('AAPL'), instrument('MSFT'), instrument('NVDA')],
+        total: 45,
+        pageSize: 20,
+        offset: 0,
+      }),
+    );
     await TestBed.configureTestingModule({
       imports: [InstrumentsComponent],
       providers: [
@@ -42,13 +55,9 @@ describe('InstrumentsComponent', () => {
         {
           provide: TradeApi,
           useValue: {
-            getInstruments: vi.fn().mockReturnValue(
-              of({
-                instruments: [instrument('AAPL'), instrument('MSFT'), instrument('NVDA')],
-                total: 3,
-                pageSize: 1000,
-                offset: 0,
-              }),
+            getInstruments,
+            instrumentFilters: vi.fn().mockReturnValue(
+              of({ exchanges: ['NASDAQ', 'NSE'], sectors: ['Technology'], types: ['EQUITY'] }),
             ),
             prices,
           },
@@ -96,6 +105,50 @@ describe('InstrumentsComponent', () => {
     await vi.advanceTimersByTimeAsync(PRICE_REFRESH_MS);
     fixture.detectChanges();
     expect(priceCells()[0]).toBe('230.20');
+  });
+
+  it('asks the server for one page, and offers the filter choices from the data', () => {
+    expect(getInstruments).toHaveBeenCalledWith(20, 0, {
+      search: undefined,
+      exchange: undefined,
+      sector: undefined,
+      type: undefined,
+    });
+    expect(fixture.componentInstance.exchanges()).toEqual(['NASDAQ', 'NSE']);
+    expect(fixture.componentInstance.totalPages()).toBe(3);
+  });
+
+  it('filters combine and go to the server, starting again at the first page', async () => {
+    const c = fixture.componentInstance;
+    c.nextPage();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getInstruments).toHaveBeenLastCalledWith(20, 20, expect.anything());
+
+    c.selectedExchange.set('NSE');
+    c.selectedType.set('EQUITY');
+    c.onFilterChange();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(getInstruments).toHaveBeenLastCalledWith(20, 0, {
+      search: undefined,
+      exchange: 'NSE',
+      sector: undefined,
+      type: 'EQUITY',
+    });
+  });
+
+  it('a search waits for typing to pause, and sends only the last text', async () => {
+    const c = fixture.componentInstance;
+    getInstruments.mockClear();
+    c.searchQuery.set('a');
+    c.onSearchChange();
+    c.searchQuery.set('app');
+    c.onSearchChange();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(getInstruments).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+    expect(getInstruments).toHaveBeenCalledTimes(1);
+    expect(getInstruments).toHaveBeenCalledWith(20, 0, expect.objectContaining({ search: 'app' }));
   });
 
   it('opens the ticket with a suggested price when there is a quote', () => {

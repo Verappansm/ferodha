@@ -1,79 +1,155 @@
 <app-auth-layout active="signin">
-  <header class="form-header">
-    <h1>Welcome back</h1>
-    <p>Sign in to your trading account.</p>
-  </header>
+  @if (mustChangePassword()) {
+    <header class="form-header">
+      <h1>Choose a new password</h1>
+      <p data-testid="login-change-required">
+        An administrator has asked you to set a new password before you sign in.
+      </p>
+    </header>
 
-  <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-    <div class="field">
-      <label class="field-label" for="username">Email address</label>
-      <input
-        id="username"
-        class="input"
-        type="email"
-        formControlName="username"
-        autocomplete="username"
-        placeholder="name@example.com"
-        data-testid="login-username"
-        [attr.aria-invalid]="showError('username')"
-        aria-describedby="username-error"
-      />
-      @if (showError('username')) {
-        <p id="username-error" class="field-error" data-testid="login-username-error">
-          @if (form.controls.username.hasError('required')) {
-            Enter your email address.
-          } @else {
-            Enter a valid email address, such as name&#64;example.com.
-          }
-        </p>
-      }
-    </div>
-
-    <div class="field">
-      <label class="field-label" for="password">Password</label>
-      <div class="password-wrap">
+    <form class="form" [formGroup]="changeForm" (ngSubmit)="changePassword()" novalidate>
+      <div class="field">
+        <label class="field-label" for="new-password">New password</label>
         <input
-          id="password"
+          id="new-password"
           class="input"
-          [type]="showPassword() ? 'text' : 'password'"
-          formControlName="password"
-          autocomplete="current-password"
-          data-testid="login-password"
-          [attr.aria-invalid]="showError('password')"
-          aria-describedby="password-error"
+          type="password"
+          formControlName="newPassword"
+          autocomplete="new-password"
+          data-testid="login-new-password"
+          [attr.aria-invalid]="showChangeError('newPassword')"
+          aria-describedby="new-password-hint"
         />
-        <button
-          type="button"
-          class="reveal"
-          (click)="showPassword.set(!showPassword())"
-          [attr.aria-pressed]="showPassword()"
-          [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
-        >
-          {{ showPassword() ? 'Hide' : 'Show' }}
-        </button>
+        <p id="new-password-hint" class="field-hint">At least 12 characters.</p>
+        @if (showChangeError('newPassword')) {
+          <p class="field-error" data-testid="login-new-password-error">
+            Enter a new password of 12 to 128 characters.
+          </p>
+        }
       </div>
-      @if (showError('password')) {
-        <p id="password-error" class="field-error" data-testid="login-password-error">
-          Enter your password.
-        </p>
-      }
-    </div>
 
-    @if (error()) {
-      <p class="form-error" role="alert" data-testid="login-error">{{ error() }}</p>
+      <div class="field">
+        <label class="field-label" for="confirm-password">Confirm new password</label>
+        <input
+          id="confirm-password"
+          class="input"
+          type="password"
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+          data-testid="login-confirm-password"
+          [attr.aria-invalid]="showChangeError('confirmPassword')"
+        />
+        @if (showChangeError('confirmPassword')) {
+          <p class="field-error" data-testid="login-confirm-password-error">
+            The two passwords do not match.
+          </p>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="form-error" role="alert" data-testid="login-error">{{ error() }}</p>
+      }
+
+      <button
+        type="submit"
+        class="btn btn-primary btn-block"
+        data-testid="login-change-submit"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Saving…' : 'Save and sign in' }}
+      </button>
+      <button
+        type="button"
+        class="btn btn-secondary btn-block"
+        data-testid="login-change-cancel"
+        (click)="cancelChange()"
+      >
+        Back to sign in
+      </button>
+    </form>
+  } @else {
+    <header class="form-header">
+      <h1>Welcome back</h1>
+      <p>Sign in to your trading account.</p>
+    </header>
+
+    @if (notice) {
+      <p class="notice notice-success" role="status" data-testid="login-notice">{{ notice }}</p>
     }
 
-    <button
-      type="submit"
-      class="btn btn-primary btn-block"
-      data-testid="login-submit"
-      [disabled]="isLoading()"
-    >
-      {{ isLoading() ? 'Signing in…' : 'Sign in' }}
-    </button>
+    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="field">
+        <label class="field-label" for="username">Email address</label>
+        <input
+          id="username"
+          class="input"
+          type="email"
+          formControlName="username"
+          autocomplete="username"
+          placeholder="name@example.com"
+          data-testid="login-username"
+          [attr.aria-invalid]="showError('username')"
+          aria-describedby="username-error"
+        />
+        @if (showError('username')) {
+          <p id="username-error" class="field-error" data-testid="login-username-error">
+            @if (form.controls.username.hasError('required')) {
+              Enter your email address.
+            } @else {
+              Enter a valid email address, such as name&#64;example.com.
+            }
+          </p>
+        }
+      </div>
 
-    <p class="field-hint footnote">
-      Forgotten your password? Contact support; self-service reset is not available yet.
-    </p>
-  </form>
+      <div class="field">
+        <label class="field-label" for="password">Password</label>
+        <div class="password-wrap">
+          <input
+            id="password"
+            class="input"
+            [type]="showPassword() ? 'text' : 'password'"
+            formControlName="password"
+            autocomplete="current-password"
+            data-testid="login-password"
+            [attr.aria-invalid]="showError('password')"
+            aria-describedby="password-error"
+          />
+          <button
+            type="button"
+            class="reveal"
+            (click)="showPassword.set(!showPassword())"
+            [attr.aria-pressed]="showPassword()"
+            [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+          >
+            {{ showPassword() ? 'Hide' : 'Show' }}
+          </button>
+        </div>
+        @if (showError('password')) {
+          <p id="password-error" class="field-error" data-testid="login-password-error">
+            Enter your password.
+          </p>
+        }
+      </div>
+
+      @if (error()) {
+        <p class="form-error" role="alert" data-testid="login-error">{{ error() }}</p>
+      }
+
+      <button
+        type="submit"
+        class="btn btn-primary btn-block"
+        data-testid="login-submit"
+        [disabled]="isLoading()"
+      >
+        {{ isLoading() ? 'Signing in…' : 'Sign in' }}
+      </button>
+
+      <p class="field-hint footnote">
+        Registered but cannot sign in yet?
+        <a routerLink="/account-status" data-testid="account-status-link">Check your account request</a>.
+        Forgotten your password? Contact support; self-service reset is not available yet.
+      </p>
+    </form>
+  }
 </app-auth-layout>

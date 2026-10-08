@@ -12,7 +12,7 @@ set -euo pipefail
 #                              ORDER_FILLED / ORDER_REJECTED  ──►  Kafka
 #   postgres        (Windows)  holds the settled result
 #
-# Main (default) profile only: trades-generator is not part of this setup.
+# Main (default) profile only: the market maker (market-sim) is not exercised here.
 #
 #   bash windows/test-windows.sh            # presenter mode: Enter between stages
 #   bash windows/test-windows.sh --auto     # timed pauses (DEMO_DELAY seconds, default 4)

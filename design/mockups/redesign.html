@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferodha redesign mockup (admin console + strategies)</title>
+<style>
+  :root {
+    --bg: #f5f7f6; --card: #ffffff; --fg: #111c18; --muted: #64746e; --line: #e3e9e6; --soft: #f2f5f4;
+    --brand: #12805c; --brand-soft: #e7f6ef; --brand-fg: #ffffff; --brand-strong: #0f6446;
+    --side: #0a2b1f; --side-hover: #134231; --side-text: #b7d7c8; --side-muted: #6f9a87; --side-accent: #3cc28f;
+    --pos: #067647; --pos-soft: #ecfdf3; --neg: #b42318; --neg-soft: #fef3f2;
+    --warn: #b54708; --warn-soft: #fffaeb; --info: #175cd3; --info-soft: #eff8ff;
+    --radius: 10px; --shadow: 0 1px 2px rgb(16 24 40 / .06);
+    --pop: 0 10px 30px rgb(0 0 0 / .14);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  [data-theme="dark"] {
+    --bg: #0b1512; --card: #101917; --fg: #e5eeea; --muted: #8fa59c; --line: #1f2f2a; --soft: #14201c;
+    --brand: #22a874; --brand-soft: #10261f; --brand-fg: #06150f; --brand-strong: #2cc08a;
+    --side: #06150f; --side-hover: #0e2a20;
+    --pos: #47d697; --pos-soft: #0f2a20; --neg: #f97066; --neg-soft: #2a1210;
+    --warn: #fdb022; --warn-soft: #2a1d07; --info: #84caff; --info-soft: #0e2038;
+    --shadow: none; --pop: 0 10px 30px rgb(0 0 0 / .6);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.45; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ---------- shell ---------- */
+  .shell { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  .side { position: sticky; top: 0; height: 100vh; padding: 16px 12px; background: var(--side); color: var(--side-text); display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 16px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--side-accent); color: var(--side); display: grid; place-items: center; font-weight: 800; }
+  .brand b { display: block; line-height: 1.1; color: #fff; } .brand span { font-size: 12px; color: var(--side-muted); }
+  .group { margin: 12px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--side-muted); }
+  .nav { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; text-align: left; color: var(--side-text); }
+  .nav:hover { background: var(--side-hover); color: #fff; }
+  .nav.on { background: var(--side-hover); color: #fff; font-weight: 600; box-shadow: inset 3px 0 0 var(--side-accent); }
+  .nav.on svg { color: var(--side-accent); }
+  .nav svg { width: 16px; height: 16px; flex: none; }
+  .nav .count { margin-left: auto; background: #fdb022; color: #3a2300; border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 700; }
+  .who { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-top: 1px solid var(--side-hover); color: #fff; }
+  .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); display: grid; place-items: center; font-weight: 700; font-size: 12px; color: var(--brand-strong); flex: none; }
+  .main { min-width: 0; }
+  .top { display: flex; align-items: center; gap: 12px; padding: 12px 28px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 5; }
+  .crumb { color: var(--muted); } .crumb b { color: var(--fg); }
+  .top .icon-btn { margin-left: auto; }
+  .icon-btn { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .page { padding: 28px; max-width: 1180px; }
+  .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.01em; }
+  h2 { margin: 0; font-size: 15px; }
+  .page-head p { margin: 0; color: var(--muted); max-width: 62ch; }
+  [data-page] { display: none; } [data-page].on { display: block; }
+
+  /* ---------- controls ---------- */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-weight: 600; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
+  .btn.primary:hover { background: var(--brand-strong); }
+  .btn.danger { color: var(--neg); }
+  .btn.sm { padding: 5px 10px; font-size: 13px; }
+  .btn.ghost { border-color: transparent; background: none; color: var(--brand); padding-inline: 8px; }
+  .seg { display: inline-flex; padding: 3px; background: var(--soft); border: 1px solid var(--line); border-radius: 9px; gap: 2px; }
+  .seg button { padding: 5px 12px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-weight: 600; }
+  .seg button.on { background: var(--card); color: var(--fg); box-shadow: var(--shadow); }
+  .seg button:disabled { opacity: .45; cursor: not-allowed; }
+  .field { display: grid; gap: 5px; } .field > label, .label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .input, select.input { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+  .input:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: transparent; }
+  .help { font-size: 12px; color: var(--muted); } .err { font-size: 12px; color: var(--neg); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .card-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--soft); color: var(--muted); }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.pos { background: var(--pos-soft); color: var(--pos); } .badge.neg { background: var(--neg-soft); color: var(--neg); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); } .badge.info { background: var(--info-soft); color: var(--info); }
+  .chip { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; color: var(--muted); background: var(--soft); }
+
+  /* info tip */
+  .tip { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 50%; font: italic 700 10px Georgia, serif; color: var(--muted); background: var(--card); cursor: help; }
+  .tip:hover, .tip:focus { color: var(--brand); border-color: var(--brand); outline: none; }
+  .tip::after { content: attr(data-tip); position: absolute; z-index: 30; left: -6px; top: 22px; width: 250px; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); box-shadow: var(--pop); font: 400 12px/1.4 ui-sans-serif, system-ui; text-align: left; text-transform: none; letter-spacing: 0; display: none; }
+  .tip:hover::after, .tip:focus::after { display: block; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--soft); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.num { text-align: right; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tbody tr:hover { background: var(--soft); } tr:last-child td { border-bottom: 0; }
+  .who-cell { display: flex; align-items: center; gap: 10px; }
+  .bar { height: 6px; border-radius: 99px; background: var(--soft); overflow: hidden; min-width: 80px; } .bar i { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+  .tabs button { padding: 9px 14px; border: 0; background: none; color: var(--muted); font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .pager { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--muted); }
+
+  /* kpis */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .kpi { padding: 16px; } .kpi .l { color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; }
+  .kpi .v { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+  .kpi.attn { border-color: var(--warn); } .kpi.attn .v { color: var(--warn); }
+  .kpi svg { width: 100%; height: 28px; margin-top: 6px; }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .list { list-style: none; margin: 0; padding: 4px 16px 10px; } .list li { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); } .list li:last-child { border: 0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--pos); margin-right: 8px; } .dot.warn { background: var(--warn); }
+  .callout { display: flex; gap: 10px; padding: 11px 13px; border-radius: 8px; border: 1px solid var(--info); background: var(--info-soft); color: var(--info); font-size: 13px; }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+
+  /* strategy cards */
+  .strip { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .strat { padding: 16px 18px; margin-bottom: 12px; display: grid; gap: 14px; }
+  .strat-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .strat-top h2 { font-size: 16px; } .strat-top .sp { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .rule { font-size: 15px; } .rule b { font-weight: 700; }
+  .strat-mid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; align-items: center; }
+  @media (max-width: 800px) { .strat-mid { grid-template-columns: 1fr; } .shell { grid-template-columns: 1fr; } .side { display: none; } }
+  .gauge { position: relative; height: 8px; border-radius: 99px; background: var(--soft); margin: 22px 0 6px; }
+  .gauge .t, .gauge .n { position: absolute; top: -5px; width: 2px; height: 18px; background: var(--brand); border-radius: 2px; }
+  .gauge .n { background: var(--fg); }
+  .gauge .t::after, .gauge .n::after { position: absolute; top: -17px; transform: translateX(-50%); font-size: 11px; font-weight: 600; white-space: nowrap; color: var(--brand); left: 1px; }
+  .gauge .t::after { content: attr(data-l); } .gauge .n::after { content: attr(data-l); color: var(--fg); }
+  .gauge .fill { position: absolute; inset: 0 auto 0 0; background: var(--brand-soft); border-radius: 99px; }
+  .meta { display: flex; gap: 6px; flex-wrap: wrap; }
+  .log { margin: 0; padding: 0 0 0 14px; list-style: none; border-left: 2px solid var(--line); display: grid; gap: 8px; }
+  .log li { display: flex; gap: 10px; font-size: 13px; } .log .w { color: var(--muted); min-width: 64px; } .log .k { font-weight: 700; min-width: 86px; }
+
+  /* drawer */
+  .scrim { position: fixed; inset: 0; background: rgb(0 0 0 / .4); display: none; z-index: 40; } .scrim.on { display: block; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--card); border-left: 1px solid var(--line); box-shadow: var(--pop); z-index: 41; display: none; flex-direction: column; }
+  .drawer.on { display: flex; }
+  .drawer-h { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+  .drawer-b { padding: 20px; overflow: auto; display: grid; gap: 18px; align-content: start; flex: 1; }
+  .drawer-f { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; gap: 10px; justify-content: flex-end; background: var(--card); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+  .field > label { min-height: 20px; }
+  .sect { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--line); }
+  .sect:first-child { border: 0; padding: 0; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .combo { position: relative; } .combo ul { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); max-height: 200px; overflow: auto; margin: 0; padding: 4px; list-style: none; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--pop); display: none; }
+  .combo.open ul { display: block; } .combo li { display: flex; gap: 10px; padding: 7px 9px; border-radius: 6px; cursor: pointer; } .combo li:hover, .combo li.act { background: var(--soft); } .combo li span { color: var(--muted); }
+  .price-now { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); } .live { width: 7px; height: 7px; border-radius: 50%; background: var(--pos); box-shadow: 0 0 0 3px var(--pos-soft); }
+  .summary { padding: 12px 14px; border-radius: 8px; background: var(--brand-soft); color: var(--fg); border: 1px solid var(--line); }
+  .switch { display: flex; gap: 10px; align-items: center; } .switch i { width: 34px; height: 20px; border-radius: 99px; background: var(--line); position: relative; flex: none; } .switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: left .15s; } .switch input { display: none; } .switch input:checked + i { background: var(--brand); } .switch input:checked + i::after { left: 16px; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 9px; font-weight: 600; z-index: 60; pointer-events: none; } .toast.on { opacity: 1; transform: translateX(-50%); }
+  .note { margin-top: 26px; padding: 14px 16px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 13px; }
+  .note b { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><div class="logo">F</div><div><b>Ferodha</b><span>Operations</span></div></div>
+    <div class="group">Operations</div>
+    <button class="nav on" data-go="overview"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>Overview</button>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 14c0-3 2-4.5 5-4.5s5 1.500 5 4.500"/></svg>Account requests<span class="count">3</span></button>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="2.5"/><circle cx="11.500" cy="7" r="2"/><path d="M1.500 13c0-2.500 2-4 4.500-4s4.500 1.500 4.500 4"/></svg>Users</button>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="9" rx="1.500"/><path d="M2 7h12"/></svg>Accounts</button>
+    <div class="group">Markets</div>
+    <button class="nav" data-go="instruments"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12l4-4 3 3 5-6"/></svg>Instruments</button>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h10M3 8h10M3 12h6"/></svg>All orders</button>
+    <button class="nav" data-go="fees"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><path d="M8 4.500v7M6 6.500c0-1 1-1.500 2-1.500s2 .5 2 1.500-1 1.200-2 1.500-2 .5-2 1.500 1 1.500 2 1.500 2-.5 2-1.500"/></svg>Fees</button>
+    <div class="group">System</div>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1.500 8h3l2-5 3 10 2-5h3"/></svg>System health</button>
+    <button class="nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="10" height="12" rx="1.500"/><path d="M5.500 6h5M5.500 9h5"/></svg>Audit log</button>
+    <div class="group">Customer app</div>
+    <button class="nav" data-go="strategies"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v10h10"/><path d="M5.500 10l2.500-3 2 2 3-4"/></svg>Strategies (preview)</button>
+    <div class="who"><div class="avatar">MB</div><div><b>Michael Brown</b><div style="font-size:12px;color:var(--side-muted)">Administrator</div></div></div>
+  </aside>
+
+  <div class="main">
+    <div class="top">
+      <div class="crumb">Ferodha / <b id="crumb">Overview</b></div>
+      <button class="icon-btn" id="theme" title="Light or dark" aria-label="Toggle theme">◐</button>
+    </div>
+
+    <!-- ============ OVERVIEW ============ -->
+    <section class="page" data-page="overview">
+      <div class="page-head"><div><h1>Overview</h1><p>The platform at a glance. Anything needing a decision is highlighted.</p></div><button class="btn">Refresh</button></div>
+      <div class="kpis">
+        <div class="card kpi attn"><div class="l">Pending account requests <span class="tip" tabindex="0" data-tip="New customers waiting for an administrator to open their trading account. They cannot sign in until you approve.">i</span></div><div class="v">3</div><div class="help">Needs a decision</div></div>
+        <div class="card kpi"><div class="l">Active users</div><div class="v">128</div><div class="help">2 suspended</div></div>
+        <div class="card kpi"><div class="l">Active accounts</div><div class="v">121</div><div class="help">USD 84 · INR 37</div></div>
+        <div class="card kpi"><div class="l">Orders today</div><div class="v">342</div><div class="help">17 in process</div></div>
+        <div class="card kpi"><div class="l">Total fees (USD) <span class="tip" tabindex="0" data-tip="Commission taken on filled customer orders. INR is converted at 90 to the dollar.">i</span></div><div class="v">18,420.50</div><div class="help">All time</div></div>
+        <div class="card kpi"><div class="l">Fees this month (USD)</div><div class="v">2,310.75</div><div class="help">So far this month</div></div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="card-h"><h2>Services</h2><button class="btn ghost sm">Details</button></div>
+          <ul class="list"><li><span><i class="dot"></i>Trade API</span><span class="badge pos">UP</span></li><li><span><i class="dot"></i>Trade executor</span><span class="badge pos">UP</span></li><li><span><i class="dot"></i>Auth service</span><span class="badge pos">UP</span></li><li><span><i class="dot warn"></i>Pricing generator</span><span class="badge warn">DEGRADED</span></li><li><span><i class="dot"></i>Kafka</span><span class="badge pos">UP</span></li></ul></div>
+        <div class="card"><div class="card-h"><h2>Latest decisions</h2><button class="btn ghost sm">Audit log</button></div>
+          <ul class="list"><li><span class="mono">INSTRUMENT_ADDED · NEWCO</span><span class="muted">M. Brown · 10:42</span></li><li><span class="mono">USER_SUSPENDED</span><span class="muted">M. Brown · 09:58</span></li><li><span class="mono">ACCOUNT_OPENED</span><span class="muted">M. Brown · 09:12</span></li></ul></div>
+      </div>
+      <div class="note"><b>What changes:</b> the same dark-green sidebar, now with icons; softer status pills with a dot and the word; the new fee tiles; an info (i) on anything that needs explaining. The green stays: every colour here is the app's own palette, in light and dark.</div>
+    </section>
+
+    <!-- ============ FEES ============ -->
+    <section class="page" data-page="fees">
+      <div class="page-head"><div><h1>Fees</h1><p>Commission taken on filled customer orders, by customer or by instrument. Amounts are in USD; INR is converted at 90 to the dollar.</p></div>
+        </div>
+      <div class="kpis">
+        <div class="card kpi"><div class="l">Total fees (USD)</div><div class="v">18,420.50</div><div class="help">All time</div></div>
+        <div class="card kpi"><div class="l">This month (USD)</div><div class="v">2,310.75</div></div>
+        <div class="card kpi"><div class="l">Orders charged</div><div class="v">1,482</div></div>
+                <div class="card kpi"><div class="l">Charged in</div><div class="v" style="font-size:16px;margin-top:12px">1,720.40 USD<br>53,100.00 INR</div></div>
+      </div>
+      <div class="tabs" id="feetabs"><button class="on" data-t="user">By user</button><button data-t="inst">By instrument</button></div>
+      <div class="card">
+        <div class="toolbar">
+          <div class="field" style="flex:1;min-width:200px"><label>Customer</label><input class="input" placeholder="Name or email"></div>
+          <div class="field"><label>From</label><input class="input" type="date" value="2026-10-01"></div>
+          <div class="field"><label>To</label><input class="input" type="date" value="2026-10-31"></div>
+          <button class="btn primary">Apply</button><button class="btn">Clear</button>
+          <div class="seg" id="range" style="margin-left:auto"><button>7 days</button><button>30 days</button><button>This month</button><button class="on">All time</button></div>
+        </div>
+        <div id="ft-user"><table><thead><tr><th>Customer</th><th>Account</th><th class="num">Orders</th><th class="num">Fees (own currency)</th><th class="num">Fees (USD)</th><th style="width:140px">Share</th></tr></thead><tbody>
+          <tr><td><div class="who-cell"><div class="avatar">JC</div><div><b>John Carter</b><div class="muted">john.carter@example.com</div></div></div></td><td class="mono">#1</td><td class="num">214</td><td class="num">412.60 USD</td><td class="num"><b>412.60</b></td><td><div class="bar"><i style="width:100%"></i></div></td></tr>
+          <tr><td><div class="who-cell"><div class="avatar">PM</div><div><b>Priya Menon</b><div class="muted">priya.menon@example.com</div></div></div></td><td class="mono">#2</td><td class="num">168</td><td class="num">29,880.00 INR</td><td class="num"><b>332.00</b></td><td><div class="bar"><i style="width:80%"></i></div></td></tr>
+          <tr><td><div class="who-cell"><div class="avatar">SR</div><div><b>Sam Rao</b><div class="muted">sam.rao@example.com</div></div></div></td><td class="mono">#5</td><td class="num">71</td><td class="num">118.20 USD</td><td class="num"><b>118.20</b></td><td><div class="bar"><i style="width:29%"></i></div></td></tr>
+        </tbody></table></div>
+        <div id="ft-inst" style="display:none"><table><thead><tr><th>Instrument</th><th class="num">Orders</th><th class="num">Fees (USD)</th><th style="width:200px">Share of fees</th></tr></thead><tbody>
+          <tr><td><b class="mono">AAPL</b> <span class="muted">Apple Inc.</span></td><td class="num">402</td><td class="num"><b>690.10</b></td><td><div class="bar"><i style="width:100%"></i></div> <span class="muted">29.9%</span></td></tr>
+          <tr><td><b class="mono">NVDA</b> <span class="muted">NVIDIA Corporation</span></td><td class="num">377</td><td class="num"><b>602.40</b></td><td><div class="bar"><i style="width:87%"></i></div> <span class="muted">26.1%</span></td></tr>
+          <tr><td><b class="mono">MSFT</b> <span class="muted">Microsoft Corporation</span></td><td class="num">241</td><td class="num"><b>388.80</b></td><td><div class="bar"><i style="width:56%"></i></div> <span class="muted">16.8%</span></td></tr>
+        </tbody></table></div>
+        <div class="pager"><span>Showing 3 of 3</span><span><button class="btn sm" disabled>Previous</button> <button class="btn sm" disabled>Next</button></span></div>
+      </div>
+      <div class="note"><b>What changes:</b> quick range chips (7 days, 30 days, this month, all time) beside the exact date fields, customer initials, and a share bar so the biggest earners stand out. The cards above show all-time and this-month totals. Empty periods show a clear "No fees in this period" message.</div>
+    </section>
+
+    <!-- ============ INSTRUMENTS ============ -->
+    <section class="page" data-page="instruments">
+      <div class="page-head"><div><h1>Instruments</h1><p>Add, list or delist instruments. Delisting stops new orders; holdings are kept.</p></div><button class="btn primary" data-open="add">+ Add instrument</button></div>
+      <div class="card">
+        <div class="toolbar"><div class="field" style="flex:1;min-width:200px"><label>Search</label><input class="input" placeholder="Symbol or name"></div>
+          <div class="field"><label>Exchange</label><input class="input" placeholder="Any"></div>
+          <div class="field"><label>Type</label><select class="input"><option>Any</option><option>EQUITY</option><option>ETF</option></select></div>
+          <div class="field"><label>Status</label><select class="input"><option>Any</option><option>Tradable</option><option>Delisted</option></select></div>
+          <button class="btn primary">Apply</button></div>
+        <table><thead><tr><th>Symbol</th><th>Name</th><th>Exchange</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody>
+          <tr><td class="mono"><b>NEWCO</b></td><td>NewCo Inc.</td><td>NASDAQ</td><td>EQUITY</td><td><span class="badge pos">TRADABLE</span></td><td class="num"><button class="btn sm">Delist</button></td></tr>
+          <tr><td class="mono"><b>AAPL</b></td><td>Apple Inc.</td><td>NASDAQ</td><td>EQUITY</td><td><span class="badge pos">TRADABLE</span></td><td class="num"><button class="btn sm">Delist</button></td></tr>
+          <tr><td class="mono"><b>XLE</b></td><td>Energy Select Sector SPDR</td><td>NYSE</td><td>ETF</td><td><span class="badge">DELISTED</span></td><td class="num"><button class="btn sm">List</button></td></tr>
+        </tbody></table>
+      </div>
+      <div class="note"><b>What changes:</b> "Add instrument" opens a side panel (not a form pushing the table down), with the ticker upper-cased as you type, inline errors, and a warning that a symbol the market-data provider does not know will have no price. The same warning sits in the panel so nobody adds a symbol the feed cannot price by surprise.</div>
+    </section>
+
+    <!-- ============ STRATEGIES ============ -->
+    <section class="page" data-page="strategies">
+      <div class="page-head"><div><h1>Strategies <span class="tip" tabindex="0" data-tip="A strategy places an order for you when a price reaches a level, with nobody confirming it. A new strategy starts disabled; disabling one stops it at once and cancels its working orders.">i</span></h1><p>Rules that trade for you when a price is reached. Try a dry run first: it logs what it would do and places nothing.</p></div>
+        <button class="btn primary" data-open="strat">+ New strategy</button></div>
+      <div class="strip"><span class="badge pos">2 running</span><span class="badge neg">1 stopped after failures</span><span class="badge">1 disabled</span></div>
+
+      <div class="card strat" id="s1">
+        <div class="strat-top"><h2>Buy the dip</h2><span class="chip mono">AAPL</span><span class="badge pos" data-status>ENABLED</span><span class="chip">dry run</span>
+          <div class="sp"><button class="btn sm" data-toggle="s1">Disable</button><button class="btn sm" data-edit title="Disable the strategy first to edit it" disabled>Edit</button><button class="btn ghost sm" data-activity="s1">Activity</button></div></div>
+        <div class="strat-mid"><div><div class="rule"><b>Buy 50 AAPL</b> when the ask falls to <b>225.00</b> or below</div>
+          <div class="gauge"><div class="fill" style="width:62%"></div><div class="t" style="left:60%" data-l="Target 225.00"></div><div class="n" style="left:72%" data-l="Ask 226.10"></div></div>
+          <div class="help">0.49% above the target · checked 10:42:05 <span class="tip" tabindex="0" data-tip="The last price this strategy looked at, and when. If it stops updating, prices have stopped arriving.">i</span></div></div>
+          <div><div class="meta"><span class="chip">Spend ≤ 12,000.00</span><span class="chip">Position ≤ 100</span><span class="chip">Orders 0 / 1</span><span class="chip">Failures 0 / 3</span></div></div></div>
+        <ul class="log" id="log-s1" style="display:none"><li><span class="w">10:42:05</span><span class="k">WATCHING</span><span>Ask 226.10: will buy when the ask falls to 225.00</span></li><li><span class="w">10:41:58</span><span class="k">ENABLED</span><span>Enabled by the customer</span></li><li><span class="w">10:40:12</span><span class="k">CREATED</span><span>Created disabled</span></li></ul>
+      </div>
+
+      <div class="card strat" id="s2">
+        <div class="strat-top"><h2>Take profit</h2><span class="chip mono">MSFT</span><span class="badge pos" data-status>ENABLED</span>
+          <div class="sp"><button class="btn sm" data-toggle="s2">Disable</button><button class="btn sm" data-edit title="Disable the strategy first to edit it" disabled>Edit</button><button class="btn ghost sm">Activity</button></div></div>
+        <div class="strat-mid"><div><div class="rule"><b>Sell 20 MSFT</b> when the bid rises to <b>430.00</b> or above</div>
+          <div class="gauge"><div class="fill" style="width:80%"></div><div class="t" style="left:90%" data-l="Target 430.00"></div><div class="n" style="left:78%" data-l="Bid 421.60"></div></div>
+          <div class="help">2.0% below the target · checked 10:42:05</div></div>
+          <div><div class="meta"><span class="chip">Held units only</span><span class="chip">Orders 0 / 1</span><span class="chip">Failures 0 / 3</span></div></div></div>
+      </div>
+
+      <div class="card strat">
+        <div class="strat-top"><h2>NVDA breakout</h2><span class="chip mono">NVDA</span><span class="badge neg">TRIPPED</span>
+          <div class="sp"><button class="btn sm primary">Re-enable</button><button class="btn sm" data-edit>Edit</button><button class="btn ghost sm">Activity</button></div></div>
+        <div class="callout warn" role="alert">Stopped after 3 failures in a row: "Order rejected by the executor: NOT_MARKETABLE". Check the rule, then re-enable.</div>
+      </div>
+      <div class="card strat" id="s4">
+        <div class="strat-top"><h2>Weekly rebalance</h2><span class="chip mono">NVDA</span><span class="badge" data-status>DISABLED</span>
+          <div class="sp"><button class="btn sm primary" data-toggle="s4">Enable</button><button class="btn sm" data-edit>Edit</button><button class="btn ghost sm">Activity</button></div></div>
+        <div class="strat-mid"><div><div class="rule"><b>Sell 5 NVDA</b> when the bid rises to <b>135.00</b> or above</div></div>
+          <div><div class="meta"><span class="chip">Held units only</span><span class="chip">Orders 0 / 4</span><span class="chip">Failures 0 / 3</span></div></div></div>
+      </div>
+      <div class="note"><b>What changes:</b> each strategy is a card that reads like a sentence, with a small gauge showing where the price is against your target (so you can see why it has not fired), the guard rails as chips, and plain-English alerts when something stopped it. Enable and Disable are one clear button; Activity opens the timeline in place. <b>Edit</b> is available while a strategy is disabled or stopped (greyed out with a hint while it runs, so it can never trade on a half-changed rule); it opens the same panel, filled in.</div>
+    </section>
+  </div>
+</div>
+
+<!-- ============ DRAWER: add instrument ============ -->
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="d-add" aria-label="Add instrument">
+  <div class="drawer-h"><h2>Add instrument</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+  <div class="drawer-b">
+    <div class="callout warn"><span>⚠</span><span>Prices come from the live feed, which can only price a symbol the market-data provider knows. An unknown ticker is listed but has <b>no price</b>, and cannot be traded, until it does.</span></div>
+    <div class="two"><div class="field"><label>Ticker <span class="tip" tabindex="0" data-tip="The short code customers search and trade by. Capital letters, digits, dots or hyphens, up to 20.">i</span></label><input class="input mono" id="ticker" placeholder="NEWCO" value=""><span class="err" id="ticker-err" style="display:none">Letters, digits, dots or hyphens only.</span></div>
+      <div class="field"><label>Currency</label><input class="input mono" value="USD" maxlength="3"></div></div>
+    <div class="field"><label>Name</label><input class="input" placeholder="NewCo Inc."></div>
+    <div class="two"><div class="field"><label>Exchange</label><input class="input" placeholder="NASDAQ"></div><div class="field"><label>Type</label><select class="input"><option>EQUITY</option><option>ETF</option><option>BOND</option><option>FOREX</option><option>CRYPTO</option></select></div></div>
+    <div class="field"><label>Sector (optional)</label><input class="input" placeholder="Technology"></div>
+    <div class="field"><label>Reason (recorded in the audit log)</label><input class="input" placeholder="Listing requested by compliance"></div>
+  </div>
+  <div class="drawer-f"><button class="btn" data-close>Cancel</button><button class="btn primary" data-toast="NEWCO is added and tradable. It can be traded once the live feed has a price for it.">Add instrument</button></div>
+</aside>
+
+<!-- ============ DRAWER: new strategy ============ -->
+<aside class="drawer" id="d-strat" aria-label="New strategy">
+  <div class="drawer-h"><h2 id="strat-title">New strategy</h2><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+  <div class="drawer-b">
+    <div class="sect">What to do</div>
+    <div class="field"><label>Name <span class="tip" tabindex="0" data-tip="A label for you, so you can tell your strategies apart.">i</span></label><input class="input" id="sname" value="Buy the dip"></div>
+    <div class="field"><span class="label">Action <span class="tip" tabindex="0" data-tip="Buy when the ask falls to your level, or sell when the bid rises to it. Sell is only offered for stock you hold, because you cannot sell what you do not own.">i</span></span>
+      <div class="seg" id="side" style="width:fit-content"><button class="on" data-side="buy">Buy</button><button data-side="sell" id="sellbtn">Sell</button></div>
+      <span class="help" id="sellhelp">You hold MSFT (20) and NVDA (5), so Sell is available for those.</span></div>
+    <div class="field"><label>Symbol <span class="tip" tabindex="0" data-tip="Search the instruments that exist on the platform. Only a listed instrument can be chosen.">i</span></label>
+      <div class="combo" id="combo"><input class="input" id="sym" role="combobox" aria-expanded="false" placeholder="Search a symbol or company" autocomplete="off"><ul id="symlist"></ul></div></div>
+    <div class="sect">When</div>
+    <div class="two align-start"><div class="field"><label>Target price <span class="tip" tabindex="0" data-tip="The level that sets the strategy off. Like a limit order, it acts at once if the price is already at or past this level when you enable it, then again only when the price crosses it.">i</span></label><input class="input" id="trig" type="number" step="0.01" value="225.00"></div>
+      <div class="field"><label>Quantity per order <span class="tip" tabindex="0" data-tip="How many units each order buys or sells.">i</span></label><input class="input" id="qty" type="number" value="50"></div></div>
+    <div class="price-now"><i class="live"></i><span id="now">Now: ask 226.10 · bid 226.00 · live</span></div>
+    <div class="help" id="preview">It will wait until the ask falls to 225.00.</div>
+    <div class="sect">Guard rails</div>
+    <div class="two"><div class="field"><label>Max spend <span class="tip" tabindex="0" data-tip="The most this strategy may spend in total, fees included. It counts orders still working.">i</span></label><input class="input" type="number" value="12000"></div>
+      <div class="field"><label>Max position <span class="tip" tabindex="0" data-tip="The most units of this instrument you may hold, counting what you own and what is on order.">i</span></label><input class="input" type="number" value="100"></div></div>
+    <div class="two"><div class="field"><label>Max orders <span class="tip" tabindex="0" data-tip="How many orders it may place before it completes. Use 1 for a one-off.">i</span></label><input class="input" type="number" value="1"></div>
+      <div class="field"><label>Stop after failures <span class="tip" tabindex="0" data-tip="Stop automatically after this many problems in a row, so a fault cannot keep spending.">i</span></label><input class="input" type="number" value="3"></div></div>
+    <label class="switch"><input type="checkbox" checked><i></i><span><b>Dry run</b> <span class="muted">log what it would do, place nothing</span></span></label>
+    <div class="summary" id="sum"><b>In plain words:</b> Buy 50 AAPL when the ask falls to 225.00 or below. Spend at most 12,000.00 in total, hold at most 100 units, place at most 1 order, and stop after 3 failures in a row. Dry run: nothing will actually be bought.</div>
+  </div>
+  <div class="drawer-f"><button class="btn" data-close>Cancel</button><button class="btn primary" id="strat-save" data-toast="Strategy created. It is disabled until you enable it.">Create strategy</button></div>
+</aside>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+  const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const titles = { overview: 'Overview', fees: 'Fees', instruments: 'Instruments', strategies: 'Strategies' };
+  function go(p) { $$('[data-page]').forEach(e => e.classList.toggle('on', e.dataset.page === p)); $$('.nav').forEach(n => n.classList.toggle('on', n.dataset.go === p)); $('#crumb').textContent = titles[p]; location.hash = p; }
+  $$('.nav[data-go]').forEach(n => n.onclick = () => go(n.dataset.go));
+  go(location.hash.slice(1) in titles ? location.hash.slice(1) : 'overview');
+  $('#theme').onclick = () => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; };
+  // fees tabs + range chips
+  $$('#feetabs button').forEach(b => b.onclick = () => { $$('#feetabs button').forEach(x => x.classList.toggle('on', x === b)); $('#ft-user').style.display = b.dataset.t === 'user' ? '' : 'none'; $('#ft-inst').style.display = b.dataset.t === 'inst' ? '' : 'none'; });
+  $$('#range button').forEach(b => b.onclick = () => $$('#range button').forEach(x => x.classList.toggle('on', x === b)));
+  // drawers + toast
+  const scrim = $('#scrim'); let open = null;
+  function show(id) { open = $('#d-' + id); open.classList.add('on'); scrim.classList.add('on'); }
+  function hide() { if (open) open.classList.remove('on'); scrim.classList.remove('on'); open = null; }
+  $$('[data-open]').forEach(b => b.onclick = () => { if (b.dataset.open === 'strat') { $('#strat-title').textContent = 'New strategy'; $('#strat-save').textContent = 'Create strategy'; $('#strat-save').dataset.toast = 'Strategy created. It is disabled until you enable it.'; } show(b.dataset.open); });
+  $$('[data-edit]').forEach(b => b.onclick = () => { if (b.disabled) return; $('#strat-title').textContent = 'Edit strategy'; $('#strat-save').textContent = 'Save changes'; $('#strat-save').dataset.toast = 'Strategy updated. Enable it when you are ready.'; $('#sname').value = b.closest('.strat').querySelector('h2').textContent; show('strat'); }); scrim.onclick = hide; $$('[data-close]').forEach(b => b.onclick = hide);
+  document.onkeydown = e => { if (e.key === 'Escape') hide(); };
+  function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 2600); }
+  $$('[data-toast]').forEach(b => b.onclick = () => { hide(); toast(b.dataset.toast); });
+  // ticker upper-case + validation
+  $('#ticker').oninput = e => { e.target.value = e.target.value.toUpperCase(); $('#ticker-err').style.display = /^[A-Z0-9][A-Z0-9.\-]{0,19}$/.test(e.target.value) || !e.target.value ? 'none' : 'block'; };
+  // strategy enable/disable + activity
+  $$('[data-toggle]').forEach(b => b.onclick = () => { const c = $('#' + b.dataset.toggle), s = $('[data-status]', c), on = b.textContent === 'Disable'; b.textContent = on ? 'Enable' : 'Disable'; b.classList.toggle('primary', on); s.textContent = on ? 'DISABLED' : 'ENABLED'; s.className = 'badge ' + (on ? '' : 'pos'); const ed = $('[data-edit]', c); if (ed) { ed.disabled = !on; ed.title = on ? '' : 'Disable the strategy first to edit it'; } toast(on ? 'Strategy disabled. Its working orders were cancelled.' : 'Strategy enabled.'); });
+  $$('[data-activity]').forEach(b => b.onclick = () => { const l = $('#log-' + b.dataset.activity); l.style.display = l.style.display === 'none' ? 'grid' : 'none'; });
+  // symbol combobox (searchable) + live price + side
+  const all = [['AAPL', 'Apple Inc.', 226.10, 226.00], ['AMD', 'Advanced Micro Devices', 158.40, 158.30], ['AMZN', 'Amazon.com', 191.20, 191.10], ['MSFT', 'Microsoft Corporation', 421.70, 421.60], ['NVDA', 'NVIDIA Corporation', 118.90, 118.80], ['TSLA', 'Tesla Inc.', 248.30, 248.10]];
+  const held = ['MSFT', 'NVDA']; let side = 'buy', cur = all[0];
+  function render(q = '') { const rows = all.filter(r => (side === 'buy' || held.includes(r[0])) && (r[0] + r[1]).toLowerCase().includes(q.toLowerCase())); $('#symlist').innerHTML = rows.map(r => `<li data-s="${r[0]}"><b>${r[0]}</b><span>${r[1]}</span></li>`).join('') || '<li><span>No matching instrument</span></li>'; $$('#symlist li[data-s]').forEach(li => li.onmousedown = e => { e.preventDefault(); pick(li.dataset.s); }); }
+  function pick(s) { cur = all.find(r => r[0] === s); $('#sym').value = s; $('#combo').classList.remove('open'); $('#now').textContent = `Now: ask ${cur[2].toFixed(2)} · bid ${cur[3].toFixed(2)} · live`; prev(); }
+  function prev() { const t = +$('#trig').value, buy = side === 'buy', p = buy ? cur[2] : cur[3], met = buy ? p <= t : p >= t; $('#preview').textContent = met ? `The ${buy ? 'ask' : 'bid'} is already ${buy ? 'at or below' : 'at or above'} this level, so it would act as soon as you enable it.` : `It will wait until the ${buy ? 'ask falls' : 'bid rises'} to ${t.toFixed(2)}.`; }
+  $('#sym').onfocus = () => { $('#combo').classList.add('open'); render($('#sym').value === cur[0] ? '' : $('#sym').value); };
+  $('#sym').oninput = e => { $('#combo').classList.add('open'); render(e.target.value); }; $('#sym').onblur = () => $('#combo').classList.remove('open');
+  $('#trig').oninput = prev; pick('AAPL');
+  $$('#side button').forEach(b => b.onclick = () => { side = b.dataset.side; $$('#side button').forEach(x => x.classList.toggle('on', x === b)); if (side === 'sell' && !held.includes(cur[0])) pick('MSFT'); else prev(); });
+</script>
+</body>
+</html>

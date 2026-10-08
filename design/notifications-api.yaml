@@ -1,0 +1,188 @@
+openapi: 3.1.0
+
+info:
+  title: Customer Notifications API
+  version: 2.0.0
+  summary: The signed-in customer's notifications and their read state (LEAP-008).
+  description: |
+    Served by the Trade REST API (`com.trade.notification`) behind the same JWT verification as
+    every other `/api/v1/**` route. The Angular UI generates its typed client from this file.
+
+    ## Where notifications come from
+
+    Notifications are written only in-process, through `NotificationService.notify`: an order
+    filled or rejected (the module's `trade-events` consumer), an order cancelled (the cancel
+    route), and a price alert crossed (the watchlist module's `market-data` consumer). There is no
+    HTTP route that creates or changes a notification (B32): a route that existed only so another
+    module could call it would be reachable by any customer token.
+
+    The customer's Settings decide whether each type is wanted and on which channel. `IN_APP` is
+    delivered by being stored; `EMAIL` is mailed after the row is committed, retried every minute
+    while the mail server refuses, and marked `FAILED` after an hour. One row per event id, so a
+    replayed event notifies once.
+
+    ## Scoping
+
+    The account is the one the verified token names. Another customer's notification answers
+    `NOT-404`, exactly as one that does not exist.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Notifications
+    description: Customer notification history and read state.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: The signed-in customer's notifications, newest first, with the unread count
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, format: int32, default: 0, minimum: 0 }
+      responses:
+        '200':
+          description: A page of notifications.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationsListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+
+  /api/v1/notifications/read-all:
+    post:
+      tags: [Notifications]
+      operationId: markAllNotificationsRead
+      summary: Mark every notification read
+      responses:
+        '204': { description: Done. }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+
+  /api/v1/notifications/{notificationId}:
+    get:
+      tags: [Notifications]
+      operationId: getNotification
+      summary: One notification
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '200':
+          description: The notification.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationResponse' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '404': { $ref: '#/components/responses/NotificationNotFound' }
+
+  /api/v1/notifications/{notificationId}/read:
+    patch:
+      tags: [Notifications]
+      operationId: markNotificationRead
+      summary: Mark one notification read
+      parameters:
+        - $ref: '#/components/parameters/NotificationId'
+      responses:
+        '204': { description: Done. }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '404': { $ref: '#/components/responses/NotificationNotFound' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    NotificationId:
+      name: notificationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorised:
+      description: Missing or invalid token, or the user is no longer active.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotificationNotFound:
+      description: No such notification for this customer.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    NotificationChannel:
+      type: string
+      enum: [EMAIL, IN_APP]
+
+    NotificationStatus:
+      type: string
+      enum: [QUEUED, SENT, FAILED, RETRYING]
+      description: |
+        `QUEUED` until delivered; `SENT`; `RETRYING` while the mail server refuses; `FAILED` when
+        it cannot be delivered (no mail server, no address, or an hour of refusals).
+
+    NotificationEventType:
+      type: string
+      enum: [ORDER_FILLED, ORDER_REJECTED, ORDER_CANCELLED, PRICE_ALERT]
+
+    NotificationResponse:
+      type: object
+      required: [notificationId, accountId, eventId, eventType, resolvedChannel, status, createdAt]
+      properties:
+        notificationId: { type: string, format: uuid }
+        accountId: { type: integer, format: int64 }
+        eventId:
+          type: string
+          format: uuid
+          description: The event this notification is for; one notification per event.
+        eventType: { $ref: '#/components/schemas/NotificationEventType' }
+        orderId:
+          type: [string, 'null']
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        symbol: { type: [string, 'null'] }
+        resolvedChannel: { $ref: '#/components/schemas/NotificationChannel' }
+        message: { type: string }
+        status: { $ref: '#/components/schemas/NotificationStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: [string, 'null'], format: date-time }
+        readAt:
+          type: [string, 'null']
+          format: date-time
+          description: When the customer read it; null while unread.
+
+    NotificationsListResponse:
+      type: object
+      required: [notifications, total, limit, offset, unread]
+      properties:
+        notifications:
+          type: array
+          items: { $ref: '#/components/schemas/NotificationResponse' }
+        total: { type: integer, format: int64 }
+        limit: { type: integer, format: int32 }
+        offset: { type: integer, format: int32 }
+        unread:
+          type: integer
+          format: int64
+          description: How many of the customer's notifications are unread (all of them, not this page).
+
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, NOT-404, VAL-422]
+        message:
+          type: string

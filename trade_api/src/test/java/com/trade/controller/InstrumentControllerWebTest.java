@@ -1,5 +1,6 @@
 package com.trade.controller;
 
+import com.trade.mapper.UserAccessMapper;
 import com.trade.domain.Instrument;
 import com.trade.dto.InstrumentQuoteDto;
 import com.trade.enums.InstrumentType;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -33,6 +35,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = "app.jwt.secret=" + JwtTestFixture.SECRET)
 class InstrumentControllerWebTest {
 
+    // JwtAuthFilter asks Users whether the token's user may still act; the
+    // slice has no database, and an unstubbed mock answers "not blocked".
+    @MockitoBean
+    private UserAccessMapper userAccessMapper;
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -45,7 +52,7 @@ class InstrumentControllerWebTest {
     @Test
     void oneInstrumentBySymbol() throws Exception {
         when(marketDataService.getTradableInstrument("AAPL")).thenReturn(
-                new Instrument("AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
+                new Instrument(UUID.randomUUID(), "AAPL", "Apple Inc.", InstrumentType.EQUITY, "USD", "NASDAQ", "Technology"));
 
         mockMvc.perform(get("/api/v1/instruments/AAPL").header("Authorization", bearer()))
                 .andExpect(status().isOk())

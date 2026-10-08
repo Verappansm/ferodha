@@ -1,7 +1,7 @@
 # `windows` profile: services on Windows, Kafka on Linux
 
 The root `docker-compose.yml` runs everything in Docker. This profile splits it across two machines.
-pricing-generator is the live price feed under both profiles: it publishes a tick for every tradable instrument to `market-data` every 5 seconds and records the history behind the instrument charts. The profiles differ only in how trade-executor settles an order. By default (the **main profile**) each order fills or is rejected at one real Fauxnance quote. Add `-MarketSim` to `start-windows.ps1` for the simulated market (see [Market-sim](#market-sim)).
+trade-executor also runs the live price feed under both profiles (formerly the separate pricing-generator service): it publishes a tick for every tradable instrument to `market-data` every 5 seconds and records the history behind the instrument charts. The profiles differ only in how trade-executor settles an order. By default (the **main profile**) each order fills or is rejected at the live tick. Add `-MarketSim` to `start-windows.ps1` for the simulated market (see [Market-sim](#market-sim)).
 
 | Machine | Runs | Port |
 |---|---|---|
@@ -11,8 +11,6 @@ pricing-generator is the live price feed under both profiles: it publishes a tic
 | **Windows** (native) | trade-api | 8080 |
 | **Windows** (native) | trade-executor | 8082 |
 | **Windows** (native) | auth-service | 3000 |
-| **Windows** (native) | trades-generator | 8083 |
-| **Windows** (native) | pricing-generator | 8084 |
 | **Windows** (native) | trading-ui (Angular, `ng serve`) | 4200 |
 | **Windows** (native) | admin console (Angular, `ng serve admin`) | 4300 |
 
@@ -146,9 +144,9 @@ The first run takes a few minutes because it builds everything. You should see:
 ```
 == Preflight ==              tools found, Kafka reachable, Postgres login OK
 == Database (tradedb) ==     database created + base schema applied (first run only)
-== Build ==                  trade-api, trade-executor, pricing-generator, trades-generator jars + auth-service
+== Build ==                  trade-api, trade-executor jars + auth-service
 == Start (SPRING_PROFILES_ACTIVE=windows) ==
-PASS: trade-api / pricing-generator / trade-executor / auth-service / trades-generator are up
+PASS: trade-api / trade-executor / auth-service are up
 PASS: trading-ui is up / admin-ui is up
 == Kafka connectivity (trade-executor consumer group) ==
 PASS: trade-executor joined its consumer group on the Linux broker
@@ -187,7 +185,7 @@ It ends with `== ALL STAGES PASSED ==`.
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\stop-windows.ps1       # Windows
 ```
-This stops every service the start script ran (with their child processes), anything java or node still listening on the platform ports (8080, 8082, 8083, 8084, 3000, 4200, 4300) after a run that failed part-way, and the local PostgreSQL service. Add `-KeepPostgres` to leave PostgreSQL running. Stopping and starting the PostgreSQL service needs a window opened as Administrator; `start-windows.ps1` starts the service again if it is stopped.
+This stops every service the start script ran (with their child processes), anything java or node still listening on the platform ports (8080, 8082, 3000, 4200, 4300) after a run that failed part-way, and the local PostgreSQL service. Add `-KeepPostgres` to leave PostgreSQL running. Stopping and starting the PostgreSQL service needs a window opened as Administrator; `start-windows.ps1` starts the service again if it is stopped.
 ```bash
 bash windows/kafka-linux.sh down                                         # Linux
 ```
@@ -209,10 +207,10 @@ Drop `-SkipBuild` after a `git pull` so the new code is built.
 powershell -ExecutionPolicy Bypass -File windows\start-windows.ps1 -MarketSim
 ```
 This sets `SPRING_PROFILES_ACTIVE=windows,market-sim` for every Spring service, the same switch Docker uses. Only settlement changes:
-- **trade-executor** takes its prices from pricing-generator instead of one Fauxnance quote per order, matches orders on a resting order book with partial fills, and expires stale resting orders.
-- **trades-generator** places synthetic counter-orders for the market-maker account, so customer orders have something to match against. It does nothing without `-MarketSim`.
+- **trade-executor** matches orders on a resting order book at its live prices, with partial fills, and expires stale resting orders.
+- Its **market maker** (formerly the trades-generator service) places synthetic counter-orders for the market-maker account, so customer orders have something to match against. It does nothing without `-MarketSim`.
 
-pricing-generator behaves the same either way. trade-executor's own market-data poller stays in the code but is off (`EXECUTOR_MARKET_DATA_POLLER_ENABLED=false`), so only one process publishes prices.
+The price feed behaves the same either way. trade-executor's own market-data poller stays in the code but is off (`EXECUTOR_MARKET_DATA_POLLER_ENABLED=false`), so only one process publishes prices.
 
 ---
 
@@ -229,7 +227,7 @@ pricing-generator behaves the same either way. trade-executor's own market-data 
   - Checks the tools, Kafka reachability and the PostgreSQL login.
   - Creates the database. On an empty database it applies only `001_initial_schema.sql` and `001_seed_data.sql`, the same two files Docker's postgres applies.
   - Builds everything.
-  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then pricing-generator, trade-executor and auth-service, then trades-generator (it reads prices from pricing-generator), then both UIs.
+  - Starts trade-api first, because its Liquibase owns the schema after Sprint 3, then trade-executor (with its price feed and market maker) and auth-service, then both UIs.
   - Waits for each health check, and for trade-executor to be assigned partitions of `orders`.
 - **`kafka-linux.sh`** plus **`docker-compose.kafka.yml`**: Kafka and Kafka UI only. The broker advertises the Linux IP on 9092 so Windows clients can reconnect to it.
 

@@ -1,0 +1,422 @@
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Strategies</h1>
+      <p class="intro">
+        A strategy places an order for you when a price reaches a level, with nobody confirming it.
+        A new strategy starts disabled, and disabling one stops it at once and cancels its working
+        orders. Try a <strong>dry run</strong> first: it logs what it would do and places nothing.
+      </p>
+    </div>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="strategies-refresh"
+        (click)="refresh()"
+      >
+        Refresh
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="strategy-new"
+        [disabled]="showForm()"
+        (click)="openForm()"
+      >
+        + New strategy
+      </button>
+    </div>
+  </header>
+
+  @if (strategies().length > 0) {
+    <div class="strip" data-testid="strategy-counts">
+      <span class="badge badge-pos">{{ counts().running }} running</span>
+      @if (counts().stopped > 0) {
+        <span class="badge badge-neg">{{ counts().stopped }} stopped after failures</span>
+      }
+      <span class="badge">{{ counts().disabled }} disabled</span>
+    </div>
+  }
+
+  @if (notice()) {
+    <p class="notice notice-success" role="status" data-testid="strategy-notice">{{ notice() }}</p>
+  }
+  @if (error()) {
+    <p class="form-error" role="alert" data-testid="strategy-error">{{ error() }}</p>
+  }
+
+  @if (isLoading() && !hasLoaded()) {
+    <p class="muted">Loading strategies…</p>
+  } @else if (hasLoaded() && strategies().length === 0) {
+    <p class="empty" data-testid="strategies-empty">
+      No strategies yet. Create one to have an order placed for you when a price reaches a level.
+    </p>
+  }
+
+  @for (s of strategies(); track s.strategyId) {
+    <article class="strat" data-testid="strategy-row">
+      <div class="strat-top">
+        <h3>{{ s.name }}</h3>
+        <span class="chip mono">{{ s.symbol }}</span>
+        @if (s.dryRun) {
+          <span class="chip">dry run</span>
+        }
+        <span
+          [class]="'badge status status-' + s.status.toLowerCase()"
+          data-testid="strategy-status"
+          >{{ s.status }}</span
+        ><app-info-tip label="Status" [text]="info.status" />
+        <div class="strat-actions">
+          @if (s.status === 'ENABLED') {
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-testid="strategy-disable"
+              [disabled]="busyId() !== null"
+              (click)="disable(s)"
+            >
+              Disable
+            </button>
+          } @else if (s.status === 'DISABLED' || s.status === 'TRIPPED') {
+            <button
+              type="button"
+              class="btn btn-primary"
+              data-testid="strategy-enable"
+              [disabled]="busyId() !== null"
+              (click)="enable(s)"
+            >
+              {{ s.status === 'TRIPPED' ? 'Re-enable' : 'Enable' }}
+            </button>
+          }
+          @if (s.status !== 'COMPLETED' && s.status !== 'EXPIRED') {
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-testid="strategy-edit"
+              [disabled]="!canEdit(s)"
+              [attr.title]="canEdit(s) ? null : 'Disable the strategy first to edit it'"
+              (click)="edit(s)"
+            >
+              Edit
+            </button>
+          }
+          <button
+            type="button"
+            class="btn btn-link"
+            data-testid="strategy-activity"
+            [attr.aria-expanded]="expandedId() === s.strategyId"
+            (click)="toggleActivity(s)"
+          >
+            Activity
+          </button>
+        </div>
+      </div>
+
+      <div class="strat-mid">
+        <div>
+          <p class="label">Rule<app-info-tip label="Rule" [text]="info.rule" /></p>
+          <p class="rule" data-testid="strategy-rule">{{ rule(s) }}</p>
+
+          <p class="label watch-label">
+            Watching<app-info-tip label="Watching" [text]="info.watching" />
+          </p>
+          <div class="watching" data-testid="strategy-watching">
+            @if (gauge(s); as g) {
+              <strong>{{ s.lastPrice | money: '1.2-2' }}</strong>
+              <small>{{ s.lastCheckedAt | date: 'HH:mm:ss' }}</small>
+            } @else {
+              {{ s.status === 'ENABLED' ? 'Waiting for a price' : '—' }}
+            }
+          </div>
+          @if (gauge(s); as g) {
+            <div class="gauge" data-testid="strategy-gauge" aria-hidden="true">
+              <div class="gauge-fill" [style.width.%]="g.now"></div>
+              <span
+                class="mark mark-target"
+                [style.left.%]="g.target"
+                [attr.data-l]="'Target ' + (s.triggerPrice | money: '1.2-2')"
+              ></span>
+              <span
+                class="mark mark-now"
+                [style.left.%]="g.now"
+                [attr.data-l]="
+                  (s.side === 'BUY' ? 'Ask ' : 'Bid ') + (s.lastPrice | money: '1.2-2')
+                "
+              ></span>
+            </div>
+            <p class="gauge-text" [class.reached]="g.reached">{{ g.text }}</p>
+          }
+        </div>
+
+        <dl class="stats">
+          <div>
+            <dt>Limits<app-info-tip label="Limits" [text]="info.limits" /></dt>
+            <dd>
+              @if (s.side === 'BUY') {
+                <span class="chip">Spend ≤ {{ s.maxSpend | money: '1.2-2' }}</span>
+                <span class="chip">Position ≤ {{ s.maxPosition }}</span>
+              } @else {
+                <span class="chip">Held units only</span>
+              }
+              @if (s.expiresAt) {
+                <span class="chip">Expires {{ s.expiresAt | date: 'd MMM y, HH:mm' }}</span>
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Orders<app-info-tip label="Orders" [text]="info.orders" /></dt>
+            <dd>{{ s.ordersPlaced }} / {{ s.maxOrders }}</dd>
+          </div>
+          <div>
+            <dt>Failures<app-info-tip label="Failures" [text]="info.failures" /></dt>
+            <dd>{{ s.consecutiveFailures }} / {{ s.maxFailures }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      @if (s.status === 'TRIPPED') {
+        <p class="callout" role="alert">
+          Stopped after {{ s.consecutiveFailures }} failures in a row. Check the Activity, edit the
+          rule if needed, then re-enable it.
+        </p>
+      }
+
+      @if (expandedId() === s.strategyId) {
+        <div class="activity-box" data-testid="strategy-activity-row">
+          @if (events().length === 0) {
+            <span class="muted">No activity yet.</span>
+          } @else {
+            <ul class="activity">
+              @for (e of events(); track $index) {
+                <li data-testid="strategy-event">
+                  <span class="when">{{ e.at | date: 'd MMM, HH:mm:ss' }}</span>
+                  <span class="kind">{{ e.kind }}</span>
+                  <span>{{ e.detail }}</span>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      }
+    </article>
+  }
+</div>
+
+@if (showForm()) {
+  <div class="scrim" (click)="closeForm()"></div>
+  <aside
+    class="drawer"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="editingId() ? 'Edit strategy' : 'New strategy'"
+    (keydown.escape)="closeForm()"
+  >
+    <header class="drawer-head">
+      <h3>{{ editingId() ? 'Edit strategy' : 'New strategy' }}</h3>
+      <button type="button" class="close" aria-label="Close" (click)="closeForm()">✕</button>
+    </header>
+    <form
+      class="strategy-form"
+      [formGroup]="form"
+      (ngSubmit)="create()"
+      novalidate
+      data-testid="strategy-form"
+    >
+      <div class="drawer-body">
+        <p class="sect">What to do</p>
+        <div class="field">
+          <label class="field-label" for="s-name"
+            >Name<app-info-tip label="Name" [text]="info.name"
+          /></label>
+          <input id="s-name" class="input" formControlName="name" data-testid="strategy-name" />
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="s-side"
+            >Action<app-info-tip label="Action" [text]="info.action"
+          /></label>
+          <select id="s-side" class="input" formControlName="side" data-testid="strategy-side">
+            <option value="BUY">Buy when the ask falls to the level</option>
+            <option value="SELL" [disabled]="!canSell()" data-testid="strategy-side-sell">
+              {{ canSell() ? 'Sell when the bid rises to the level' : 'Sell (you hold no stock)' }}
+            </option>
+          </select>
+          @if (!canSell()) {
+            <p class="hint" data-testid="strategy-no-stock">
+              Selling is available once you hold some stock.
+            </p>
+          }
+        </div>
+
+        <div class="field">
+          <span class="field-label" id="s-symbol-label"
+            >Symbol<app-info-tip label="Symbol" [text]="info.symbol"
+          /></span>
+          <app-symbol-picker
+            [options]="pickable()"
+            [value]="form.controls.symbol.value"
+            (valueChange)="setSymbol($event)"
+            label="Symbol"
+            testId="strategy-symbol"
+            [emptyText]="isBuy() ? 'No matching instrument' : 'You hold no matching stock'"
+          />
+          @if (!isBuy() && form.controls.symbol.value) {
+            <p class="hint" data-testid="strategy-held">
+              You hold {{ held() | money }} {{ form.controls.symbol.value }}.
+            </p>
+          }
+        </div>
+
+        <p class="sect">When</p>
+        <div class="pair">
+          <div class="field">
+            <label class="field-label" for="s-trigger"
+              >Target price<app-info-tip label="Target price" [text]="info.trigger"
+            /></label>
+            <input
+              id="s-trigger"
+              class="input"
+              type="number"
+              step="0.01"
+              formControlName="triggerPrice"
+              data-testid="strategy-trigger"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label" for="s-qty"
+              >Quantity per order<app-info-tip label="Quantity" [text]="info.quantity"
+            /></label>
+            <input
+              id="s-qty"
+              class="input"
+              type="number"
+              formControlName="quantity"
+              data-testid="strategy-quantity"
+            />
+          </div>
+        </div>
+        @if (quote(); as q) {
+          <p class="price-now" data-testid="strategy-current-price">
+            <i class="live" aria-hidden="true"></i>
+            @if (q.ask != null || q.bid != null) {
+              Now: ask {{ q.ask | money: '1.2-2' }} · bid {{ q.bid | money: '1.2-2' }}
+              {{ q.currency }}
+            } @else if (q.mid != null) {
+              Last price {{ q.mid | money: '1.2-2' }} {{ q.currency }}
+            } @else {
+              No price yet for {{ q.symbol }}
+            }
+          </p>
+        }
+        @if (preview(); as p) {
+          <p class="hint" data-testid="strategy-preview">{{ p }}</p>
+        }
+
+        <p class="sect">Guard rails</p>
+        @if (isBuy()) {
+          <div class="pair">
+            <div class="field">
+              <label class="field-label" for="s-spend"
+                >Max spend<app-info-tip label="Max spend" [text]="info.maxSpend"
+              /></label>
+              <input
+                id="s-spend"
+                class="input"
+                type="number"
+                step="0.01"
+                formControlName="maxSpend"
+                data-testid="strategy-max-spend"
+              />
+            </div>
+            <div class="field">
+              <label class="field-label" for="s-position"
+                >Max position<app-info-tip label="Max position" [text]="info.maxPosition"
+              /></label>
+              <input
+                id="s-position"
+                class="input"
+                type="number"
+                formControlName="maxPosition"
+                data-testid="strategy-max-position"
+              />
+            </div>
+          </div>
+        }
+        <div class="pair">
+          <div class="field">
+            <label class="field-label" for="s-orders"
+              >Max orders<app-info-tip label="Max orders" [text]="info.maxOrders"
+            /></label>
+            <input
+              id="s-orders"
+              class="input"
+              type="number"
+              formControlName="maxOrders"
+              data-testid="strategy-max-orders"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label" for="s-failures"
+              >Stop after failures<app-info-tip
+                label="Stop after failures"
+                [text]="info.maxFailures"
+            /></label>
+            <input
+              id="s-failures"
+              class="input"
+              type="number"
+              formControlName="maxFailures"
+              data-testid="strategy-max-failures"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="s-expires"
+            >Expires (optional)<app-info-tip label="Expiry" [text]="info.expires"
+          /></label>
+          <input
+            id="s-expires"
+            class="input"
+            type="datetime-local"
+            formControlName="expiresAt"
+            data-testid="strategy-expires"
+          />
+        </div>
+
+        <label class="check">
+          <input type="checkbox" formControlName="dryRun" data-testid="strategy-dry-run" />
+          <span><strong>Dry run</strong>: log what it would do, place nothing</span>
+          <app-info-tip label="Dry run" [text]="info.dryRun" />
+        </label>
+
+        @if (form.touched && form.invalid) {
+          <p class="field-error" data-testid="strategy-form-hint">
+            @if (form.hasError('capsRequired')) {
+              A buy needs a max spend and a max position.
+            } @else if (!form.controls.symbol.value) {
+              Choose a symbol from the list.
+            } @else {
+              Check the highlighted details: name, trigger price and quantity are required.
+            }
+          </p>
+        }
+        @if (formError()) {
+          <p class="form-error" role="alert" data-testid="strategy-form-error">{{ formError() }}</p>
+        }
+      </div>
+
+      <footer class="drawer-foot">
+        <button type="button" class="btn btn-secondary" (click)="closeForm()">Cancel</button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          data-testid="strategy-save"
+          [disabled]="isSaving()"
+        >
+          {{ isSaving() ? 'Saving…' : editingId() ? 'Save changes' : 'Create strategy' }}
+        </button>
+      </footer>
+    </form>
+  </aside>
+}

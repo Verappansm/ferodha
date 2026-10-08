@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
@@ -6,6 +7,7 @@ import { CANCEL_TOO_LATE, MAX_POLLS, OrdersComponent, POLL_INTERVAL_MS } from '.
 import { Session } from '../../core/session/session';
 import { OrderHistoryEntry, OrderSide, OrderStatus, TradeApi } from '../../api/trade-api';
 import { ERROR_MESSAGES } from '../../core/errors/error-message';
+import { provideStubPreferences } from '../../core/preferences/preferences.testing';
 
 function order(
   orderId: string,
@@ -23,6 +25,10 @@ function order(
     executedPrice: status === OrderStatus.FILLED ? 149.5 : null,
     status,
     createdOn,
+    instrumentCurrency: 'USD',
+    accountCurrency: 'USD',
+    filledQuantity: status === OrderStatus.FILLED ? 10 : 0,
+    estimatedValueAccountCurrency: 1500,
     ...extra,
   };
 }
@@ -42,7 +48,9 @@ describe('OrdersComponent', () => {
     await TestBed.configureTestingModule({
       imports: [OrdersComponent],
       providers: [
+        provideRouter([]),
         { provide: Session, useValue: { accountId } },
+        provideStubPreferences(),
         { provide: TradeApi, useValue: { orderHistory, placeOrder, cancelOrder } },
       ],
     }).compileComponents();
@@ -314,8 +322,8 @@ describe('OrdersComponent', () => {
       // The question is its own full-width row under the order: the table never widens.
       const confirmRow = byTestId('cancel-confirm')!;
       expect(confirmRow.tagName).toBe('TR');
-      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('9');
-      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00?');
+      expect(confirmRow.querySelector('td')?.getAttribute('colspan')).toBe('8');
+      expect(confirmRow.textContent).toContain('Cancel BUY 10 AAPL at 150.00 USD?');
 
       orderHistory.mockReturnValue(
         of([order('ORD-abc', OrderStatus.CANCELLED, '2026-09-30T09:00:00Z')]),

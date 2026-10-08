@@ -4,6 +4,7 @@ import com.trade.enums.OrderSide;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 
 // payload of an ORDER_PLACED event on the orders topic. orderId is the exact
 // "ORD-<uuid>" string OrderService already persisted - never re-minted here.
@@ -15,6 +16,7 @@ public record OrderPlacedPayload(
         Integer quantity,
         BigDecimal price,
         String idempotencyKey,
-        Instant createdOn
+        Instant createdOn,
+        Map<String, BigDecimal> instrumentToAccountRates
 ) {
 }

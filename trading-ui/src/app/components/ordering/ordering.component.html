@@ -1,173 +1,340 @@
-<div class="ordering-container">
-  <h2>Place Order</h2>
-
-  <form [formGroup]="form" (ngSubmit)="submit()" class="order-form">
-    <!-- Account (Read-only) -->
-    <div class="form-group">
-      <label for="account">Account</label>
-      <input
-        id="account"
-        type="text"
-        [value]="account() || ''"
-        readonly
-        class="form-control"
-        data-testid="order-account"
-      />
-      <small>Your trading account (from token)</small>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Place an order</h1>
+      <p>A limit order: you set the most you will pay, or the least you will accept.</p>
     </div>
-
-    <!-- Symbol -->
-    <div class="form-group">
-      <label for="symbol">Symbol</label>
-      <input
-        id="symbol"
-        type="text"
-        formControlName="symbol"
-        placeholder="e.g., AAPL, TCS.NS, FX:EURUSD"
-        class="form-control"
-        data-testid="order-symbol"
-      />
-      @if (form.controls.symbol.invalid && form.controls.symbol.touched) {
-        <div class="error-message" data-testid="order-symbol-error">
-          {{ symbolError() }}
-        </div>
-      }
+    <div class="page-actions">
+      <a class="btn btn-secondary" routerLink="/orders">View orders</a>
     </div>
+  </header>
 
-    <!-- Side (BUY/SELL) -->
-    <div class="form-group">
-      <label for="side">Side</label>
-      <select id="side" formControlName="side" class="form-control" data-testid="order-side">
-        <option [value]="OrderSide.BUY">Buy</option>
-        <option [value]="OrderSide.SELL">Sell</option>
-      </select>
-    </div>
-
-    <!-- Quantity -->
-    <div class="form-group">
-      <label for="quantity">Quantity</label>
-      <input
-        id="quantity"
-        type="number"
-        formControlName="quantity"
-        placeholder="Whole units"
-        class="form-control"
-        data-testid="order-quantity"
-      />
-      @if (form.controls.quantity.invalid && form.controls.quantity.touched) {
-        <div class="error-message" data-testid="order-quantity-error">
-          {{ quantityError() }}
-        </div>
-      }
-    </div>
-
-    <!-- Price -->
-    <div class="form-group">
-      <label for="price">Price</label>
-      <input
-        id="price"
-        type="number"
-        step="0.01"
-        formControlName="price"
-        placeholder="Per unit (max 2 decimals)"
-        class="form-control"
-        data-testid="order-price"
-      />
-      @if (form.controls.price.invalid && form.controls.price.touched) {
-        <div class="error-message" data-testid="order-price-error">
-          {{ priceError() }}
-        </div>
-      }
-      @if (quote(); as q) {
-        <div class="current-price" data-testid="order-current-price">
-          @if (q.mid != null) {
-            Current price <strong>{{ q.mid | number: '1.2-4' }} {{ q.currency }}</strong>
-            @if (q.bid != null && q.ask != null) {
-              (bid {{ q.bid | number: '1.2-4' }} / ask {{ q.ask | number: '1.2-4' }})
-            }
-            @if (q.stale) {
-              <span class="stale" data-testid="order-quote-stale">
-                stale{{ q.asOf ? ', last priced ' + (q.asOf | date: 'shortTime') : '' }}
-              </span>
-            } @else if (q.asOf) {
-              · live {{ q.asOf | date: 'mediumTime' }}
-            }
-            @if (suggestedPrice(); as s) {
-              <div data-testid="order-suggested-price">
-                Suggested limit {{ s | number: '1.2-2' }} ({{
-                  form.controls.side.value === 'BUY' ? '+' : '−'
-                }}{{ bufferPercent }}% past the
-                {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})
-                @if (form.controls.price.value !== s) {
-                  <button
-                    type="button"
-                    class="link-button"
-                    data-testid="order-use-suggested"
-                    (click)="useSuggestedPrice()"
-                  >
-                    Use it
-                  </button>
-                }
-              </div>
-            }
-          } @else {
-            No live price for {{ q.symbol }} yet.
-          }
-        </div>
-      }
-    </div>
-
-    <!-- Submit Button -->
-    <button
-      type="submit"
-      class="btn btn-primary"
-      [disabled]="isSubmitting()"
-      data-testid="order-submit"
-    >
-      {{ isSubmitting() ? 'Submitting...' : 'Place Order' }}
-    </button>
-  </form>
-
-  <!-- Success Message -->
   @if (successMessage()) {
-    <div class="alert alert-success" data-testid="order-success">
+    <p class="notice notice-success" role="status" data-testid="order-success">
       {{ successMessage() }}
-    </div>
+    </p>
   }
-
-  <!-- Error Message -->
   @if (errorMessage()) {
-    <div class="alert alert-error" data-testid="order-error">
+    <p class="notice notice-error" role="alert" data-testid="order-error">
       {{ errorMessage() }}
-    </div>
+    </p>
   }
 
-  <!-- Order Result Details -->
-  @if (orderResult(); as result) {
-    <div class="order-result" data-testid="order-result">
-      <h3>Order Details</h3>
-      <dl>
-        <dt>Order ID</dt>
-        <dd data-testid="order-result-id">{{ result.orderId }}</dd>
+  <div class="ticket-layout">
+    <section class="card ticket" [class.sell]="form.controls.side.value === 'SELL'">
+      @if (step() === 'edit') {
+        <header class="card-header">
+          <h2>Order ticket</h2>
+          <span class="step">Step 1 of 2</span>
+        </header>
+        <form [formGroup]="form" (ngSubmit)="startReview()" class="card-body order-form" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label class="field-label" for="side">Side</label>
+              <select
+                id="side"
+                formControlName="side"
+                class="input side-select"
+                data-testid="order-side"
+              >
+                <option [value]="OrderSide.BUY">Buy</option>
+                <option [value]="OrderSide.SELL">Sell</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label" for="account">Account</label>
+              <input
+                id="account"
+                type="text"
+                [value]="account() || ''"
+                readonly
+                class="input"
+                data-testid="order-account"
+                aria-describedby="account-hint"
+              />
+            </div>
+            <p id="account-hint" class="field-hint wide">
+              Orders go to the account you signed in with; it cannot be changed here.
+            </p>
 
-        <dt>Status</dt>
-        <dd data-testid="order-result-status">{{ result.status }}</dd>
+            <div class="field wide">
+              <span class="field-label" id="symbol-label">Symbol</span>
+              <app-symbol-picker
+                class="symbol-input"
+                [options]="symbolOptions()"
+                [value]="symbolValue()"
+                (valueChange)="setSymbol($event)"
+                [freeText]="true"
+                label="Symbol"
+                placeholder="Search a symbol or company, e.g. AAPL"
+                testId="order-symbol"
+              />
+              @if (form.controls.symbol.invalid && form.controls.symbol.touched) {
+                <p class="field-error" data-testid="order-symbol-error">{{ symbolError() }}</p>
+              }
+            </div>
 
-        <dt>Symbol</dt>
-        <dd data-testid="order-result-symbol">{{ result.symbol }}</dd>
+            <div class="field">
+              <label class="field-label" for="quantity">Quantity</label>
+              <input
+                id="quantity"
+                type="number"
+                formControlName="quantity"
+                placeholder="Whole units"
+                class="input"
+                min="1"
+                step="1"
+                data-testid="order-quantity"
+              />
+              @if (form.controls.quantity.invalid && form.controls.quantity.touched) {
+                <p class="field-error" data-testid="order-quantity-error">{{ quantityError() }}</p>
+              }
+            </div>
 
-        <dt>Side</dt>
-        <dd data-testid="order-result-side">{{ result.side }}</dd>
+            <div class="field">
+              <label class="field-label" for="price"
+                >Limit price
+                @if (quote(); as q) {
+                  ({{ q.currency }})
+                }
+              </label>
+              <input
+                id="price"
+                type="number"
+                step="0.01"
+                formControlName="price"
+                placeholder="Per unit"
+                class="input"
+                data-testid="order-price"
+              />
+              @if (form.controls.price.invalid && form.controls.price.touched) {
+                <p class="field-error" data-testid="order-price-error">{{ priceError() }}</p>
+              }
+            </div>
+          </div>
 
-        <dt>Quantity</dt>
-        <dd data-testid="order-result-quantity">{{ result.quantity }}</dd>
+          @if (quote(); as q) {
+            <div class="quote-box" data-testid="order-current-price">
+              @if (q.mid != null) {
+                <div class="quote-line">
+                  <span class="live-dot" [class.is-stale]="q.stale" aria-hidden="true"></span>
+                  <span>
+                    Current price <strong>{{ q.mid | money: '1.2-4' }} {{ q.currency }}</strong>
+                  </span>
+                  @if (q.stale) {
+                    <span class="stale" data-testid="order-quote-stale">
+                      stale{{ q.asOf ? ', last priced ' + (q.asOf | date: 'shortTime') : '' }}
+                    </span>
+                  } @else if (q.asOf) {
+                    <span class="muted">live {{ q.asOf | date: 'mediumTime' }}</span>
+                  }
+                </div>
+                @if (q.bid != null && q.ask != null) {
+                  <div class="bid-ask">
+                    bid <strong>{{ q.bid | money: '1.2-4' }}</strong> / ask
+                    <strong>{{ q.ask | money: '1.2-4' }}</strong>
+                  </div>
+                }
+                @if (suggestedPrice(); as s) {
+                  <div class="suggest" data-testid="order-suggested-price">
+                    <span
+                      >Suggested limit <strong>{{ s | money: '1.2-2' }}</strong> ({{
+                        form.controls.side.value === 'BUY' ? '+' : '−'
+                      }}{{ bufferPercent }}% past the
+                      {{ form.controls.side.value === 'BUY' ? 'ask' : 'bid' }})</span
+                    >
+                    @if (form.controls.price.value !== s) {
+                      <button
+                        type="button"
+                        class="btn btn-link"
+                        data-testid="order-use-suggested"
+                        (click)="useSuggestedPrice()"
+                      >
+                        Use it
+                      </button>
+                    }
+                  </div>
+                }
+              } @else {
+                <span class="muted">No live price for {{ q.symbol }} yet.</span>
+              }
+            </div>
+          }
 
-        <dt>Price</dt>
-        <dd data-testid="order-result-price">{{ result.price }}</dd>
+          <!-- Review: nothing is sent until Confirm on the next step -->
+          <button
+            type="submit"
+            class="btn btn-lg btn-block"
+            [class.btn-buy]="form.controls.side.value === 'BUY'"
+            [class.btn-sell]="form.controls.side.value === 'SELL'"
+            data-testid="order-submit"
+          >
+            Review order
+          </button>
+        </form>
+      } @else {
+        <section class="order-review" aria-labelledby="order-review-title" data-testid="order-review">
+          <header class="card-header">
+            <h2 id="order-review-title">Review your order</h2>
+            <span class="step">Step 2 of 2</span>
+          </header>
+          <div class="card-body">
+            @if (review(); as r) {
+              <p class="review-summary" data-testid="order-review-summary">
+                <span [class]="r.side === 'BUY' ? 'side-buy' : 'side-sell'">{{
+                  r.side === 'BUY' ? 'Buy' : 'Sell'
+                }}</span>
+                {{ r.quantity | money }} {{ r.symbol }} at {{ r.price | money: '1.2-2' }}
+                {{ r.currency }}
+              </p>
+              <dl class="kv">
+                <div>
+                  <dt>Estimated cost</dt>
+                  <dd data-testid="order-review-cost">
+                    {{ r.estimatedCost | money: '1.2-2' }} {{ r.currency }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Fees <small>({{ r.feeRate * 100 | money: '1.0-4' }}% of the value)</small></dt>
+                  <dd data-testid="order-review-fee">{{ r.fee | money: '1.2-2' }} {{ r.currency }}</dd>
+                </div>
+                <div class="total">
+                  <dt>{{ r.side === 'BUY' ? 'Total to pay' : 'Total you receive' }}</dt>
+                  <dd data-testid="order-review-total">
+                    <strong>{{ r.total | money: '1.2-2' }} {{ r.currency }}</strong>
+                  </dd>
+                </div>
+                @if (r.currency !== r.accountCurrency) {
+                  <div>
+                    <dt>Estimated in {{ r.accountCurrency }}</dt>
+                    <dd data-testid="order-review-account-total">
+                      Value {{ r.estimatedCostAccountCurrency | money: '1.2-2' }}
+                      {{ r.accountCurrency }} + fee {{ r.feeAccountCurrency | money: '1.2-2' }}
+                      {{ r.accountCurrency }} =
+                      <strong
+                        >{{ r.totalAccountCurrency | money: '1.2-2' }} {{ r.accountCurrency }}</strong
+                      >
+                    </dd>
+                  </div>
+                }
+                @if (r.cashRemaining != null) {
+                  <div>
+                    <dt>Cash remaining</dt>
+                    <dd data-testid="order-review-cash" [class.negative]="r.cashRemaining < 0">
+                      {{ r.cashRemaining | money: '1.2-2' : 'balance' }} {{ r.accountCurrency }}
+                    </dd>
+                  </div>
+                }
+              </dl>
+              <p class="field-hint review-note">
+                Estimated at your limit price. A fill can be at a better price, and the fee is
+                charged on the price you actually get, in your account's currency.
+              </p>
+            } @else if (isLoadingReview()) {
+              <div aria-hidden="true">
+                <div class="skeleton"></div>
+                <div class="skeleton"></div>
+                <div class="skeleton"></div>
+              </div>
+              <p class="muted" data-testid="order-review-loading">Working out the cost…</p>
+            }
 
-        <dt>Message</dt>
-        <dd data-testid="order-result-message">{{ result.message }}</dd>
-      </dl>
-    </div>
-  }
+            @if (reviewError()) {
+              <p class="form-error" role="alert" data-testid="order-review-error">
+                {{ reviewError() }}
+              </p>
+            }
+          </div>
+
+          <footer class="card-footer review-actions">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-testid="order-review-back"
+              [disabled]="isSubmitting()"
+              (click)="back()"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [class.btn-buy]="review()?.side !== 'SELL'"
+              [class.btn-sell]="review()?.side === 'SELL'"
+              data-testid="order-review-confirm"
+              [disabled]="isSubmitting() || review() === null"
+              (click)="submit()"
+            >
+              {{ isSubmitting() ? 'Submitting...' : 'Confirm order' }}
+            </button>
+          </footer>
+        </section>
+      }
+    </section>
+
+    <aside class="side-col">
+      @if (orderResult(); as result) {
+        <section class="card" data-testid="order-result" aria-labelledby="result-title">
+          <header class="card-header">
+            <h2 id="result-title">Your order</h2>
+            <app-order-status-badge [status]="liveStatus() ?? result.status" />
+          </header>
+          <div class="card-body">
+            <dl class="kv">
+              <div>
+                <dt>Order ID</dt>
+                <dd class="mono" data-testid="order-result-id">{{ result.orderId }}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd data-testid="order-result-status">{{ liveStatus() ?? result.status }}</dd>
+              </div>
+              @if (rejectReason(); as reason) {
+                <div>
+                  <dt>Reason</dt>
+                  <dd class="reject-reason" data-testid="order-result-reason">{{ reason }}</dd>
+                </div>
+              }
+              <div>
+                <dt>Symbol</dt>
+                <dd data-testid="order-result-symbol">{{ result.symbol }}</dd>
+              </div>
+              <div>
+                <dt>Side</dt>
+                <dd data-testid="order-result-side">{{ result.side }}</dd>
+              </div>
+              <div>
+                <dt>Quantity</dt>
+                <dd data-testid="order-result-quantity">{{ result.quantity }}</dd>
+              </div>
+              <div>
+                <dt>Price</dt>
+                <dd data-testid="order-result-price">{{ result.price }}</dd>
+              </div>
+            </dl>
+            <p class="field-hint result-msg" data-testid="order-result-message">
+              {{ result.message }}
+            </p>
+          </div>
+          <footer class="card-footer">
+            <a class="btn btn-secondary btn-sm" routerLink="/orders">Open the orders page</a>
+          </footer>
+        </section>
+      }
+
+      <section class="card how" aria-labelledby="how-title">
+        <header class="card-header">
+          <h2 id="how-title">How your order fills</h2>
+        </header>
+        <div class="card-body">
+          <p class="fill-note" data-testid="order-fill-note">{{ fillNote() }}</p>
+          <ul class="how-list">
+            <li>You review the cost and fee before anything is sent.</li>
+            <li>The order shows as in process until the exchange answers.</li>
+            <li>An order still in process can be cancelled from the Orders page.</li>
+          </ul>
+        </div>
+      </section>
+    </aside>
+  </div>
 </div>

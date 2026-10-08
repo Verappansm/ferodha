@@ -211,3 +211,8 @@
     display: none;
   }
 }
+
+.help-link {
+  margin: 1rem 0 0;
+  text-align: center;
+}

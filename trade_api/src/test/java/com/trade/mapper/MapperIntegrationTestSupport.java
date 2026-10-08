@@ -39,7 +39,9 @@ import java.util.UUID;
 @TestPropertySource(properties = {
         "app.jwt.secret=mapper-integration-test-signing-secret",
         // no broker in this test: keep the market-data listener from polling for one
-        "portfolio.quotes.listen=false"
+        "portfolio.quotes.listen=false",
+        "strategy.listen=false",
+        "watchlist.alerts.listen=false"
 })
 @Tag("integration")
 abstract class MapperIntegrationTestSupport {

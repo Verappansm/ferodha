@@ -14,6 +14,11 @@ public record OrderHistoryRow(
         BigDecimal executedPrice,
         String status,
         String idempotencyKey,
-        OffsetDateTime createdOn
+        OffsetDateTime createdOn,
+        String rejectionReason,
+        String instrumentCurrency,
+        String accountCurrency,
+        BigDecimal feeAmount,
+        BigDecimal feeRate
 ) {
 }

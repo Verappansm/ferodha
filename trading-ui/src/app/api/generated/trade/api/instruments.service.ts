@@ -19,9 +19,15 @@ import { OpenApiHttpParams, QueryParamStyle } from '../query.params';
 // @ts-ignore
 import { ErrorResponse } from '../model/error-response';
 // @ts-ignore
+import { InstrumentFilters } from '../model/instrument-filters';
+// @ts-ignore
 import { InstrumentQuote } from '../model/instrument-quote';
 // @ts-ignore
 import { InstrumentResponse } from '../model/instrument-response';
+// @ts-ignore
+import { InstrumentSignal } from '../model/instrument-signal';
+// @ts-ignore
+import { InstrumentType } from '../model/instrument-type';
 // @ts-ignore
 import { PaginatedInstrumentsResponse } from '../model/paginated-instruments-response';
 // @ts-ignore
@@ -92,6 +98,62 @@ export class InstrumentsService extends BaseService {
         let localVarPath = `/api/v1/instruments/${this.configuration.encodeParam({name: "symbol", value: symbol, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: undefined})}`;
         const { basePath, withCredentials } = this.configuration;
         return this.httpClient.request<InstrumentResponse>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * The exchanges, sectors and types of the tradable instruments
+     * The choices for the market list\&#39;s filters, from the data rather than a constant.
+     * @endpoint get /api/v1/instruments/filters
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public getInstrumentFilters(observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<InstrumentFilters>;
+    public getInstrumentFilters(observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<InstrumentFilters>>;
+    public getInstrumentFilters(observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<InstrumentFilters>>;
+    public getInstrumentFilters(observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/instruments/filters`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<InstrumentFilters>('get', `${basePath}${localVarPath}`,
             {
                 context: localVarHttpContext,
                 responseType: <any>responseType_,
@@ -310,19 +372,83 @@ export class InstrumentsService extends BaseService {
     }
 
     /**
-     * Get tradable instruments
-     * Returns a paginated list of all tradable instruments. Filtering by exchange, sector, and type is performed on the client side. 
-     * @endpoint get /api/v1/instruments
-     * @param pageSize Number of instruments per page (default 20).
-     * @param offset Zero-based offset for pagination (default 0).
+     * A buy, sell or hold view from past daily prices (Sprint 10 stretch)
+     * Trade advice and signals. The 20-day simple moving average against the 50-day one gives the trend, the 14-day RSI filters out a stretched move, and the gap between the averages gives the strength. Computed from the stored daily candles (no Fauxnance call), cached per symbol for an hour. Fewer than 50 closes is HOLD with that reason. It informs; it never places an order. 
+     * @endpoint get /api/v1/instruments/{symbol}/signal
+     * @param symbol 
      * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
      * @param reportProgress flag to report request and response progress.
      * @param options additional options
      */
-    public getInstruments(pageSize?: number, offset?: number, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<PaginatedInstrumentsResponse>;
-    public getInstruments(pageSize?: number, offset?: number, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<PaginatedInstrumentsResponse>>;
-    public getInstruments(pageSize?: number, offset?: number, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<PaginatedInstrumentsResponse>>;
-    public getInstruments(pageSize?: number, offset?: number, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+    public getInstrumentSignal(symbol: string, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<InstrumentSignal>;
+    public getInstrumentSignal(symbol: string, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<InstrumentSignal>>;
+    public getInstrumentSignal(symbol: string, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<InstrumentSignal>>;
+    public getInstrumentSignal(symbol: string, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
+        if (symbol === null || symbol === undefined) {
+            throw new Error('Required parameter symbol was null or undefined when calling getInstrumentSignal.');
+        }
+
+        let localVarHeaders = this.defaultHeaders;
+
+        // authentication (bearerAuth) required
+        localVarHeaders = this.configuration.addCredentialToHeaders('bearerAuth', 'Authorization', localVarHeaders, 'Bearer ');
+
+        const localVarHttpHeaderAcceptSelected: string | undefined = options?.httpHeaderAccept ?? this.configuration.selectHeaderAccept([
+            'application/json'
+        ]);
+        if (localVarHttpHeaderAcceptSelected !== undefined) {
+            localVarHeaders = localVarHeaders.set('Accept', localVarHttpHeaderAcceptSelected);
+        }
+
+        const localVarHttpContext: HttpContext = options?.context ?? new HttpContext();
+
+        const localVarTransferCache: boolean = options?.transferCache ?? true;
+
+
+        let responseType_: 'text' | 'json' | 'blob' = 'json';
+        if (localVarHttpHeaderAcceptSelected) {
+            if (localVarHttpHeaderAcceptSelected.startsWith('text')) {
+                responseType_ = 'text';
+            } else if (this.configuration.isJsonMime(localVarHttpHeaderAcceptSelected)) {
+                responseType_ = 'json';
+            } else {
+                responseType_ = 'blob';
+            }
+        }
+
+        let localVarPath = `/api/v1/instruments/${this.configuration.encodeParam({name: "symbol", value: symbol, in: "path", style: "simple", explode: false, dataType: "string", dataFormat: undefined})}/signal`;
+        const { basePath, withCredentials } = this.configuration;
+        return this.httpClient.request<InstrumentSignal>('get', `${basePath}${localVarPath}`,
+            {
+                context: localVarHttpContext,
+                responseType: <any>responseType_,
+                ...(withCredentials ? { withCredentials } : {}),
+                headers: localVarHeaders,
+                observe: observe,
+                ...(localVarTransferCache !== undefined ? { transferCache: localVarTransferCache } : {}),
+                reportProgress: reportProgress
+            }
+        );
+    }
+
+    /**
+     * Get tradable instruments
+     * A page of the tradable instruments, by ticker (LEAP-015). Every filter is optional and they combine; &#x60;search&#x60; matches part of the ticker or the name, case-insensitively. A delisted instrument never appears. 
+     * @endpoint get /api/v1/instruments
+     * @param pageSize Number of instruments per page (default 20).
+     * @param offset Zero-based offset for pagination (default 0).
+     * @param search Case-insensitive ticker or instrument-name search.
+     * @param exchange Only this exchange (one of &#x60;GET /api/v1/instruments/filters&#x60;).
+     * @param sector Only this sector.
+     * @param type Only this instrument type.
+     * @param observe set whether or not to return the data Observable as the body, response or events. defaults to returning the body.
+     * @param reportProgress flag to report request and response progress.
+     * @param options additional options
+     */
+    public getInstruments(pageSize?: number, offset?: number, search?: string, exchange?: string, sector?: string, type?: InstrumentType, observe?: 'body', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<PaginatedInstrumentsResponse>;
+    public getInstruments(pageSize?: number, offset?: number, search?: string, exchange?: string, sector?: string, type?: InstrumentType, observe?: 'response', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpResponse<PaginatedInstrumentsResponse>>;
+    public getInstruments(pageSize?: number, offset?: number, search?: string, exchange?: string, sector?: string, type?: InstrumentType, observe?: 'events', reportProgress?: boolean, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<HttpEvent<PaginatedInstrumentsResponse>>;
+    public getInstruments(pageSize?: number, offset?: number, search?: string, exchange?: string, sector?: string, type?: InstrumentType, observe: any = 'body', reportProgress: boolean = false, options?: {httpHeaderAccept?: 'application/json', context?: HttpContext, transferCache?: boolean}): Observable<any> {
 
         let localVarQueryParameters = new OpenApiHttpParams(this.encoder);
 
@@ -339,6 +465,42 @@ export class InstrumentsService extends BaseService {
             localVarQueryParameters,
             'offset',
             <any>offset,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'search',
+            <any>search,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'exchange',
+            <any>exchange,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'sector',
+            <any>sector,
+            QueryParamStyle.Form,
+            true,
+        );
+
+
+        localVarQueryParameters = this.addToHttpParams(
+            localVarQueryParameters,
+            'type',
+            <any>type,
             QueryParamStyle.Form,
             true,
         );

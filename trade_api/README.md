@@ -22,3 +22,18 @@ In `docker compose` it is on host port 8080 too.
   topics and keys are justified in `design/kafka.md`.
 - Where we depart from the contracts (for example `PARTIALLY_FILLED`), the
   reason is in `story_docs/contract-breach.md`.
+
+## Kafka consumer groups
+
+This process holds four consumer groups, one per module. Each group ID is
+explicit, set in `src/main/resources/application.yml`, and shared with no
+other module, so their offsets stay apart. Don't reuse these IDs in a new
+module; give it its own. The full register is in
+[`../INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md#4-consumer-groups).
+
+| Module | Topic(s) | Group ID |
+|---|---|---|
+| portfolio (quotes) | `market-data` | `trade-api-quotes-${random.uuid}`, unique per start on purpose, so the retained quotes are re-read |
+| notifications | `trade-events` | `notification-consumer` |
+| watchlist alerts | `market-data` | `watchlist-alerts` |
+| strategies | `market-data`, `trade-events` | `strategy-service` |

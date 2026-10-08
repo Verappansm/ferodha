@@ -100,4 +100,14 @@ export class RefreshTokensRepository {
       [familyId],
     );
   }
+
+  /** A password change: every login chain the user holds ends. */
+  async revokeAllForUser(userId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE auth_refresh_tokens
+          SET revoked_at = COALESCE(revoked_at, NOW())
+        WHERE user_id = $1`,
+      [userId],
+    );
+  }
 }

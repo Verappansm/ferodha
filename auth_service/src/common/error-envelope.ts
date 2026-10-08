@@ -13,6 +13,8 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 export enum ErrorCode {
   Unauthorised = 'AUTH-401',
   Conflict = 'AUTH-409',
+  // The password was right, but an admin forced a reset (LEAP-016).
+  PasswordChangeRequired = 'AUTH-428',
   InvalidInput = 'VAL-422',
   Internal = 'INTERNAL-500',
   // The admin routes' extra codes (design/admin-auth-api.yaml).
@@ -92,6 +94,21 @@ export function unauthorised(): HttpException {
   return new HttpException(
     { errorCode: ErrorCode.Unauthorised, message: UNAUTHORISED },
     HttpStatus.UNAUTHORIZED,
+  );
+}
+
+/**
+ * The credentials were right, but an administrator forced a password reset:
+ * no session until POST /auth/change-password. Only ever sent after the
+ * password checked out, so it says nothing to someone guessing.
+ */
+export function passwordChangeRequired(): HttpException {
+  return new HttpException(
+    {
+      errorCode: ErrorCode.PasswordChangeRequired,
+      message: 'Password change required',
+    },
+    HttpStatus.PRECONDITION_REQUIRED,
   );
 }
 

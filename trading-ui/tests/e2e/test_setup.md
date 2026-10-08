@@ -84,6 +84,33 @@ Located in `place-order.spec.ts`
 - Placed order (explicit NEW): Order placement with any valid status
 - Order isolation: Tests leave no shared state for next test
 
+### Platform Journeys (`journeys.spec.ts`, 7 tests, run in order)
+
+The whole life cycle, each run with a brand-new customer:
+
+1. Sign up, enter the emailed code; sign-in is refused until approval.
+2. An admin approves the request in the admin console.
+3. The customer signs in, deposits 5,000 from the bank (PIN 1234), and a buy fills over Kafka.
+4. Selling more than is held is refused, with the reason.
+5. A buy below the market rests on the book and is cancelled. **Needs market-sim**
+   (`start-windows.ps1 -MarketSim`); on the default profile the order is rejected at
+   once, so this step reports itself skipped.
+6. An admin adds and delists an instrument; the customer can no longer trade it.
+7. An admin suspends the customer; their sign-in is refused.
+
+What they need beyond the other suites:
+
+- **The admin console** on `ADMIN_BASE_URL` (default `http://localhost:4300`).
+- **No mail server** (`SMTP_HOST` unset): the sign-up code is read from the auth
+  service log. It is found in `windows/.run/logs/auth-service.log` (Windows setup)
+  or `docker logs auth-service` (Docker); set `E2E_AUTH_LOG` to the log file otherwise.
+- **Database access**, to play the bank: a bank account under the new customer's
+  email has to exist before approval (decision 0012). Read from `windows/.env.windows`
+  when present, else `E2E_PG_HOST/PORT/DB/USER/PASSWORD`, else the Docker defaults.
+- **Fewer than 5 failed sign-ins in 15 minutes from this machine.** The auth service
+  locks out an address after that; a full run makes 3. When re-running back to back,
+  restart the auth service (the counter lives in memory) or wait 15 minutes.
+
 ## File Structure
 
 ```

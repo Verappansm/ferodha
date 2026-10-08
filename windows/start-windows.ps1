@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  "windows" profile: runs Postgres-backed trade-api, trade-executor,
-  auth-service, pricing-generator and trades-generator natively on Windows,
-  against a Kafka broker running in Docker on a Linux host
-  (windows/kafka-linux.sh). pricing-generator is the live price feed under
-  both profiles (market-data ticks, the instrument charts). The profiles
-  differ in how trade-executor settles: by default each order fills or is
-  rejected at one real Fauxnance quote; -MarketSim matches orders on an
-  order book at pricing-generator's prices, with trades-generator's
-  counter-orders - exactly as SPRING_PROFILES_ACTIVE=market-sim under Docker.
+  "windows" profile: runs Postgres-backed trade-api, trade-executor and
+  auth-service natively on Windows, against a Kafka broker running in Docker
+  on a Linux host (windows/kafka-linux.sh). trade-executor also runs the live
+  price feed under both profiles (market-data ticks, the instrument charts)
+  and, under -MarketSim, the market maker. The profiles differ in how
+  trade-executor settles: by default each order fills or is rejected at the
+  live tick; -MarketSim matches orders on an order book at those prices, with
+  the market maker's counter-orders - exactly as
+  SPRING_PROFILES_ACTIVE=market-sim under Docker.
 
 .DESCRIPTION
   1. Loads windows/.env.windows
@@ -93,8 +93,6 @@ $JwtSecret = Get-Setting 'JWT_SECRET' ''
 $TradeApiPort = Get-Setting 'TRADE_API_PORT' '8080'
 $ExecutorPort = Get-Setting 'TRADE_EXECUTOR_PORT' '8082'
 $AuthPort = Get-Setting 'AUTH_SERVICE_PORT' '3000'
-$TradesGeneratorPort = Get-Setting 'TRADES_GENERATOR_PORT' '8083'
-$PricingGeneratorPort = Get-Setting 'PRICING_GENERATOR_PORT' '8084'
 
 if ($KafkaBootstrap -eq '') { Fail 'KAFKA_BOOTSTRAP_SERVERS is not set in windows\.env.windows.' }
 if ($KafkaBootstrap -match '^(localhost|127\.0\.0\.1):') {
@@ -114,10 +112,9 @@ $env:POSTGRES_DB = $PgDb
 $env:POSTGRES_USER = $PgUser
 $env:PGPASSWORD = $env:POSTGRES_PASSWORD
 $env:PGOPTIONS = '-c client_min_messages=warning'
-# market-sim reaches every Spring service at once, as under Docker: the
-# executor settles on its order book at pricing-generator's prices instead of
-# one Fauxnance quote per order, and trades-generator starts placing
-# synthetic counter-orders. pricing-generator ticks under both.
+# market-sim reaches both Spring services at once, as under Docker: the
+# executor settles on its order book at its live prices, and its market maker
+# starts placing synthetic counter-orders. The price feed ticks under both.
 $env:SPRING_PROFILES_ACTIVE = if ($MarketSim) { 'windows,market-sim' } else { 'windows' }
 
 # ---------------------------------------------------------------------------
@@ -279,7 +276,7 @@ $script:Psql = Find-Psql
 if (-not $script:Psql) { Fail 'psql.exe not found. Add PostgreSQL\<version>\bin to PATH or set PSQL_BIN_DIR.' }
 Write-Pass "tools found (psql: $script:Psql)"
 
-$PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort, $TradesGeneratorPort, $PricingGeneratorPort)
+$PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort)
 if (-not $SkipUi) { $PortsToCheck += @($UiPort, $AdminUiPort) }
 foreach ($port in $PortsToCheck) {
     if (Test-Tcp 'localhost' ([int]$port) 500) { Fail "Port $port is already in use on this machine." }
@@ -289,7 +286,19 @@ foreach ($port in $PortsToCheck) {
 # before anything starts, so a firewall problem shows up here and not as a
 # stream of producer timeouts in the logs.
 foreach ($entry in $KafkaBootstrap.Split(',')) {
-    $kafkaHost, $kafkaPort = $entry.Trim().Split(':')
+    $trimmed = $entry.Trim()
+    # Strip protocol prefixes like kafka://, //, etc.
+    $trimmed = $trimmed -replace '^[a-z]+://', ''
+    $trimmed = $trimmed -replace '^//', ''
+
+    # Extract host and port (handles formats like "host:9092")
+    if ($trimmed -match '^([^:]+):(\d+)$') {
+        $kafkaHost = $matches[1]
+        $kafkaPort = $matches[2]
+    } else {
+        Fail "Invalid Kafka bootstrap server format: '$entry' (expected 'host:port')"
+    }
+
     if (-not (Test-Tcp $kafkaHost ([int]$kafkaPort) 5000)) {
         Fail "Cannot reach Kafka at ${kafkaHost}:${kafkaPort}. Is windows/kafka-linux.sh running on the Linux host, and is the port open in its firewall?"
     }
@@ -339,7 +348,7 @@ if ($hasSchema -ne 't') {
 # ---------------------------------------------------------------------------
 # Stage: Build
 # ---------------------------------------------------------------------------
-$SpringServices = @('trade_api', 'trade_executor', 'pricing_generator', 'trades_generator')
+$SpringServices = @('trade_api', 'trade_executor')
 if ($SkipBuild) {
     Write-Stage 'Build (skipped)'
 } else {
@@ -387,36 +396,22 @@ Start-AppProcess 'trade-api' (Join-Path $RepoDir 'trade_api') 'java' `
     @{ SERVER_PORT = $TradeApiPort }
 Wait-Http 'trade-api' "http://localhost:$TradeApiPort/actuator/health" '"status":"UP"' 'trade-api' 240
 
-# pricing-generator's Fauxnance client is built under every profile, and an
-# unset URL would stop it booting. Blank in .env.windows means "no key": the
-# same unreachable placeholder trade-executor's windows profile uses, so only
-# market-sim's quote refresh would ever notice.
-$PricingEnv = @{ SERVER_PORT = $PricingGeneratorPort }
-if ((Get-Setting 'FAUXNANCE_API_URL' '') -eq '') { $PricingEnv['FAUXNANCE_API_URL'] = 'http://127.0.0.1:9' }
-if ((Get-Setting 'FAUXNANCE_API_KEY' '') -eq '') { $PricingEnv['FAUXNANCE_API_KEY'] = 'unset' }
-Start-AppProcess 'pricing-generator' (Join-Path $RepoDir 'pricing_generator') 'java' `
-    @('-jar', (Get-BootJar (Join-Path $RepoDir 'pricing_generator'))) `
-    $PricingEnv
-
-# Under market-sim the executor takes its quotes from pricing-generator (the
-# same wiring as TRADES_GENERATOR_URL in docker-compose.yml).
+# The executor's price feed builds its Fauxnance client under every profile,
+# and an unset URL would stop it booting. Blank in .env.windows means "no key":
+# an unreachable placeholder, so there are no live prices but everything runs.
+$ExecutorEnv = @{ SERVER_PORT = $ExecutorPort }
+if ((Get-Setting 'FAUXNANCE_API_URL' '') -eq '') { $ExecutorEnv['FAUXNANCE_API_URL'] = 'http://127.0.0.1:9' }
+if ((Get-Setting 'FAUXNANCE_API_KEY' '') -eq '') { $ExecutorEnv['FAUXNANCE_API_KEY'] = 'unset' }
 Start-AppProcess 'trade-executor' (Join-Path $RepoDir 'trade_executor') 'java' `
     @('-jar', (Get-BootJar (Join-Path $RepoDir 'trade_executor'))) `
-    @{ SERVER_PORT = $ExecutorPort; TRADES_GENERATOR_URL = "http://localhost:$PricingGeneratorPort" }
+    $ExecutorEnv
 
 Start-AppProcess 'auth-service' (Join-Path $RepoDir 'auth_service') 'node' `
     @('dist/main.js') `
     @{ PORT = $AuthPort; NODE_ENV = 'development' }
 
-Wait-Http 'pricing-generator' "http://localhost:$PricingGeneratorPort/actuator/health" '"status":"UP"' 'pricing-generator'
 Wait-Http 'trade-executor' "http://localhost:$ExecutorPort/actuator/health" '"status":"UP"' 'trade-executor'
 Wait-Http 'auth-service' "http://localhost:$AuthPort/health" '"status":"ok"' 'auth-service' 60
-
-# trades-generator reads prices from pricing-generator, so it starts after it.
-Start-AppProcess 'trades-generator' (Join-Path $RepoDir 'trades_generator') 'java' `
-    @('-jar', (Get-BootJar (Join-Path $RepoDir 'trades_generator'))) `
-    @{ SERVER_PORT = $TradesGeneratorPort; PRICING_GENERATOR_URL = "http://localhost:$PricingGeneratorPort" }
-Wait-Http 'trades-generator' "http://localhost:$TradesGeneratorPort/actuator/health" '"status":"UP"' 'trades-generator'
 
 # The two UIs, last: they only need the APIs above to be answering. Started
 # through node directly (not npm/npx) so the recorded PID is the server
@@ -469,12 +464,10 @@ if (-not $SkipUi) {
 Write-Host "  trade-api         http://localhost:$TradeApiPort"
 Write-Host "  trade-executor    http://localhost:$ExecutorPort/actuator/health"
 Write-Host "  auth-service      http://localhost:$AuthPort"
-Write-Host "  pricing-generator http://localhost:$PricingGeneratorPort/actuator/health"
-Write-Host "  trades-generator  http://localhost:$TradesGeneratorPort/actuator/health"
 if ($MarketSim) {
     Write-Host "  profile           $env:SPRING_PROFILES_ACTIVE   (simulated market)"
 } else {
-    Write-Host "  profile           $env:SPRING_PROFILES_ACTIVE   (fills at a real Fauxnance quote - add -MarketSim for the order book)"
+    Write-Host "  profile           $env:SPRING_PROFILES_ACTIVE   (fills at the live tick - add -MarketSim for the order book)"
 }
 Write-Host "  kafka             $KafkaBootstrap (Linux)"
 Write-Host "  kafka-ui          $(Get-Setting 'KAFKA_UI_URL' '<KAFKA_UI_URL not set>')"

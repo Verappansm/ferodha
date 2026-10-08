@@ -7,11 +7,16 @@ import com.trade.admin.dto.AdminDtos.AdminOrderDto;
 import com.trade.admin.dto.AdminDtos.AdminSummaryDto;
 import com.trade.admin.dto.AdminDtos.ApproveAccountRequest;
 import com.trade.admin.dto.AdminDtos.AuditEntryDto;
+import com.trade.admin.dto.AdminDtos.CreateInstrumentRequest;
+import com.trade.admin.dto.AdminDtos.FeeInstrumentDto;
+import com.trade.admin.dto.AdminDtos.FeeSummaryDto;
+import com.trade.admin.dto.AdminDtos.FeeUserDto;
 import com.trade.admin.dto.AdminDtos.PageDto;
 import com.trade.admin.dto.AdminDtos.ReasonRequest;
 import com.trade.admin.dto.AdminDtos.SystemHealthDto;
 import com.trade.admin.service.AdminAccountRequestService;
 import com.trade.admin.service.AdminAccountService;
+import com.trade.admin.service.AdminFeeService;
 import com.trade.admin.service.AdminInstrumentService;
 import com.trade.admin.service.AdminReadService;
 import com.trade.admin.service.Paging;
@@ -27,8 +32,11 @@ import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -47,10 +55,12 @@ public class AdminController {
     private final AdminAccountService accounts;
     private final AdminInstrumentService instruments;
     private final SystemHealthService health;
+    private final AdminFeeService fees;
 
     public AdminController(AdminReadService reads, AdminAccountRequestService requests,
                            AdminAccountService accounts, AdminInstrumentService instruments,
-                           SystemHealthService health) {
+                           SystemHealthService health, AdminFeeService fees) {
+        this.fees = fees;
         this.reads = reads;
         this.requests = requests;
         this.accounts = accounts;
@@ -124,6 +134,13 @@ public class AdminController {
         return instruments.list(q, exchange, type, tradable, new Paging(page, size));
     }
 
+    @PostMapping("/instruments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AdminInstrumentDto addInstrument(@Valid @RequestBody CreateInstrumentRequest body,
+                                            @RequestAttribute(ADMIN) AdminPrincipal admin) {
+        return instruments.create(body, admin);
+    }
+
     @PostMapping("/instruments/{id}/delist")
     public AdminInstrumentDto delist(@PathVariable UUID id, @Valid @RequestBody ReasonRequest body,
                                      @RequestAttribute(ADMIN) AdminPrincipal admin) {
@@ -134,6 +151,30 @@ public class AdminController {
     public AdminInstrumentDto list(@PathVariable UUID id, @Valid @RequestBody ReasonRequest body,
                                    @RequestAttribute(ADMIN) AdminPrincipal admin) {
         return instruments.relist(id, body.reason(), admin);
+    }
+
+    // ---- Fees ----
+
+    @GetMapping("/fees/summary")
+    public FeeSummaryDto feeSummary() {
+        return fees.summary();
+    }
+
+    @GetMapping("/fees/by-user")
+    public PageDto<FeeUserDto> feesByUser(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "25") int size) {
+        return fees.byUser(from, to, q, new Paging(page, size));
+    }
+
+    @GetMapping("/fees/by-instrument")
+    public List<FeeInstrumentDto> feesByInstrument(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return fees.byInstrument(from, to);
     }
 
     // ---- Orders, health, audit ----

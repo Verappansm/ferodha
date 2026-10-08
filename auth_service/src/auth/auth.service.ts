@@ -9,8 +9,14 @@ import {
   UsersRepository,
   UsernameTakenError,
 } from '../persistence/users.repository';
-import { registrationConflict, unauthorised } from '../common/error-envelope';
+import {
+  invalidInput,
+  passwordChangeRequired,
+  registrationConflict,
+  unauthorised,
+} from '../common/error-envelope';
 import { AccessTokenClaims } from './access-token-claims';
+import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
 import { RegisterRequestDto } from './dto/register-request.dto';
@@ -37,6 +43,14 @@ const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 
 /** Refresh tokens live 7 days - the lifetime the contract states. */
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface AccountStatusResponse {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE';
+  reason: string | null;
+  emailVerified: boolean;
+  requestedAt: string | null;
+  decidedAt: string | null;
+}
 
 export const JWT_ISSUER = 'auth-service';
 
@@ -121,9 +135,85 @@ export class AuthService {
       throw unauthorised();
     }
 
+    // An admin forced a reset (LEAP-016): no tokens until the password is
+    // changed. Reached only with the right password.
+    if (user.mustChangePassword) {
+      this.logger.warn(`Login held: user ${user.id} must change password`);
+      throw passwordChangeRequired();
+    }
+
     this.logger.log(`Login succeeded: user ${user.id}`);
     // A fresh login starts a new refresh-token chain (its family).
     return this.issueTokenPair(session, randomUUID());
+  }
+
+  /**
+   * POST /auth/account-status (LEAP-012): the state of the user's account-opening
+   * request, for someone who cannot sign in yet. It authenticates with the email and
+   * password exactly as login does, so every failure is the same AUTH-401 and an
+   * unknown email costs the same bcrypt run; it issues no token.
+   */
+  async accountStatus(body: LoginRequestDto): Promise<AccountStatusResponse> {
+    const user = await this.users.findByEmail(body.username);
+    const passwordValid = user
+      ? await this.passwords.verify(body.password, user.passwordHash)
+      : await this.passwords.verifyAgainstDecoy(body.password);
+    if (!user || !passwordValid) {
+      throw unauthorised();
+    }
+    const [request, emailVerified] = await Promise.all([
+      this.accounts.findLatestRequest(user.id),
+      this.users.isEmailVerified(user.id),
+    ]);
+    return {
+      status: request?.status ?? 'NONE',
+      reason: request?.status === 'REJECTED' ? request.reason : null,
+      emailVerified,
+      requestedAt: request?.requestedAt.toISOString() ?? null,
+      decidedAt: request?.decidedAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * POST /auth/logout-all (LEAP-010): sign out everywhere. Every refresh token the
+   * user holds is revoked, the device that asked included, so every session ends at
+   * its next refresh; the caller clears its own session at once.
+   */
+  async logoutEverywhere(claims: AccessTokenClaims): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(claims.sub);
+    this.logger.log(`Signed out everywhere: user ${claims.sub}`);
+  }
+
+  /**
+   * POST /auth/change-password (LEAP-010). The current password is checked
+   * exactly as login checks it, so every failure is the same AUTH-401. On
+   * success the new hash replaces the old, a forced reset is cleared, and
+   * every refresh token the user holds is revoked: they sign in again with
+   * the new password.
+   */
+  async changePassword(body: ChangePasswordRequestDto): Promise<void> {
+    const user = await this.users.findByEmail(body.username);
+    const valid = user
+      ? await this.passwords.verify(body.currentPassword, user.passwordHash)
+      : await this.passwords.verifyAgainstDecoy(body.currentPassword);
+    if (!user || !valid || user.status !== 'ACTIVE') {
+      this.logger.warn(
+        user
+          ? `Password change refused for user ${user.id}`
+          : 'Password change refused: unknown username',
+      );
+      throw unauthorised();
+    }
+    if (body.newPassword === body.currentPassword) {
+      throw invalidInput();
+    }
+
+    await this.users.updatePassword(
+      user.id,
+      await this.passwords.hash(body.newPassword),
+    );
+    await this.refreshTokens.revokeAllForUser(user.id);
+    this.logger.log(`Password changed: user ${user.id}`);
   }
 
   /**

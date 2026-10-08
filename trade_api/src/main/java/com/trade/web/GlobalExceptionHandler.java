@@ -2,9 +2,13 @@ package com.trade.web;
 
 import com.trade.dto.ErrorResponseDto;
 import com.trade.exception.AccountNotActiveException;
+import com.trade.exception.BankTransferException;
+import com.trade.exception.DuplicateBankTransferException;
 import com.trade.exception.AccountNotFoundException;
 import com.trade.exception.ConcurrentUpdateException;
 import com.trade.exception.DomainException;
+import com.trade.exception.StrategyNotFoundException;
+import com.trade.exception.StrategyStateException;
 import com.trade.exception.DuplicateOrderException;
 import com.trade.exception.InstrumentNotFoundException;
 import com.trade.exception.InsufficientFundsException;
@@ -15,6 +19,7 @@ import com.trade.exception.InvalidParameterException;
 import com.trade.exception.OrderNotCancellableException;
 import com.trade.exception.OrderNotFoundException;
 import com.trade.exception.PricingUnavailableException;
+import com.trade.exception.UnsupportedCurrencyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -46,6 +51,8 @@ public class GlobalExceptionHandler {
     private static final Map<Class<? extends DomainException>, HttpStatus> STATUS_BY_TYPE = Map.ofEntries(
             Map.entry(AccountNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(AccountNotActiveException.class, HttpStatus.FORBIDDEN),
+            Map.entry(BankTransferException.class, HttpStatus.BAD_REQUEST),
+            Map.entry(DuplicateBankTransferException.class, HttpStatus.CONFLICT),
             Map.entry(InstrumentNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(InsufficientFundsException.class, HttpStatus.BAD_REQUEST),
             Map.entry(InsufficientHoldingsException.class, HttpStatus.CONFLICT),
@@ -56,7 +63,10 @@ public class GlobalExceptionHandler {
             Map.entry(OrderNotFoundException.class, HttpStatus.NOT_FOUND),
             Map.entry(OrderNotCancellableException.class, HttpStatus.CONFLICT),
             Map.entry(ConcurrentUpdateException.class, HttpStatus.CONFLICT),
-            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE)
+            Map.entry(PricingUnavailableException.class, HttpStatus.SERVICE_UNAVAILABLE),
+            Map.entry(StrategyNotFoundException.class, HttpStatus.NOT_FOUND),
+            Map.entry(StrategyStateException.class, HttpStatus.CONFLICT),
+            Map.entry(UnsupportedCurrencyException.class, HttpStatus.UNPROCESSABLE_ENTITY)
     );
 
     @ExceptionHandler(DomainException.class)

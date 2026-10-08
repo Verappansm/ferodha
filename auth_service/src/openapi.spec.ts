@@ -39,7 +39,10 @@ describe('OpenAPI document', () => {
 
     expect(document.openapi).toMatch(/^3\./);
     expect(Object.keys(document.paths).sort()).toEqual([
+      '/auth/account-status',
+      '/auth/change-password',
       '/auth/login',
+      '/auth/logout-all',
       '/auth/me',
       '/auth/refresh',
       '/auth/register',
@@ -48,10 +51,16 @@ describe('OpenAPI document', () => {
     expect(Object.keys(document.paths['/auth/me'])).toEqual(['get']);
   });
 
-  it('marks only /auth/me as needing a bearer token', () => {
+  it('marks only /auth/me and /auth/logout-all as needing a bearer token', () => {
     const document = buildOpenApiDocument(app);
 
     expect(document.paths['/auth/me'].get?.security).toEqual([{ bearer: [] }]);
+    expect(document.paths['/auth/logout-all'].post?.security).toEqual([
+      { bearer: [] },
+    ]);
+    expect(
+      document.paths['/auth/account-status'].post?.security,
+    ).toBeUndefined();
     expect(document.paths['/auth/login'].post?.security).toBeUndefined();
   });
 

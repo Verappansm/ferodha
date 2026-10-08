@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
-// Feeds LatestQuotes from market-data: pricing_generator's ticks (or, if
+// Feeds LatestQuotes from market-data: the price feed's ticks (or, if
 // ever re-enabled, trade-executor's poller - the same envelope) with a
 // {symbol, bid, ask, currency, asOf} payload.
 //

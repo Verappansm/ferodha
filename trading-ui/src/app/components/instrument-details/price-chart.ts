@@ -52,11 +52,14 @@ function drawPriceChart(canvas: HTMLCanvasElement, series: PriceSeries): DrawnCh
       scales: {
         x: {
           ticks: { maxTicksLimit: 8, color: series.colours.text },
-          grid: { color: series.colours.grid },
+          grid: { display: false },
+          border: { color: series.colours.grid },
         },
         y: {
+          position: 'right',
           ticks: { color: series.colours.text },
           grid: { color: series.colours.grid },
+          border: { display: false },
         },
       },
     },

@@ -69,7 +69,8 @@ public class JwtService {
         return new AuthenticatedPrincipal(
                 claims.getSubject(),
                 accountIdClaim.longValue(),
-                roles == null ? List.of() : roles
+                roles == null ? List.of() : roles,
+                claims.get("strategyId", String.class)
         );
     }
 

@@ -93,6 +93,45 @@ export class RegistrationComponent {
     }
   }
 
+  /** True once the emailed code was accepted: the email, and so the bank account, is theirs. */
+  readonly verified = signal(false);
+  readonly code = signal('');
+  readonly codeError = signal('');
+  readonly codeBusy = signal(false);
+  readonly resent = signal(false);
+
+  async verify(): Promise<void> {
+    const email = this.submittedEmail();
+    const code = this.code().trim();
+    if (!email) return;
+    if (!/^[0-9]{6}$/.test(code)) {
+      this.codeError.set('Enter the 6-digit code from your email.');
+      return;
+    }
+    this.codeBusy.set(true);
+    this.codeError.set('');
+    try {
+      await firstValueFrom(this.authApi.verifyEmail(email, code));
+      this.verified.set(true);
+    } catch {
+      this.codeError.set('That code is wrong or has expired. Check it, or ask for a new one.');
+    } finally {
+      this.codeBusy.set(false);
+    }
+  }
+
+  async resend(): Promise<void> {
+    const email = this.submittedEmail();
+    if (!email) return;
+    this.codeError.set('');
+    try {
+      await firstValueFrom(this.authApi.resendCode(email));
+      this.resent.set(true);
+    } catch (error) {
+      this.codeError.set(errorMessage(error));
+    }
+  }
+
   showError(field: 'name' | 'email' | 'password' | 'confirmPassword'): boolean {
     const control = this.form.controls[field];
     return control.invalid && control.touched;

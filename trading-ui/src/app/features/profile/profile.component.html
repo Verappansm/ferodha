@@ -1,129 +1,155 @@
-<section class="profile">
-  <h2>Profile</h2>
+<div class="page page-narrow">
+  <header class="page-header">
+    <div>
+      <h1>Profile</h1>
+      <p>The details we hold about you. Your email is your sign-in name and cannot be changed.</p>
+    </div>
+  </header>
 
   @if (loadError()) {
-    <p class="error" role="alert" data-testid="profile-load-error">{{ loadError() }}</p>
+    <p class="notice notice-error" role="alert" data-testid="profile-load-error">
+      {{ loadError() }}
+    </p>
   } @else if (profile(); as p) {
-    <dl class="details" data-testid="profile-details">
-      <div>
-        <dt>Email</dt>
-        <dd data-testid="profile-email">{{ p.email }}</dd>
+    <section class="card identity">
+      <div class="who">
+        <span class="avatar-lg" aria-hidden="true">{{ (p.name || p.email).charAt(0) }}</span>
+        <div>
+          <p class="name">{{ p.name }}</p>
+          <p class="muted">{{ p.email }}</p>
+        </div>
       </div>
-      <div>
-        <dt>Role</dt>
-        <dd>{{ p.role === 'ADMIN' ? 'Administrator' : 'Customer' }}</dd>
-      </div>
-      <div>
-        <dt>Trading account</dt>
-        <dd data-testid="profile-account">
-          {{ p.accountId != null ? 'Account ' + p.accountId : 'No trading account yet' }}
-        </dd>
-      </div>
-      <div>
-        <dt>Joined</dt>
-        <dd>{{ p.joiningDate | date: 'longDate' }}</dd>
-      </div>
-    </dl>
+      <dl class="facts" data-testid="profile-details">
+        <div>
+          <dt>Email</dt>
+          <dd data-testid="profile-email">{{ p.email }}</dd>
+        </div>
+        <div>
+          <dt>Role</dt>
+          <dd>{{ p.role === 'ADMIN' ? 'Administrator' : 'Customer' }}</dd>
+        </div>
+        <div>
+          <dt>Trading account</dt>
+          <dd data-testid="profile-account">
+            {{ p.accountId != null ? 'Account ' + p.accountId : 'No trading account yet' }}
+          </dd>
+        </div>
+        <div>
+          <dt>Joined</dt>
+          <dd>{{ p.joiningDate | date: 'longDate' }}</dd>
+        </div>
+      </dl>
+    </section>
 
-    <!-- Immutable display of name and phone when not in edit mode -->
-    @if (!isEditMode()) {
-      <div class="profile-display">
-        <div class="profile-card">
-          <h3>Your Information</h3>
-          @if (saved()) {
-            <p class="saved" role="status" data-testid="profile-saved">Your profile is saved.</p>
-          }
-          <div class="info-item">
-            <label>Name</label>
-            <p class="info-value" data-testid="profile-view-name">{{ p.name }}</p>
-          </div>
-          <div class="info-item">
-            <label>Phone</label>
-            <p class="info-value" data-testid="profile-view-phone">
-              {{ p.phone || 'Not provided' }}
-            </p>
-          </div>
+    <section class="card" aria-labelledby="contact-title">
+      <header class="card-header">
+        <h2 id="contact-title">Contact details</h2>
+        @if (!isEditMode()) {
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn btn-secondary btn-sm"
             data-testid="profile-edit"
             (click)="startEdit()"
           >
-            Edit Information
+            Edit
           </button>
-        </div>
-      </div>
-    }
-
-    <!-- Edit form when in edit mode -->
-    @if (isEditMode()) {
-      <form class="form" [formGroup]="form" (ngSubmit)="save()" novalidate>
-        <div class="form-title">Edit Information</div>
-
-        <div class="field">
-          <label class="field-label" for="profile-name">Name</label>
-          <input
-            id="profile-name"
-            class="input"
-            formControlName="name"
-            autocomplete="name"
-            data-testid="profile-name"
-            [attr.aria-invalid]="nameError() ? true : null"
-            aria-describedby="profile-name-error"
-          />
-          @if (nameError(); as message) {
-            <p id="profile-name-error" class="field-error" data-testid="profile-name-error">
-              {{ message }}
-            </p>
-          }
-        </div>
-
-        <div class="field">
-          <label class="field-label" for="profile-phone">Phone</label>
-          <input
-            id="profile-phone"
-            class="input"
-            type="tel"
-            formControlName="phone"
-            autocomplete="tel"
-            data-testid="profile-phone"
-            [attr.aria-invalid]="phoneError() ? true : null"
-            aria-describedby="profile-phone-hint profile-phone-error"
-          />
-          <p id="profile-phone-hint" class="field-hint">Optional. Leave empty to remove it.</p>
-          @if (phoneError(); as message) {
-            <p id="profile-phone-error" class="field-error" data-testid="profile-phone-error">
-              {{ message }}
-            </p>
-          }
-        </div>
-
-        @if (saveError()) {
-          <p class="form-error" role="alert" data-testid="profile-save-error">{{ saveError() }}</p>
         }
+      </header>
 
-        <div class="form-actions">
-          <button
-            type="submit"
-            class="btn btn-primary"
-            data-testid="profile-save"
-            [disabled]="saving() || form.pristine"
-          >
-            {{ saving() ? 'Saving…' : 'Save changes' }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-secondary"
-            data-testid="profile-cancel"
-            (click)="cancelEdit()"
-            [disabled]="saving()"
-          >
-            Cancel
-          </button>
+      @if (!isEditMode()) {
+        <div class="card-body">
+          @if (saved()) {
+            <p class="notice notice-success saved" role="status" data-testid="profile-saved">
+              Your profile is saved.
+            </p>
+          }
+          <dl class="kv">
+            <div>
+              <dt>Name</dt>
+              <dd data-testid="profile-view-name">{{ p.name }}</dd>
+            </div>
+            <div>
+              <dt>Phone</dt>
+              <dd data-testid="profile-view-phone">{{ p.phone || 'Not provided' }}</dd>
+            </div>
+          </dl>
         </div>
-      </form>
-    }
+      } @else {
+        <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+          <div class="card-body form-grid">
+            <div class="field">
+              <label class="field-label" for="profile-name">Name</label>
+              <input
+                id="profile-name"
+                class="input"
+                formControlName="name"
+                autocomplete="name"
+                data-testid="profile-name"
+                [attr.aria-invalid]="nameError() ? true : null"
+                aria-describedby="profile-name-error"
+              />
+              @if (nameError(); as message) {
+                <p id="profile-name-error" class="field-error" data-testid="profile-name-error">
+                  {{ message }}
+                </p>
+              }
+            </div>
+
+            <div class="field">
+              <label class="field-label" for="profile-phone">Phone</label>
+              <input
+                id="profile-phone"
+                class="input"
+                type="tel"
+                formControlName="phone"
+                autocomplete="tel"
+                data-testid="profile-phone"
+                [attr.aria-invalid]="phoneError() ? true : null"
+                aria-describedby="profile-phone-hint profile-phone-error"
+              />
+              <p id="profile-phone-hint" class="field-hint">Optional. Leave empty to remove it.</p>
+              @if (phoneError(); as message) {
+                <p id="profile-phone-error" class="field-error" data-testid="profile-phone-error">
+                  {{ message }}
+                </p>
+              }
+            </div>
+
+            @if (saveError()) {
+              <p class="form-error wide" role="alert" data-testid="profile-save-error">
+                {{ saveError() }}
+              </p>
+            }
+          </div>
+
+          <footer class="card-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-testid="profile-cancel"
+              (click)="cancelEdit()"
+              [disabled]="saving()"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              data-testid="profile-save"
+              [disabled]="saving() || form.pristine"
+            >
+              {{ saving() ? 'Saving…' : 'Save changes' }}
+            </button>
+          </footer>
+        </form>
+      }
+    </section>
   } @else {
-    <p class="muted">Loading your profile…</p>
+    <section class="card card-body" aria-hidden="true">
+      <div class="skeleton lg"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+    </section>
+    <p class="visually-hidden">Loading your profile…</p>
   }
-</section>
+</div>

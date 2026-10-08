@@ -63,3 +63,30 @@ export class ErrorResponseDto {
   @ApiProperty({ example: 'Unauthorised' })
   message!: string;
 }
+
+export class AccountStatusResponseDto {
+  @ApiProperty({
+    enum: ['PENDING', 'APPROVED', 'REJECTED', 'NONE'],
+    description:
+      'The latest account-opening request. NONE when no request was ever filed for the user.',
+  })
+  status!: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE';
+
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Why the request was rejected; null otherwise.',
+  })
+  reason!: string | null;
+
+  @ApiProperty({
+    description:
+      'Whether the code mailed at registration has been entered. Approval waits for it.',
+  })
+  emailVerified!: boolean;
+
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  requestedAt!: string | null;
+
+  @ApiPropertyOptional({ format: 'date-time', nullable: true })
+  decidedAt!: string | null;
+}

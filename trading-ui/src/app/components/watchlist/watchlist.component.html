@@ -1,20 +1,383 @@
-<div class="watchlist-container">
-  <div class="coming-soon-banner">
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="banner-icon"
-    >
-      <path
-        d="M12 9v2m0 4v2m7.5-12H4.5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"
-      ></path>
-    </svg>
-    <h1>To Be Released</h1>
-    <p>This feature is coming soon. Stay tuned for updates!</p>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <h1>Watchlist</h1>
+      <p>Follow any instrument with its live price, and get told when a price you set is crossed.</p>
+    </div>
+    <div class="page-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateModal()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+        New watchlist
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <p class="notice notice-error" role="alert">{{ error() }}</p>
+  }
+
+  <div class="wl-layout">
+    <!-- The lists -->
+    <nav class="card wl-lists" aria-label="Your watchlists">
+      <header class="card-header">
+        <h2>Lists</h2>
+        <span class="muted">{{ watchlists().length }}</span>
+      </header>
+      @if (watchlists().length === 0) {
+        <p class="state">{{ isLoading() ? 'Loading…' : 'No lists yet' }}</p>
+      } @else {
+        <ul>
+          @for (wl of watchlists(); track wl.watchlistId) {
+            <li>
+              <button
+                type="button"
+                class="wl-list"
+                [class.active]="selectedWatchlistId() === wl.watchlistId"
+                [attr.aria-current]="selectedWatchlistId() === wl.watchlistId ? 'true' : null"
+                (click)="selectWatchlist(wl.watchlistId)"
+              >
+                <span
+                  class="wl-dot"
+                  [style.background]="getWatchlistColor(wl.watchlistId)"
+                  aria-hidden="true"
+                ></span>
+                <span class="wl-list-name">{{ wl.name }}</span>
+                <span class="wl-count">{{ wl.items.length }}</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </nav>
+
+    <section class="card wl-main" aria-labelledby="wl-title">
+      @if (!selectedWatchlistId()) {
+        <div class="state">
+          <strong>No watchlists yet</strong>
+          Create a watchlist to start following instruments.
+          <div>
+            <button type="button" class="btn btn-primary" (click)="openCreateModal()">
+              New watchlist
+            </button>
+          </div>
+        </div>
+      } @else {
+        <header class="card-header">
+          <h2 id="wl-title" class="wl-title">
+            <span class="wl-dot" [style.background]="selectedWatchlistColor()" aria-hidden="true"></span>
+            {{ selectedWatchlistName() }}
+          </h2>
+          <div class="wl-tools">
+            <!-- Search and add: pick an instrument, then the lists to put it in -->
+            <div class="wl-search">
+              <div class="search">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  type="search"
+                  class="input"
+                  placeholder="Add an instrument…"
+                  aria-label="Search for an instrument to add"
+                  autocomplete="off"
+                  [(ngModel)]="searchQuery"
+                  (input)="onSearchInput()"
+                  (focus)="onSearchInput()"
+                />
+              </div>
+
+              @if (searchResults().length > 0 && !selectedInstrument()) {
+                <div class="popover" role="listbox" aria-label="Matching instruments">
+                  @for (result of filteredSearchResults(); track result.symbol) {
+                    <button
+                      type="button"
+                      class="result"
+                      role="option"
+                      (click)="selectInstrument(result)"
+                    >
+                      <span class="symbol">{{ result.symbol }}</span>
+                      <span class="result-name">{{ result.name }}</span>
+                      <span class="muted">{{ result.exchange }}</span>
+                    </button>
+                  }
+                  @if (filteredSearchResults().length === 0) {
+                    <p class="popover-empty">No instruments found</p>
+                  }
+                </div>
+              }
+
+              @if (showAddDropdown() && selectedInstrument()) {
+                <div class="popover add" role="dialog" aria-label="Add to watchlists">
+                  <div class="add-head">
+                    <div class="cell-stack">
+                      <span class="symbol">{{ selectedInstrument()?.symbol }}</span>
+                      <small>{{ selectedInstrument()?.name }}</small>
+                    </div>
+                    <button type="button" class="btn-link btn" (click)="clearSearch()">Cancel</button>
+                  </div>
+                  <p class="add-label">Add to</p>
+                  <div class="add-options">
+                    @for (wl of watchlists(); track wl.watchlistId) {
+                      <label class="check add-option">
+                        <input
+                          type="checkbox"
+                          [checked]="isWatchlistSelected(wl.watchlistId)"
+                          (change)="toggleWatchlistSelection(wl.watchlistId)"
+                        />
+                        <span
+                          class="wl-dot"
+                          [style.background]="getWatchlistColor(wl.watchlistId)"
+                          aria-hidden="true"
+                        ></span>
+                        {{ wl.name }}
+                      </label>
+                    }
+                  </div>
+                  @if (showCreateFromSearch()) {
+                    <div class="add-create">
+                      <input
+                        type="text"
+                        class="input"
+                        placeholder="New list name"
+                        aria-label="New watchlist name"
+                        [(ngModel)]="newWatchlistNameFromSearch"
+                        (keyup.enter)="createWatchlistFromSearch()"
+                      />
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm"
+                        (click)="createWatchlistFromSearch()"
+                      >
+                        Create and add
+                      </button>
+                    </div>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn btn-link add-new"
+                      (click)="showCreateFromSearch.set(true)"
+                    >
+                      + New list
+                    </button>
+                  }
+                  <div class="add-foot">
+                    <button
+                      type="button"
+                      class="btn btn-primary btn-sm"
+                      [disabled]="selectedWatchlistIds().size === 0"
+                      (click)="confirmAddToWatchlists()"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+
+            @if (hasItems() || isEditing()) {
+              @if (isEditing()) {
+                <button type="button" class="btn btn-primary" (click)="submitEdits()">Done</button>
+              } @else {
+                <button type="button" class="btn btn-secondary" (click)="toggleEdit()">Edit</button>
+              }
+            }
+          </div>
+        </header>
+
+        @if (!hasItems() && !isEditing()) {
+          <div class="state">
+            <strong>This list is empty</strong>
+            Search above to add an instrument to "{{ selectedWatchlistName() }}".
+          </div>
+        } @else {
+          @if (isEditing()) {
+            <p class="edit-hint">
+              Editing: remove instruments, or change an alert's price and direction in the table.
+            </p>
+          }
+          <div class="grid-container">
+            <ag-grid-angular
+              class="watchlist-grid"
+              [theme]="gridTheme"
+              [columnDefs]="columnDefs()"
+              [defaultColDef]="defaultColDef()"
+              [rowData]="editRows()"
+              [getRowClass]="getRowClass"
+              [domLayout]="'autoHeight'"
+              (gridReady)="onGridReady($event)"
+              [rowHeight]="48"
+              [headerHeight]="40"
+            />
+          </div>
+        }
+      }
+    </section>
   </div>
+
+  @if (hasItems() && !isEditing()) {
+    <section class="card alerts" aria-labelledby="alerts-title">
+      <div class="card-body alerts-body">
+        <div>
+          <h2 id="alerts-title" class="section-title">Price alerts</h2>
+          <p class="muted">
+            Get told once when an instrument's price goes above or below a level you set. The
+            alert is delivered on the channel chosen in Settings.
+          </p>
+        </div>
+        <button type="button" class="btn btn-secondary" (click)="openCreateAlertModalFromSection()">
+          Create alert
+        </button>
+      </div>
+    </section>
+  }
+
+  <!-- Feedback for actions on this page -->
+  @if (notifications().length > 0) {
+    <div class="wl-toasts" role="region" aria-label="Watchlist updates" aria-live="polite">
+      @for (notification of notifications(); track notification.id) {
+        <div class="wl-toast" [class]="'wl-toast wl-toast-' + notification.type">
+          <span class="wl-toast-msg">{{ notification.message }}</span>
+          <button
+            type="button"
+            class="toast-x"
+            (click)="dismissNotification(notification.id)"
+            aria-label="Dismiss"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- New watchlist -->
+  @if (showCreateModal()) {
+    <div class="scrim" (click)="closeCreateModal()"></div>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-title"
+      (keydown.escape)="closeCreateModal()"
+    >
+      <header class="modal-header">
+        <h2 id="create-title">New watchlist</h2>
+        <button type="button" class="icon-btn" aria-label="Close" (click)="closeCreateModal()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </header>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" for="wl-new-name">Name</label>
+          <input
+            id="wl-new-name"
+            type="text"
+            class="input"
+            placeholder="e.g. Tech, Long term"
+            [(ngModel)]="newWatchlistName"
+            (keyup.enter)="createWatchlist()"
+            autofocus
+          />
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeCreateModal()">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="createWatchlist()"
+          [disabled]="isCreating() || !newWatchlistName().trim()"
+        >
+          {{ isCreating() ? 'Creating…' : 'Create' }}
+        </button>
+      </footer>
+    </div>
+  }
+
+  <!-- Create or edit a price alert -->
+  @if (showCreateAlertModal()) {
+    <div class="scrim" (click)="closeCreateAlertModal()"></div>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="alert-title"
+      (keydown.escape)="closeCreateAlertModal()"
+    >
+      <header class="modal-header">
+        <h2 id="alert-title">
+          {{ createAlertSymbol() && !createAlertAvailableItems().length ? 'Price alert' : 'New price alert' }}
+        </h2>
+        <button type="button" class="icon-btn" aria-label="Close" (click)="closeCreateAlertModal()">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </header>
+      <div class="modal-body">
+        <div class="field">
+          <label class="field-label" for="alertInstrument">Instrument</label>
+          @if (createAlertItemId() && !createAlertAvailableItems().length) {
+            <div class="instrument-display">
+              <span class="symbol">{{ createAlertSymbol() }}</span>
+              <span class="muted">{{ createAlertName() }}</span>
+            </div>
+          } @else {
+            <select
+              id="alertInstrument"
+              class="input"
+              [(ngModel)]="createAlertItemId"
+              (ngModelChange)="onAlertInstrumentChange($event)"
+              required
+            >
+              <option [ngValue]="null" disabled>Choose an instrument…</option>
+              @for (item of createAlertAvailableItems(); track item.itemId) {
+                <option [value]="item.itemId">{{ item.symbol }} · {{ item.name }}</option>
+              }
+            </select>
+          }
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label" for="alertDirection">When the price goes</label>
+            <select id="alertDirection" class="input" [(ngModel)]="createAlertDirection">
+              <option value="ABOVE">Above</option>
+              <option value="BELOW">Below</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="alertPrice">Price</label>
+            <input
+              type="number"
+              id="alertPrice"
+              class="input"
+              placeholder="e.g. 150.00"
+              [(ngModel)]="createAlertPrice"
+              min="0.01"
+              step="0.01"
+              (keyup.enter)="createPriceAlert()"
+            />
+          </div>
+        </div>
+        @if (createAlertPrice() !== null && !isCreateAlertValid() && createAlertItemId()) {
+          <p class="field-error">Enter a price above zero with at most two decimal places.</p>
+        }
+        @if (createAlertError()) {
+          <p class="form-error" role="alert">{{ createAlertError() }}</p>
+        }
+      </div>
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="closeCreateAlertModal()">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          (click)="createPriceAlert()"
+          [disabled]="isCreatingAlert() || !isCreateAlertValid()"
+        >
+          {{ isCreatingAlert() ? 'Saving…' : 'Save alert' }}
+        </button>
+      </footer>
+    </div>
+  }
 </div>

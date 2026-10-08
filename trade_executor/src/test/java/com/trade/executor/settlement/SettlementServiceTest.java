@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -41,7 +42,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(1);
@@ -59,12 +60,32 @@ class SettlementServiceTest {
     }
 
     @Test
+    @DisplayName("a buy whose cash went in the meantime is refused, never written as a negative balance")
+    void buyNoLongerAffordableIsRefused() {
+        SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
+
+        OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
+        AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
+        // The first write loses the race; the re-read finds a withdrawal took the cash.
+        when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(1);
+        when(accountMapper.updateBalanceWithVersion(any(), any(), anyInt())).thenReturn(0);
+        when(accountMapper.findById(1L)).thenReturn(java.util.Optional.of(
+                new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("50.00"), "ACTIVE", 1, "USD")));
+
+        assertThrows(InsufficientFundsAtSettlementException.class, () -> settlementService.settleFill(
+                order, account, new BigDecimal("10.00"), 10, new BigDecimal("0.10"), new BigDecimal("100.10"),
+                OrderSide.BUY));
+        verify(accountMapper, never()).updateBalanceWithVersion(any(), eq(new BigDecimal("-50.10")), anyInt());
+    }
+
+    @Test
     @DisplayName("a second delivery affects zero rows and publishes nothing")
     void redeliveredFillIsAlreadyProcessed() {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow order = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("10.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow account = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
         when(orderMapper.fillOrderIfNew(any(), any(), any())).thenReturn(0);
@@ -83,9 +104,9 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
-                new BigDecimal("119.50"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("119.50"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
         AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
@@ -120,9 +141,9 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow resting = new OrderRow(UUID.randomUUID(), 2L, INSTRUMENT_ID, "AAPL", "SELL", 10,
-                new BigDecimal("119.50"), "PARTIALLY_FILLED", 3, java.time.OffsetDateTime.now());
+                new BigDecimal("119.50"), "PARTIALLY_FILLED", 3, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
         AccountRow restingAccount = new AccountRow(2L, UUID.randomUUID(), new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
         AccountRow incomingAccount = new AccountRow(1L, ACCOUNT_UUID, new BigDecimal("5000.00"), "ACTIVE", 0, "USD");
 
@@ -146,7 +167,7 @@ class SettlementServiceTest {
         SettlementService settlementService = new SettlementService(orderMapper, accountMapper, 3);
 
         OrderRow incoming = new OrderRow(ORDER_ID, 1L, INSTRUMENT_ID, "AAPL", "BUY", 10,
-                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now());
+                new BigDecimal("120.00"), "NEW", 0, java.time.OffsetDateTime.now(), BigDecimal.ZERO);
 
         when(orderMapper.matchIncomingOrderIfNew(ORDER_ID, 6, "PARTIALLY_FILLED", new BigDecimal("119.50"),
                 new BigDecimal("3.00"))).thenReturn(1);

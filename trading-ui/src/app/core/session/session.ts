@@ -34,6 +34,8 @@ export class Session {
   /** The account the token says this session may trade. */
   readonly accountId = computed(() => this.state()?.user.accountId ?? null);
   readonly isSignedIn = computed(() => this.state() !== null);
+  /** The roles the user holds (CUSTOMER or ADMIN); empty when signed out. */
+  readonly roles = computed<string[]>(() => this.state()?.user.roles ?? []);
 
   /** The renewal in flight, shared by every request that needs it. */
   private renewing: Promise<boolean> | null = null;

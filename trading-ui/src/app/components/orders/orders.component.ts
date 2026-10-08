@@ -1,9 +1,12 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { OrderFilter, OrderHistoryEntry, OrderStatus, TradeApi } from '../../api/trade-api';
 import { errorMessage } from '../../core/errors/error-message';
+import { rejectionLabel, rejectionText } from '../../core/format/rejection-reason';
 import { Session } from '../../core/session/session';
 import {
   OrderStatusBadgeComponent,
@@ -32,7 +35,7 @@ export const STATUS_FILTERS: OrderStatus[] = [
 
 @Component({
   selector: 'app-orders',
-  imports: [DatePipe, DecimalPipe, FormsModule, OrderStatusBadgeComponent],
+  imports: [DatePipe, MoneyPipe, FormsModule, RouterLink, OrderStatusBadgeComponent],
   templateUrl: './orders.component.html',
   styleUrls: ['./orders.component.css'],
 })
@@ -48,6 +51,8 @@ export class OrdersComponent {
   private readonly pollsLeft = signal(MAX_POLLS);
 
   readonly statusFilters = STATUS_FILTERS;
+  readonly rejectionLabel = rejectionLabel;
+  readonly rejectionText = rejectionText;
   /** The filter fields as typed; applied to the history only on Apply. */
   statusFilter: OrderStatus | '' = '';
   fromDate = '';

@@ -34,6 +34,7 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
+  type-handlers-package: com.trade.mapper
   configuration:
     map-underscore-to-camel-case: true
 
@@ -60,6 +61,40 @@ portfolio:
     stale-after-seconds: ${PORTFOLIO_STALE_AFTER_SECONDS:300}
     group-id: trade-api-quotes-${random.uuid}
     listen: ${PORTFOLIO_QUOTES_LISTEN:true}
+
+# The commission rate (LEAP-017), and its only home. The order review
+# (POST /api/v1/orders/review) uses it, placing an order writes it on the
+# order (Orders.fee_rate), and trade_executor charges each fill at the
+# order's own rate.
+fee:
+  rate: ${EXECUTOR_FEE_RATE:0.001}
+
+# Automated strategies (com.trade.strategy). The group id is fixed: the engine
+# only needs quotes from now on, and a stale one is ignored (max-quote-age).
+notification:
+  listen: ${NOTIFICATION_LISTEN:true}
+  group-id: notification-consumer
+  # EMAIL notifications go out over this SMTP server; leave SMTP_HOST empty and they are
+  # marked FAILED ("no mail server") instead of being silently dropped.
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    from: ${MAIL_FROM:Ferodha <no-reply@ferodha.local>}
+
+# LEAP-007: price alerts are checked against each market-data quote by the watchlist
+# module's own consumer group (a quote older than this is not acted on).
+watchlist:
+  alerts:
+    listen: ${WATCHLIST_ALERTS_LISTEN:true}
+    group-id: watchlist-alerts
+    max-quote-age-seconds: ${WATCHLIST_ALERT_MAX_QUOTE_AGE_SECONDS:900}
+
+strategy:
+  listen: ${STRATEGY_LISTEN:true}
+  group-id: strategy-service
+  max-quote-age-seconds: ${STRATEGY_MAX_QUOTE_AGE_SECONDS:900}
 
 logging:
   level:

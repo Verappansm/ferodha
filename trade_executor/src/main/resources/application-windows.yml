@@ -15,11 +15,6 @@ spring:
       properties:
         max.block.ms: ${KAFKA_MAX_BLOCK_MS:10000}
 
-# No compose DNS on Windows: trades-generator is a sibling process on this
-# same machine.
-trades-generator:
-  base-url: ${TRADES_GENERATOR_URL:http://localhost:8083}
-
 # A variable can't be set to an empty string on Windows (setting "" deletes
 # it), so a blank FAUXNANCE_* in windows/.env.windows arrives here as unset.
 # The URL defaults to a closed local port rather than "": an empty base URL

@@ -1,22 +1,35 @@
-<section class="dashboard">
-  <header class="dashboard-header">
+<div class="page">
+  <header class="page-header">
     <div>
-      <h2>Dashboard</h2>
-      @if (lastUpdated(); as updated) {
-        <p class="updated" data-testid="dashboard-updated">
-          Updated {{ updated | date: 'shortTime' }}
-        </p>
-      }
+      <h1>Dashboard</h1>
+      <p>
+        Your cash, today's profit and loss, and what you hold.
+        @if (lastUpdated(); as updated) {
+          <span class="updated" data-testid="dashboard-updated"
+            >Updated {{ updated | date: 'shortTime' }}</span
+          >
+        }
+      </p>
     </div>
-    <button type="button" class="refresh" data-testid="dashboard-refresh" (click)="refresh()">
-      Refresh
-    </button>
+    <div class="page-actions">
+      <button
+        type="button"
+        class="btn btn-secondary"
+        data-testid="dashboard-refresh"
+        (click)="refresh()"
+      >
+        Refresh
+      </button>
+      <a class="btn btn-primary" routerLink="/instruments">Browse markets</a>
+    </div>
   </header>
 
-  <div class="grid">
+  <div class="dash-row">
     <app-cash-panel [state]="cash()" (retry)="loadCash()" />
     <app-pnl-panel [state]="pnl()" (retry)="loadPnl()" />
+  </div>
+  <div class="dash-row">
     <app-recent-orders-panel [state]="orders()" (retry)="loadOrders()" />
     <app-top-positions-panel [state]="positions()" (retry)="loadPositions()" />
   </div>
-</section>
+</div>

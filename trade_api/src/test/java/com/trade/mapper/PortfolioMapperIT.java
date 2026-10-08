@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PortfolioMapperIT extends MapperIntegrationTestSupport {
 
+    private static final BigDecimal FEE_RATE = new BigDecimal("0.001");
+
     @Autowired
     private AccountMapper accountMapper;
 
@@ -81,7 +83,7 @@ class PortfolioMapperIT extends MapperIntegrationTestSupport {
                                             BigDecimal price, String idempotencyKey) {
         UUID orderId = UUID.randomUUID();
         orderMapper.insertOrder(orderId, account.userId(), account.accountUuid(), instrumentId,
-                side, quantity, price, price, "FILLED", idempotencyKey);
+                side, quantity, price, price, "FILLED", idempotencyKey, FEE_RATE);
         orderMapper.insertTrade(orderId, price, quantity);
     }
 

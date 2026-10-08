@@ -1,33 +1,42 @@
-<section class="panel" data-testid="orders-panel" aria-labelledby="orders-title">
-  <header class="panel-header">
+<section class="card panel" data-testid="orders-panel" aria-labelledby="orders-title">
+  <header class="card-header panel-header">
     <h3 id="orders-title">Recent orders</h3>
-    <a class="panel-link" routerLink="/orders">All orders</a>
+    <a class="card-link" routerLink="/orders">All orders</a>
   </header>
 
   @if (state().loading) {
-    <div class="skeleton" aria-hidden="true"></div>
-    <div class="skeleton" aria-hidden="true"></div>
-    <div class="skeleton" aria-hidden="true"></div>
-    <span class="visually-hidden">Loading orders</span>
+    <div class="card-body">
+      <div class="skeleton" aria-hidden="true"></div>
+      <div class="skeleton" aria-hidden="true"></div>
+      <div class="skeleton" aria-hidden="true"></div>
+      <span class="visually-hidden">Loading orders</span>
+    </div>
   } @else if (state().error) {
-    <div class="panel-error" role="alert">
+    <div class="card-body panel-error" role="alert">
       <p data-testid="orders-panel-error">{{ state().error }}</p>
-      <button type="button" class="retry" (click)="retry.emit()">Try again</button>
+      <button type="button" class="btn btn-secondary btn-sm retry" (click)="retry.emit()">
+        Try again
+      </button>
     </div>
   } @else if (state().data; as orders) {
     @if (orders.length === 0) {
-      <p class="muted" data-testid="orders-panel-empty">
-        No orders yet. <a class="panel-link" routerLink="/instruments">Find an instrument</a> to
-        place your first order.
+      <p class="state" data-testid="orders-panel-empty">
+        No orders yet. <a routerLink="/instruments">Find an instrument</a> to place your first
+        order.
       </p>
     } @else {
       <ul class="rows">
         @for (order of orders; track order.orderId) {
           <li data-testid="orders-panel-row">
-            <span>
-              <span class="symbol">{{ order.symbol }}</span>
-              {{ order.side }} {{ order.quantity }}
-              <span class="muted">{{ order.createdOn | date: 'short' }}</span>
+            <span class="cell-stack">
+              <span>
+                <span class="symbol">{{ order.symbol }}</span>
+                <span [class]="order.side === 'BUY' ? 'side-buy' : 'side-sell'">{{
+                  order.side
+                }}</span>
+                {{ order.quantity }}
+              </span>
+              <small>{{ order.createdOn | date: 'd MMM, HH:mm' }}</small>
             </span>
             <app-order-status-badge [status]="order.status" />
           </li>

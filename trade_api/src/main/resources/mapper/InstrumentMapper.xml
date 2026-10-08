@@ -21,6 +21,12 @@
         WHERE ticker = #{symbol}
     </select>
 
+    <select id="findByInstrumentId" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        WHERE instrument_id = #{instrumentId}
+    </select>
+
     <select id="findAllTradable" resultMap="instrumentRow">
         SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
         FROM Instruments
@@ -33,6 +39,45 @@
         SELECT COUNT(*)
         FROM Instruments
         WHERE tradable = true
+    </select>
+
+    <!-- LEAP-015: the customer market list. Every filter is optional and they combine;
+         the text matches part of the ticker or the name, case-insensitively (trigram
+         indexes, Liquibase 024). Delisted instruments never appear. -->
+    <sql id="searchWhere">
+        WHERE tradable = true
+        <if test="query != null">
+            AND (lower(ticker) LIKE #{query} ESCAPE '!' OR lower(name) LIKE #{query} ESCAPE '!')
+        </if>
+        <if test="exchange != null">AND exchange = #{exchange}</if>
+        <if test="sector != null">AND sector = #{sector}</if>
+        <if test="type != null">AND type::text = #{type}</if>
+    </sql>
+
+    <select id="searchTradable" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        <include refid="searchWhere"/>
+        ORDER BY ticker ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countSearchTradable" resultType="long">
+        SELECT COUNT(*) FROM Instruments
+        <include refid="searchWhere"/>
+    </select>
+
+    <select id="distinctTradableExchanges" resultType="string">
+        SELECT DISTINCT exchange FROM Instruments WHERE tradable = true ORDER BY exchange
+    </select>
+
+    <select id="distinctTradableSectors" resultType="string">
+        SELECT DISTINCT sector FROM Instruments
+        WHERE tradable = true AND sector IS NOT NULL AND sector &lt;&gt; '' ORDER BY sector
+    </select>
+
+    <select id="distinctTradableTypes" resultType="string">
+        SELECT DISTINCT type::text FROM Instruments WHERE tradable = true ORDER BY 1
     </select>
 
 </mapper>

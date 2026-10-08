@@ -156,18 +156,24 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
       FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
-      # The executor's own market-data poller stays off: pricing-generator is
-      # the live price feed under every profile. POLL_INTERVAL_SECONDS only
-      # applies if it is switched back on.
+      # The executor's own price feed (com.trade.executor.ticker, formerly the
+      # pricing-generator service) runs under every profile: real Fauxnance
+      # quotes every 5 minutes as anchors, a simulated tick for every tradable
+      # instrument to market-data every 5 seconds, 1-minute bars for the 1D
+      # chart (market_bars) and daily candles (market_candles). Under
+      # market-sim its market maker (formerly trades-generator) also places
+      # synthetic counter-orders. The old market-data poller stays off;
+      # POLL_INTERVAL_SECONDS only applies if it is switched back on.
+      GENERATOR_BAR_RETENTION_HOURS: ${GENERATOR_BAR_RETENTION_HOURS:-26}
       EXECUTOR_MARKET_DATA_POLLER_ENABLED: ${EXECUTOR_MARKET_DATA_POLLER_ENABLED:-false}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
-      # The profile only changes how orders settle. Empty/unset = the
-      # spec-exact story (one real Fauxnance quote per order, fill-or-reject,
-      # no partial fills). market-sim = an order book at pricing-generator's
-      # prices, with partial fills and expiry - see TradesGeneratorQuoteSource
-      # / FauxnanceQuoteClient.
+      # Fills are priced at that live tick, in process, under every profile:
+      # a BUY at the ask, a SELL at the bid. The
+      # profile only changes how orders settle. Empty/unset = fill-or-reject
+      # against that tick, no partial fills. market-sim = an order book at the
+      # same prices, with partial fills and expiry. fauxnance-direct = the
+      # retired one-Fauxnance-quote-per-order path (needs the FAUXNANCE_* keys).
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
-      TRADES_GENERATOR_URL: http://pricing-generator:8084
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/actuator/health"]
       interval: 10s
@@ -181,86 +187,6 @@ services:
       trade-api:
         condition: service_healthy
       kafka:
-        condition: service_healthy
-    networks:
-      - trade-net
-
-  # The platform's live price feed, under every profile: refreshes real
-  # Fauxnance quotes every 5 minutes as anchors, publishes a simulated tick
-  # for every tradable instrument to market-data every 5 seconds (trade-api's
-  # portfolio and instrument pages read it), records 1-minute bars for the
-  # 1D chart (market_bars) and stores daily candles once a day
-  # (market_candles). Under market-sim it also prices trade-executor's fills.
-  # Starts after trade-api, whose Liquibase creates those tables.
-  pricing-generator:
-    container_name: pricing-generator
-    build:
-      context: ./pricing_generator
-      dockerfile: Dockerfile
-    ports:
-      - "8084:8084"
-    environment:
-      SERVER_PORT: 8084
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-tradedb}
-      POSTGRES_USER: ${POSTGRES_USER:-trade}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      FAUXNANCE_API_URL: ${FAUXNANCE_API_URL}
-      FAUXNANCE_API_KEY: ${FAUXNANCE_API_KEY}
-      GENERATOR_BAR_RETENTION_HOURS: ${GENERATOR_BAR_RETENTION_HOURS:-26}
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8084/actuator/health"]
-      interval: 10s
-      timeout: 3s
-      start_period: 40s
-      retries: 5
-    depends_on:
-      trade-api:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    networks:
-      - trade-net
-
-  trades-generator:
-    container_name: trades-generator
-    build:
-      context: ./trades_generator
-      dockerfile: Dockerfile
-    ports:
-      - "8083:8083"
-    environment:
-      SERVER_PORT: 8083
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-tradedb}
-      POSTGRES_USER: ${POSTGRES_USER:-trade}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      PRICING_GENERATOR_URL: http://pricing-generator:8084
-      # Needed here too, not just on trade-executor - OrderGenerator
-      # (synthetic RANDOMIZER orders) and OrderExpiryScheduler are both
-      # @Profile("market-sim") on trade-executor's side, but trade-executor
-      # only ever sees a synthetic order to match against if trades-generator
-      # itself is also told market-sim is active. Without this line, setting
-      # SPRING_PROFILES_ACTIVE=market-sim only ever reached trade-executor -
-      # trades-generator would silently never place a single synthetic order.
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8083/actuator/health"]
-      interval: 10s
-      timeout: 3s
-      start_period: 40s
-      retries: 5
-    depends_on:
-      trade-api:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      pricing-generator:
         condition: service_healthy
     networks:
       - trade-net

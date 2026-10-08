@@ -2,6 +2,7 @@ package com.trade.admin.service;
 
 import com.trade.admin.AdminException;
 import com.trade.admin.dto.AdminDtos.AdminInstrumentDto;
+import com.trade.admin.dto.AdminDtos.CreateInstrumentRequest;
 import com.trade.admin.dto.AdminDtos.PageDto;
 import com.trade.admin.mapper.AdminMapper;
 import com.trade.security.AdminPrincipal;
@@ -36,6 +37,28 @@ public class AdminInstrumentService {
         return new PageDto<>(
                 mapper.listInstruments(query, exch, type, tradable, paging.offset(), paging.size()),
                 paging.page(), paging.size(), mapper.countInstruments(query, exch, type, tradable));
+    }
+
+    // Adds a new tradable instrument. The ticker is the key (unique), so a second
+    // add of the same ticker is a conflict, not a duplicate. Prices come from
+    // the live feed, which can only price a symbol Fauxnance knows: a ticker it
+    // does not know is listed but has no price (and so cannot be traded) until
+    // it does.
+    @Transactional
+    public AdminInstrumentDto create(CreateInstrumentRequest request, AdminPrincipal admin) {
+        if (!TYPES.contains(request.type())) {
+            throw AdminException.invalid("type=" + request.type());
+        }
+        String sector = Paging.blankToNull(request.sector());
+        String id = mapper.insertInstrument(request.ticker(), request.name().trim(), request.exchange().trim(),
+                request.currency(), request.type(), sector == null ? null : sector.trim(),
+                admin.userId().toString());
+        if (id == null) {
+            throw AdminException.conflict("instrument " + request.ticker() + " already exists");
+        }
+        AdminInstrumentDto created = mapper.findInstrument(id);
+        audit.record(admin, "INSTRUMENT_ADDED", "INSTRUMENT", created.symbol(), request.reason().trim());
+        return created;
     }
 
     @Transactional

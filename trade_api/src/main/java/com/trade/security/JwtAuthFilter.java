@@ -2,6 +2,7 @@ package com.trade.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.trade.dto.ErrorResponseDto;
+import com.trade.mapper.UserAccessMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,13 +12,22 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
+import java.util.UUID;
 
 // Answers whether the caller holds a valid token, once, for every route
 // under /api/v1/**, before any controller runs. It does not decide whether
 // the caller may reach a particular account - that is ACC-403, answered in
 // the service layer where the account key is known.
+//
+// A token's signature proves who it was issued to, not that they may still
+// act: a suspension or a forced password reset in the auth service cannot
+// recall a token already issued. So every request also asks Users, by
+// primary key, whether the token's user is still allowed in (UserAccessMapper),
+// and answers the same AUTH-401 if not - effective on the next request rather
+// than when the access token expires.
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
@@ -36,17 +46,34 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final UserAccessMapper userAccess;
     private final ObjectMapper objectMapper;
 
-    public JwtAuthFilter(JwtService jwtService, ObjectMapper objectMapper) {
+    public JwtAuthFilter(JwtService jwtService, UserAccessMapper userAccess, ObjectMapper objectMapper) {
         this.jwtService = jwtService;
+        this.userAccess = userAccess;
         this.objectMapper = objectMapper;
+    }
+
+    // The path routing will see: decoded, ;parameters removed, doubled slashes collapsed.
+    // Deciding on the raw URI instead let /api/v1;x/orders or /api/v1/%61dmin/... be judged
+    // as one route here and dispatched as another.
+    private static final UrlPathHelper PATHS = new UrlPathHelper();
+
+    static {
+        PATHS.setUrlDecode(true);
+        PATHS.setRemoveSemicolonContent(true);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                      FilterChain filterChain) throws ServletException, IOException {
-        if (!request.getRequestURI().startsWith(PROTECTED_PREFIX)) {
+        String path = PATHS.getPathWithinApplication(request);
+        if (isSmuggled(request.getRequestURI())) {
+            writeError(response, HttpStatus.BAD_REQUEST, "VAL-422", "Malformed request path");
+            return;
+        }
+        if (!path.startsWith(PROTECTED_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -59,7 +86,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         String token = header.substring(BEARER_PREFIX.length()).trim();
 
-        if (request.getRequestURI().startsWith(ADMIN_PREFIX)) {
+        if (path.startsWith(ADMIN_PREFIX)) {
             AdminPrincipal admin;
             try {
                 admin = jwtService.verifyAdmin(token);
@@ -67,6 +94,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 writeError(response, HttpStatus.FORBIDDEN, "AUTH-403", "Forbidden");
                 return;
             } catch (JwtVerificationException e) {
+                writeUnauthorised(response);
+                return;
+            }
+            if (userAccess.isAdminBlocked(admin.userId().toString())) {
                 writeUnauthorised(response);
                 return;
             }
@@ -82,9 +113,53 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             writeUnauthorised(response);
             return;
         }
+        if (!isUuid(principal.subjectUserId()) || userAccess.isCustomerBlocked(principal.subjectUserId())) {
+            writeUnauthorised(response);
+            return;
+        }
+        if (principal.strategyId() != null) {
+            // A delegated strategy token places orders and does nothing else.
+            if (!isOrderPlacement(request, path)) {
+                writeError(response, HttpStatus.FORBIDDEN, "AUTH-403", "Forbidden");
+                return;
+            }
+            if (!isUuid(principal.strategyId())
+                    || !userAccess.isStrategyTokenValid(principal.strategyId(), principal.subjectUserId())) {
+                writeUnauthorised(response);
+                return;
+            }
+        }
 
         request.setAttribute(PRINCIPAL_ATTRIBUTE, principal);
         filterChain.doFilter(request, response);
+    }
+
+    private static boolean isOrderPlacement(HttpServletRequest request, String path) {
+        return "POST".equals(request.getMethod()) && "/api/v1/orders".equals(path);
+    }
+
+    /**
+     * A raw path no client of ours ever sends: path parameters, encoded slashes, backslashes
+     * or dot segments, written plainly or encoded. Refused outright rather than normalised,
+     * so no two layers can ever disagree about which route a request is for.
+     */
+    static boolean isSmuggled(String rawUri) {
+        if (rawUri == null) {
+            return false;
+        }
+        String lower = rawUri.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains(";") || lower.contains("%2f") || lower.contains("%5c") || lower.contains("\\")
+                || lower.contains("%2e") || lower.contains("/../") || lower.endsWith("/..")
+                || lower.contains("/./") || lower.endsWith("/.") || lower.contains("%25");
+    }
+
+    private static boolean isUuid(String value) {
+        try {
+            UUID.fromString(value);
+            return true;
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return false;
+        }
     }
 
     private void writeUnauthorised(HttpServletResponse response) throws IOException {

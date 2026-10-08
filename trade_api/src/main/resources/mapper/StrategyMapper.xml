@@ -1,0 +1,195 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.trade.strategy.mapper.StrategyMapper">
+
+    <!-- Boxed javaTypes throughout: the record components are boxed, and a
+         primitive here would not match the constructor. -->
+    <resultMap id="strategy" type="com.trade.strategy.Strategy">
+        <constructor>
+            <arg column="strategy_id" javaType="java.lang.String"/>
+            <arg column="user_id" javaType="java.lang.String"/>
+            <arg column="account_id" javaType="java.lang.Long"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="trigger_price" javaType="java.math.BigDecimal"/>
+            <arg column="quantity" javaType="java.lang.Integer"/>
+            <arg column="max_spend" javaType="java.math.BigDecimal"/>
+            <arg column="max_position" javaType="java.lang.Integer"/>
+            <arg column="max_orders" javaType="java.lang.Integer"/>
+            <arg column="max_failures" javaType="java.lang.Integer"/>
+            <arg column="dry_run" javaType="java.lang.Boolean"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="orders_placed" javaType="java.lang.Integer"/>
+            <arg column="consecutive_failures" javaType="java.lang.Integer"/>
+            <arg column="last_price" javaType="java.math.BigDecimal"/>
+            <arg column="expires_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="last_checked_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="strategyEvent" type="com.trade.strategy.StrategyEvent">
+        <constructor>
+            <arg column="occurred_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="kind" javaType="java.lang.String"/>
+            <arg column="detail" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        strategy_id::text AS strategy_id, user_id::text AS user_id, account_id, name, symbol, side,
+        trigger_price, quantity, max_spend, max_position, max_orders, max_failures, dry_run, status,
+        orders_placed, consecutive_failures, last_price, expires_at, created_at, last_checked_at
+    </sql>
+
+    <select id="insert" resultType="java.lang.String">
+        INSERT INTO strategies (user_id, account_id, name, symbol, side, trigger_price, quantity,
+                                max_spend, max_position, max_orders, max_failures, dry_run, expires_at)
+        VALUES (CAST(#{userId} AS uuid), #{accountId}, #{name}, #{symbol}, #{side}, #{triggerPrice}, #{quantity},
+                #{maxSpend,jdbcType=DECIMAL}, #{maxPosition,jdbcType=INTEGER}, #{maxOrders}, #{maxFailures},
+                #{dryRun}, #{expiresAt,jdbcType=TIMESTAMP})
+        RETURNING strategy_id::text
+    </select>
+
+    <update id="update">
+        UPDATE strategies
+        SET name = #{name}, symbol = #{symbol}, side = #{side}, trigger_price = #{triggerPrice},
+            quantity = #{quantity}, max_spend = #{maxSpend,jdbcType=DECIMAL},
+            max_position = #{maxPosition,jdbcType=INTEGER}, max_orders = #{maxOrders},
+            max_failures = #{maxFailures}, dry_run = #{dryRun},
+            expires_at = #{expiresAt,jdbcType=TIMESTAMP},
+            last_price = NULL, last_checked_at = NULL, updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status IN ('DISABLED', 'TRIPPED')
+    </update>
+
+    <select id="findById" resultMap="strategy">
+        SELECT <include refid="columns"/> FROM strategies
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+    </select>
+
+    <select id="findByAccount" resultMap="strategy">
+        SELECT <include refid="columns"/> FROM strategies
+        WHERE account_id = #{accountId}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="findEnabledBySymbol" resultMap="strategy">
+        SELECT <include refid="columns"/> FROM strategies
+        WHERE symbol = #{symbol} AND status = 'ENABLED'
+    </select>
+
+    <update id="enable">
+        UPDATE strategies
+        SET status = 'ENABLED', consecutive_failures = 0, last_price = NULL, last_checked_at = NULL,
+            updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status IN ('DISABLED', 'TRIPPED')
+          AND (expires_at IS NULL OR expires_at > now())
+    </update>
+
+    <update id="disable">
+        UPDATE strategies
+        SET status = 'DISABLED', updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid) AND status = 'ENABLED'
+    </update>
+
+    <update id="claim">
+        UPDATE strategies
+        SET orders_placed = orders_placed + 1, last_price = #{price}, last_checked_at = now(),
+            updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status = 'ENABLED'
+          AND orders_placed &lt; max_orders
+          AND (expires_at IS NULL OR expires_at &gt; now())
+    </update>
+
+    <update id="release">
+        UPDATE strategies
+        SET orders_placed = GREATEST(orders_placed - 1, 0), updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+    </update>
+
+    <update id="completeIfDone">
+        UPDATE strategies
+        SET status = 'COMPLETED', updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status = 'ENABLED' AND orders_placed &gt;= max_orders
+    </update>
+
+    <update id="expire">
+        UPDATE strategies
+        SET status = 'EXPIRED', updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid) AND status = 'ENABLED'
+    </update>
+
+    <update id="setLastPrice">
+        UPDATE strategies SET last_price = #{price}, last_checked_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+    </update>
+
+    <!-- SET expressions read the row as it was, so the comparison uses the
+         count before this failure is added. -->
+    <update id="recordFailure">
+        UPDATE strategies
+        SET consecutive_failures = consecutive_failures + 1,
+            status = CASE WHEN status = 'ENABLED' AND consecutive_failures + 1 &gt;= max_failures
+                          THEN 'TRIPPED' ELSE status END,
+            updated_at = now()
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+    </update>
+
+    <update id="resetFailures">
+        UPDATE strategies SET consecutive_failures = 0
+        WHERE strategy_id = CAST(#{strategyId} AS uuid) AND consecutive_failures &lt;&gt; 0
+    </update>
+
+    <insert id="insertEvent">
+        INSERT INTO strategy_events (strategy_id, kind, detail)
+        VALUES (CAST(#{strategyId} AS uuid), #{kind}, #{detail})
+    </insert>
+
+    <select id="findEvents" resultMap="strategyEvent">
+        SELECT occurred_at, kind, detail FROM strategy_events
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+        ORDER BY event_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="committedSpend" resultType="java.math.BigDecimal">
+        SELECT COALESCE(SUM(quantity * limit_price * (1 + fee_rate)), 0)
+        FROM Orders
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND side = 'BUY'::order_side_enum
+          AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum,
+                         'FILLED'::order_status_enum)
+    </select>
+
+    <select id="pendingQuantity" resultType="java.lang.Long">
+        SELECT COALESCE(SUM(o.quantity - o.filled_quantity), 0)
+        FROM Orders o
+                 JOIN Accounts a ON a.account_id = o.account_id
+                 JOIN Instruments i ON i.instrument_id = o.instrument_id
+        WHERE a.id = #{accountId}
+          AND i.ticker = #{symbol}
+          AND o.side = #{side}::order_side_enum
+          AND o.status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+    </select>
+
+    <update id="tagOrder">
+        UPDATE Orders SET strategy_id = CAST(#{strategyId} AS uuid)
+        WHERE idempotency_key = #{idempotencyKey}
+    </update>
+
+    <select id="strategyIdOfOrder" resultType="java.lang.String">
+        SELECT strategy_id::text FROM Orders WHERE order_id = CAST(#{orderId} AS uuid)
+    </select>
+
+    <select id="findOpenOrderIds" resultType="java.lang.String">
+        SELECT order_id::text FROM Orders
+        WHERE strategy_id = CAST(#{strategyId} AS uuid)
+          AND status IN ('NEW'::order_status_enum, 'PARTIALLY_FILLED'::order_status_enum)
+    </select>
+
+</mapper>

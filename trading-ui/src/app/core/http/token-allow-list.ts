@@ -26,9 +26,13 @@ export function tokenAllowList(urls: {
   return [
     // Every Trade REST API route is protected.
     { origin: new URL(urls.tradeApiUrl).origin, paths: ['/api/v1/'] },
-    // Only /auth/me is protected on the Auth service. /auth/login,
-    // /auth/register and /auth/refresh are `security: []` and take no header.
-    { origin: new URL(urls.authApiUrl).origin, paths: ['/auth/me', '/profile'] },
+    // On the Auth service only /auth/me, /auth/logout-all and /profile are
+    // protected. /auth/login, /auth/register, /auth/refresh and
+    // /auth/account-status are `security: []` and take no header.
+    {
+      origin: new URL(urls.authApiUrl).origin,
+      paths: ['/auth/me', '/auth/logout-all', '/profile'],
+    },
   ];
 }
 

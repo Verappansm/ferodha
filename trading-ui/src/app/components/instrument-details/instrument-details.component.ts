@@ -9,12 +9,14 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { DatePipe, DecimalPipe } from '@angular/common';
+import { DatePipe } from '@angular/common';
+import { MoneyPipe } from '../../core/format/money.pipe';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ChartRange,
   InstrumentQuote,
   InstrumentResponse,
+  InstrumentSignal,
   PricePoint,
   TradeApi,
 } from '../../api/trade-api';
@@ -22,6 +24,7 @@ import { errorMessage } from '../../core/errors/error-message';
 import { pnlDirection, pnlSign, pnlWord } from '../../core/format/pnl';
 import { suggestedLimitPrice } from '../../core/format/limit-price';
 import { CHART_FACTORY, DrawnChart } from './price-chart';
+import { Theme } from '../../core/theme/theme';
 
 export const RANGES: { value: ChartRange; label: string }[] = [
   { value: '1D', label: '1 day' },
@@ -43,7 +46,7 @@ export const QUOTE_REFRESH_MS = 15_000;
  */
 @Component({
   selector: 'app-instrument-details',
-  imports: [DatePipe, DecimalPipe, RouterLink],
+  imports: [DatePipe, MoneyPipe, RouterLink],
   templateUrl: './instrument-details.component.html',
   styleUrl: './instrument-details.component.css',
 })
@@ -53,6 +56,7 @@ export class InstrumentDetailsComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly drawChart = inject(CHART_FACTORY);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly theme = inject(Theme);
 
   protected readonly ranges = RANGES;
   protected readonly direction = pnlDirection;
@@ -69,6 +73,9 @@ export class InstrumentDetailsComponent implements OnInit {
   readonly points = signal<PricePoint[] | null>(null);
   readonly historyError = signal<string | null>(null);
   readonly showTable = signal(false);
+  /** The buy, sell or hold view (Sprint 10 stretch); null while loading. */
+  readonly tradeSignal = signal<InstrumentSignal | null>(null);
+  readonly signalError = signal<string | null>(null);
 
   readonly rangeLabel = computed(() => RANGES.find((r) => r.value === this.range())?.label ?? '');
 
@@ -80,31 +87,44 @@ export class InstrumentDetailsComponent implements OnInit {
     const points = this.points();
     if (!points || points.length === 0) return null;
     const first = points[0].close;
-    const last = points[points.length - 1].close;
+    const last = points.at(-1)?.close;
     return {
       low: Math.min(...points.map((p) => p.low)),
       high: Math.max(...points.map((p) => p.high)),
       first,
       last,
-      change: last - first,
-      changePercent: first === 0 ? null : ((last - first) / first) * 100,
+      change: last ? last - first : 0,
+      changePercent: first === 0 || !last ? null : ((last - first) / first) * 100,
     };
   });
 
+  /** The move since the previous close, when both prices are known. */
+  readonly dayChange = computed(() => {
+    const quote = this.quote();
+    if (quote?.mid == null || !quote.previousClose) return null;
+    const change = quote.mid - quote.previousClose;
+    return { change, percent: (change / quote.previousClose) * 100 };
+  });
+
   constructor() {
-    // Redraw whenever the points change and the canvas is on the page.
+    // Redraw whenever the points change and the canvas is on the page, and on a
+    // theme switch, since the chart's colours are read from the theme's tokens.
     effect(() => {
+      this.theme.choice();
       const points = this.points();
       const canvas = this.canvas()?.nativeElement;
       this.chart?.destroy();
       this.chart = null;
       if (!canvas || !points || points.length === 0) return;
+      const first = points[0].close;
+      const last = points.at(-1)?.close;
+      const isUp = last ? last >= first : false;
       this.chart = this.drawChart(canvas, {
         labels: points.map((p) => this.label(p.time)),
         closes: points.map((p) => p.close),
         colours: {
-          line: cssVar('--brand-600'),
-          fill: cssVar('--brand-100'),
+          line: isUp ? cssVar('--positive') : cssVar('--negative'),
+          fill: isUp ? cssVar('--positive-bg') : cssVar('--negative-bg'),
           grid: cssVar('--ink-200'),
           text: cssVar('--ink-500'),
         },
@@ -120,6 +140,7 @@ export class InstrumentDetailsComponent implements OnInit {
       this.loadInstrument();
       this.loadQuote();
       this.loadHistory();
+      this.loadSignal();
     });
     const timer = setInterval(() => this.loadQuote(), QUOTE_REFRESH_MS);
     this.destroyRef.onDestroy(() => clearInterval(timer));
@@ -138,7 +159,7 @@ export class InstrumentDetailsComponent implements OnInit {
    */
   trade(side: 'BUY' | 'SELL'): void {
     const price = suggestedLimitPrice(this.quote(), side);
-    this.router.navigate(['/order'], {
+    void this.router.navigate(['/order'], {
       queryParams:
         price === null ? { symbol: this.symbol(), side } : { symbol: this.symbol(), side, price },
     });
@@ -167,6 +188,15 @@ export class InstrumentDetailsComponent implements OnInit {
     this.tradeApi.history(this.symbol(), this.range()).subscribe({
       next: (history) => this.points.set(history.points),
       error: (error: unknown) => this.historyError.set(errorMessage(error)),
+    });
+  }
+
+  loadSignal(): void {
+    this.tradeSignal.set(null);
+    this.signalError.set(null);
+    this.tradeApi.signal(this.symbol()).subscribe({
+      next: (s) => this.tradeSignal.set(s),
+      error: (error: unknown) => this.signalError.set(errorMessage(error)),
     });
   }
 

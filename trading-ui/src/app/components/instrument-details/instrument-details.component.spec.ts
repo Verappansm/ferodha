@@ -58,7 +58,30 @@ describe('InstrumentDetailsComponent', () => {
       imports: [InstrumentDetailsComponent],
       providers: [
         provideRouter([]),
-        { provide: TradeApi, useValue: { instrument, quote, history } },
+        {
+          provide: TradeApi,
+          useValue: {
+            instrument,
+            quote,
+            history,
+            signal: vi.fn().mockReturnValue(
+              of({
+                symbol: 'AAPL',
+                direction: 'BUY',
+                strength: 'MODERATE',
+                reason: 'Uptrend: the 20-day average is above the 50-day average.',
+                sma20: 210,
+                sma50: 205,
+                rsi14: 58,
+                lastClose: 212,
+                closesUsed: 60,
+                asOf: '2026-10-07T00:00:00Z',
+                computedAt: '2026-10-08T09:00:00Z',
+                disclaimer: 'Not investment advice.',
+              }),
+            ),
+          },
+        },
         { provide: CHART_FACTORY, useValue: drawChart },
         {
           provide: ActivatedRoute,
@@ -199,5 +222,12 @@ describe('InstrumentDetailsComponent', () => {
     );
     open();
     expect(text('instrument-error')).toBe(ERROR_MESSAGES['INS-404']);
+  });
+
+  it('shows the signal with its direction, strength and reason', () => {
+    open();
+    expect(text('signal')).toContain('BUY · moderate');
+    expect(text('signal')).toContain('Uptrend');
+    expect(text('signal')).toContain('Not investment advice.');
   });
 });

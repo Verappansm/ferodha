@@ -2,9 +2,12 @@ package com.trade.domain;
 
 import com.trade.enums.InstrumentType;
 
+import java.util.UUID;
+
 
 public class Instrument {
 
+    private final UUID instrumentId;
     private final String symbol;
     private final String displayName;
     private final InstrumentType assetClass;
@@ -15,8 +18,9 @@ public class Instrument {
     // can no longer be traded.
     private boolean tradable;
 
-    public Instrument(String symbol, String displayName, InstrumentType assetClass,
+    public Instrument(UUID instrumentId, String symbol, String displayName, InstrumentType assetClass,
                        String quoteCurrency, String exchange, String sector) {
+        this.instrumentId = instrumentId;
         this.symbol = symbol;
         this.displayName = displayName;
         this.assetClass = assetClass;
@@ -33,6 +37,10 @@ public class Instrument {
 
     public void delist() {
         tradable = false;
+    }
+
+    public UUID getInstrumentId() {
+        return instrumentId;
     }
 
     public String getSymbol() {
