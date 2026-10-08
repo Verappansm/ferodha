@@ -1,4 +1,4 @@
-# Contract breaches
+﻿# Contract breaches
 
 Every place this repository departs from what Neueda gave us: the binding
 contracts and sprint READMEs in
@@ -243,7 +243,7 @@ are not yet in `design/trade-api.yaml`. The delegated token adds two claims
 accepted by trade_api, never by the auth service. A strategy that is not running (disabled, or stopped after failures) can be
 edited with `PUT /api/v1/strategies/{id}`; a running one answers `STR-409`, so it
 never trades on a half-changed rule. The decisions behind the
-identity and the limits are in `story_docs/decision-log/0001` and `0002`.
+identity and the limits are in `decision-log/0001` and `0002`.
 
 **B28 (fill price source).** The brief prices a fill with a real Fauxnance
 quote fetched per order. Every price the customer sees comes from the live
@@ -251,7 +251,7 @@ ticker instead, so a limit chosen from the screen could be rejected against a
 quote the customer never saw. Fills now use the ticker's ask (BUY) and bid
 (SELL) with the same greater-than and less-than rule, so the price shown, the
 price suggested and the price filled are one number. The decision and the
-retired alternative are in `story_docs/decision-log/0003`.
+retired alternative are in `decision-log/0003`.
 
 **B29 (admin fees and adding instruments).** The console could list and delist
 instruments but not show what the platform earns or add one. Fees are the sum of
