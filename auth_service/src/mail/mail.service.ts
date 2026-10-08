@@ -6,10 +6,10 @@ import { AppConfigService } from '../config/config.service';
  * Sends the one kind of mail this service sends: the sign-up verification code.
  *
  * With SMTP_HOST set it goes out over SMTP. Without it (a developer's machine)
- * nothing leaves the process and the message is written to the log, so the flow
- * can still be walked through. That fallback is for development only: a log line
- * holding a code is exactly what production must never do, so production sets
- * SMTP_HOST.
+ * nothing leaves the process and, outside production, the message is written to
+ * the log so the flow can still be walked through. A log line holding a code is
+ * exactly what production must never write: there, a missing SMTP_HOST is an error
+ * the caller reports, and the message itself is never logged.
  */
 @Injectable()
 export class MailService {
@@ -21,8 +21,11 @@ export class MailService {
   async send(to: string, subject: string, text: string): Promise<void> {
     const transporter = this.transport();
     if (!transporter) {
+      if (this.config.nodeEnv === 'production') {
+        throw new Error('SMTP_HOST is not set: mail cannot be sent');
+      }
       this.logger.warn(
-        `SMTP_HOST is not set, so no mail was sent. To: ${to} | ${subject} | ${text}`,
+        `SMTP_HOST is not set, so no mail was sent (development only). To: ${to} | ${subject} | ${text}`,
       );
       return;
     }

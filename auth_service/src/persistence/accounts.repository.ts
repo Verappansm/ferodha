@@ -26,4 +26,40 @@ export class AccountsRepository {
     // BIGINT comes back from pg as a string.
     return result.rows[0] ? Number(result.rows[0].id) : null;
   }
+
+  /**
+   * The user's most recent account-opening request (LEAP-012), or null when none was
+   * filed. Read-only: trade_api owns account_requests and decides them.
+   */
+  async findLatestRequest(userId: string): Promise<AccountRequestRow | null> {
+    const result = await this.pool.query<{
+      status: AccountRequestRow['status'];
+      reason: string | null;
+      requested_at: Date;
+      decided_at: Date | null;
+    }>(
+      `SELECT status::text AS status, reason, requested_at, decided_at
+         FROM account_requests
+        WHERE user_id = $1
+        ORDER BY requested_at DESC
+        LIMIT 1`,
+      [userId],
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          status: row.status,
+          reason: row.reason,
+          requestedAt: row.requested_at,
+          decidedAt: row.decided_at,
+        }
+      : null;
+  }
+}
+
+export interface AccountRequestRow {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string | null;
+  requestedAt: Date;
+  decidedAt: Date | null;
 }

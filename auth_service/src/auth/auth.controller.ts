@@ -27,6 +27,7 @@ import { LoginRequestDto } from './dto/login-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
 import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
 import {
+  AccountStatusResponseDto,
   ErrorResponseDto,
   TokenResponseDto,
   UserResponseDto,
@@ -138,6 +139,44 @@ export class AuthController {
       }
       throw error;
     }
+  }
+
+  @Post('account-status')
+  @UseGuards(LoginThrottleGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    operationId: 'accountStatus',
+    summary:
+      'The state of the account-opening request, checked with the email and password (no token is issued). Failures count towards the login throttle.',
+  })
+  @ApiOkResponse({ type: AccountStatusResponseDto })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async accountStatus(@Body() body: LoginRequestDto, @Req() request: Request) {
+    try {
+      return await this.authService.accountStatus(body);
+    } catch (error) {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === Number(HttpStatus.UNAUTHORIZED)
+      ) {
+        this.loginAttempts.recordFailure(clientIp(request));
+      }
+      throw error;
+    }
+  }
+
+  @Post('logout-all')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({
+    operationId: 'logoutAll',
+    summary:
+      'Sign out everywhere: revokes every refresh token the user holds, this device included.',
+  })
+  @ApiUnauthorizedResponse({ type: ErrorResponseDto })
+  async logoutAll(@CurrentUser() claims: AccessTokenClaims): Promise<void> {
+    await this.authService.logoutEverywhere(claims);
   }
 
   @Post('refresh')

@@ -44,6 +44,14 @@ const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 /** Refresh tokens live 7 days - the lifetime the contract states. */
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+export interface AccountStatusResponse {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'NONE';
+  reason: string | null;
+  emailVerified: boolean;
+  requestedAt: string | null;
+  decidedAt: string | null;
+}
+
 export const JWT_ISSUER = 'auth-service';
 
 /**
@@ -137,6 +145,43 @@ export class AuthService {
     this.logger.log(`Login succeeded: user ${user.id}`);
     // A fresh login starts a new refresh-token chain (its family).
     return this.issueTokenPair(session, randomUUID());
+  }
+
+  /**
+   * POST /auth/account-status (LEAP-012): the state of the user's account-opening
+   * request, for someone who cannot sign in yet. It authenticates with the email and
+   * password exactly as login does, so every failure is the same AUTH-401 and an
+   * unknown email costs the same bcrypt run; it issues no token.
+   */
+  async accountStatus(body: LoginRequestDto): Promise<AccountStatusResponse> {
+    const user = await this.users.findByEmail(body.username);
+    const passwordValid = user
+      ? await this.passwords.verify(body.password, user.passwordHash)
+      : await this.passwords.verifyAgainstDecoy(body.password);
+    if (!user || !passwordValid) {
+      throw unauthorised();
+    }
+    const [request, emailVerified] = await Promise.all([
+      this.accounts.findLatestRequest(user.id),
+      this.users.isEmailVerified(user.id),
+    ]);
+    return {
+      status: request?.status ?? 'NONE',
+      reason: request?.status === 'REJECTED' ? request.reason : null,
+      emailVerified,
+      requestedAt: request?.requestedAt.toISOString() ?? null,
+      decidedAt: request?.decidedAt?.toISOString() ?? null,
+    };
+  }
+
+  /**
+   * POST /auth/logout-all (LEAP-010): sign out everywhere. Every refresh token the
+   * user holds is revoked, the device that asked included, so every session ends at
+   * its next refresh; the caller clears its own session at once.
+   */
+  async logoutEverywhere(claims: AccessTokenClaims): Promise<void> {
+    await this.refreshTokens.revokeAllForUser(claims.sub);
+    this.logger.log(`Signed out everywhere: user ${claims.sub}`);
   }
 
   /**

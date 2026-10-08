@@ -54,11 +54,24 @@ export class EmailOtpsRepository {
       : null;
   }
 
-  async recordFailedAttempt(userId: string): Promise<void> {
-    await this.pool.query(
-      'UPDATE auth_email_otps SET attempts = attempts + 1 WHERE user_id = $1',
-      [userId],
+  /**
+   * Spends one guess and returns the stored code hash, in one statement: the guess is
+   * counted before the code is compared, and only while fewer than `maxAttempts` were
+   * spent and the code is still live. Concurrent guesses each take their own slot, so
+   * no burst can get past the limit. Null when no guess is left (or no live code).
+   */
+  async claimAttempt(
+    userId: string,
+    maxAttempts: number,
+  ): Promise<string | null> {
+    const result = await this.pool.query<{ code_hash: string }>(
+      `UPDATE auth_email_otps
+          SET attempts = attempts + 1
+        WHERE user_id = $1 AND attempts < $2 AND expires_at > NOW()
+        RETURNING code_hash`,
+      [userId, maxAttempts],
     );
+    return result.rows[0]?.code_hash ?? null;
   }
 
   async delete(userId: string): Promise<void> {

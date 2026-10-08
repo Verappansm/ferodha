@@ -46,9 +46,17 @@ describe('EmailVerificationService', () => {
       return Promise.resolve();
     },
     find: () => Promise.resolve(stored),
-    recordFailedAttempt: () => {
-      if (stored) stored.attempts += 1;
-      return Promise.resolve();
+    // As the SQL does it: one guess spent and the hash returned, only while one is left.
+    claimAttempt: (_id: string, max: number) => {
+      if (
+        !stored ||
+        stored.attempts >= max ||
+        stored.expiresAt.getTime() <= Date.now()
+      ) {
+        return Promise.resolve(null);
+      }
+      stored.attempts += 1;
+      return Promise.resolve(stored.codeHash);
     },
     delete: () => {
       stored = null;
@@ -119,6 +127,20 @@ describe('EmailVerificationService', () => {
 
     expect(await statusOf(service.verify(USER.email, lastCode()))).toBe(422);
     expect(verified).toBe(false);
+  });
+
+  it('guesses sent together cannot get past the limit', async () => {
+    await service.issue(USER.id, USER.email);
+    const wrong = lastCode() === '000000' ? '000001' : '000000';
+
+    await Promise.all(
+      Array.from({ length: MAX_ATTEMPTS * 3 }, () =>
+        statusOf(service.verify(USER.email, wrong)),
+      ),
+    );
+
+    expect(stored!.attempts).toBe(MAX_ATTEMPTS);
+    expect(await statusOf(service.verify(USER.email, lastCode()))).toBe(422);
   });
 
   it('an expired code is refused', async () => {
