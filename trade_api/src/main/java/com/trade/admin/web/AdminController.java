@@ -41,7 +41,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-// The routes of design/admin-trade-api.yaml. JwtAuthFilter has already
+// The routes of contracts/admin-trade-api.yaml. JwtAuthFilter has already
 // refused anything but an admin console token before a request gets here,
 // and put the verified operator in the request; handlers only delegate.
 @RestController

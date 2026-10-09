@@ -7,7 +7,7 @@ import { Session } from '../../core/session/session';
 import { NotificationsStore, POLL_MS } from '../../core/notifications/notifications.store';
 import { NotificationsComponent } from './notifications.component';
 
-const URL = 'http://localhost:8080/api/v1/notifications';
+const URL = 'http://localhost:8081/api/v1/notifications';
 
 function note(id: string, readAt: string | null = null) {
   return {

@@ -20,7 +20,7 @@ const trim = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
 /**
- * PATCH /profile body (design/profile-api.yaml). Only the name and phone can
+ * PATCH /profile body (contracts/profile-api.yaml). Only the name and phone can
  * change; the email, role and account are not editable here. An omitted
  * field is left as it is; an empty `phone` clears it.
  */

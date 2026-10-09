@@ -1,0 +1,1461 @@
+openapi: 3.1.0
+
+info:
+  title: Trade REST API
+  version: 1.0.0
+  summary: Order placement, order cancellation and account queries for the Enterprise Trading Platform.
+  description: |
+    Binding contract for the Sprint 6 Spring Boot service. Implement it exactly. The Angular UI
+    generates its typed client from this file, so a field renamed here is a compile error there.
+
+    ## Identifiers
+
+    `accountId` means the numeric surrogate key `ACCOUNTS.id` everywhere in this contract: in the
+    path parameter, in the order request body, and in the JWT `accountId` claim. The string business
+    identifier lives on `ACCOUNTS.account_id` and is returned as `AccountResponse.accountId`, which
+    is the one place the name carries the other meaning. Where any other material uses the name
+    loosely, this contract is the one that binds.
+
+    ## Order lifecycle and the Sprint 7 change
+
+    In Sprint 6 there is no Trade Executor, so `POST /api/v1/orders` validates, fills and persists
+    inside one request and returns `FILLED` or `REJECTED`.
+
+    From Sprint 7 execution is asynchronous. The endpoint validates, persists the order with status
+    `NEW`, publishes it to the `orders` Kafka topic and returns `NEW`. The Trade Executor consumes
+    the order, prices it against a live Fauxnance quote, applies the fill rules, updates the order,
+    the cash balance and the position in one database transaction, and publishes the outcome to
+    `trade-events`.
+
+    Both behaviours are valid responses under this contract. Clients must handle an order that is
+    still `NEW` when the response arrives.
+
+    ## Business rules
+
+    Enforced in the order given. The first failure wins and no later rule is evaluated.
+
+    | # | Rule | Error |
+    |---|---|---|
+    | 1 | The account must exist | `ACC-404`, 404 |
+    | 2 | The account must be `ACTIVE` | `ACC-403`, 403 |
+    | 3 | The instrument must exist and be tradable | `INS-404`, 404 |
+    | 4 | Quantity must be greater than zero | `VAL-422`, 422 |
+    | 5 | Price must be greater than zero | `VAL-422`, 422 |
+    | 6 | BUY: cash balance must be at least quantity multiplied by price | `ORD-400`, 400 |
+    | 7 | SELL: held quantity must be at least the order quantity | `ORD-409`, 409 |
+    | 8 | The idempotency key must be unique | `ORD-409`, 409 |
+
+    Rules 9 and 10 have no error code. Cash and position update atomically, in one transaction.
+    Every order is recorded, including rejected ones, because the order table is the audit trail.
+
+    Rule 8 is enforced by the unique constraint on `orders.idempotency_key`, not by a read followed
+    by a write. A read-then-write check has a race that two concurrent requests will find.
+
+    ## Authentication
+
+    Every `/api/v1/**` route requires a valid signed JWT in the `Authorization` header. A missing,
+    malformed, expired or wrongly signed token is `AUTH-401`, 401. A valid token whose `accountId`
+    claim does not match the account being addressed is `ACC-403`, 403: a token proves who you are,
+    not what you may reach.
+  contact:
+    name: Enterprise Trading Platform, programme materials
+  license:
+    name: Instructional use only
+
+servers:
+  - url: http://localhost:8081
+    description: Local development, run from Docker Compose
+  - url: http://trade-api:8081
+    description: Service name inside the Docker Compose network
+
+tags:
+  - name: Orders
+    description: Placing and cancelling orders.
+  - name: Accounts
+    description: Account details, cash balance, holdings and order history.
+  - name: Instruments
+    description: Market instruments and tradable symbols.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/orders:
+    post:
+      tags: [Orders]
+      operationId: placeOrder
+      summary: Place an order
+      description: |
+        Validates the request against business rules 1 to 8 and records the order. Returns `NEW`
+        once the Trade Executor exists, or the terminal status when the service fills synchronously
+        in Sprint 6.
+
+        Retrying with the same `idempotencyKey` is not a way to poll for status. It returns
+        `ORD-409`. Poll `GET /api/v1/accounts/{id}/orders` instead.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+            examples:
+              buy:
+                summary: Buy 100 shares
+                value:
+                  accountId: 1
+                  symbol: ACME
+                  side: BUY
+                  quantity: 100
+                  price: 25.50
+                  idempotencyKey: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+      responses:
+        '200':
+          description: Order accepted and recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              examples:
+                accepted:
+                  summary: Sprint 7 onwards, asynchronous execution
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: NEW
+                    message: Order accepted
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
+                filled:
+                  summary: Sprint 6 only, synchronous execution
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: FILLED
+                    message: Order executed
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
+        '400':
+          $ref: '#/components/responses/InsufficientFunds'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          description: The account or the instrument does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                accountMissing:
+                  value:
+                    errorCode: ACC-404
+                    message: Account not found
+                instrumentMissing:
+                  value:
+                    errorCode: INS-404
+                    message: Instrument not found
+        '409':
+          description: Insufficient holdings for a sell, or the idempotency key has been used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                holdings:
+                  value:
+                    errorCode: ORD-409
+                    message: Insufficient holdings
+                duplicate:
+                  value:
+                    errorCode: ORD-409
+                    message: Duplicate order
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/orders/review:
+    post:
+      tags: [Orders]
+      operationId: reviewOrder
+      summary: Review an order before placing it
+      description: |
+        The figures the order ticket shows before the customer confirms (LEAP-017): cost at the
+        limit price, the fee at the platform's rate (the rate placing the order records on it), the
+        total, and the cash left after a BUY. Creates no order and publishes nothing. The executor
+        may fill at a better price, so for a BUY these figures are an upper bound.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderReviewRequest'
+      responses:
+        '200':
+          description: The review figures.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderReviewResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          description: The account or the instrument does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/orders/{id}:
+    delete:
+      tags: [Orders]
+      operationId: cancelOrder
+      summary: Cancel a working order
+      description: |
+        Cancels an order that is still `NEW` and returns the updated order. An order that is already
+        `FILLED`, `REJECTED` or `CANCELLED` cannot be cancelled and returns `ORD-409`.
+
+        The cancellation is a state transition guarded inside the database transaction. Checking the
+        status, then updating it, without a guarded transition, races the Trade Executor.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The order UUID, without the `ORD-` display prefix.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+              examples:
+                cancelled:
+                  value:
+                    orderId: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+                    status: CANCELLED
+                    message: Order cancelled
+                    symbol: ACME
+                    side: BUY
+                    quantity: 100
+                    price: 25.50
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          description: No order exists with that identifier.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  value:
+                    errorCode: ORD-409
+                    message: Order not found
+        '409':
+          description: The order is not in a cancellable state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                alreadyFilled:
+                  value:
+                    errorCode: ORD-409
+                    message: Order is not cancellable
+
+  /api/v1/accounts/{id}:
+    get:
+      tags: [Accounts]
+      operationId: getAccount
+      summary: Get account details
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Account details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/balance:
+    get:
+      tags: [Accounts]
+      operationId: getBalance
+      summary: Get cash balance
+      description: |
+        Returns available cash only. It does not include the market value of holdings. Portfolio
+        valuation is the Sprint 10 Portfolio and P&L extension, contracted separately.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Cash balance.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/positions:
+    get:
+      tags: [Accounts]
+      operationId: getPositions
+      summary: Get holdings
+      description: |
+        Net held quantity and average cost per instrument. Positions with a net quantity of zero are
+        not returned. Market value is not calculated here; it needs a live quote and belongs to the
+        Portfolio and P&L extension.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: Holdings for the account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PositionResponse'
+              examples:
+                holdings:
+                  value:
+                    - accountId: 1
+                      symbol: ACME
+                      quantity: 100
+                      averageCost: 25.50
+                    - accountId: 1
+                      symbol: INFY.NS
+                      quantity: 40
+                      averageCost: 1580.25
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/accounts/{id}/bank-funds:
+    get:
+      tags: [Accounts]
+      operationId: getBankFunds
+      summary: Get the authenticated customer's linked bank and trading balances
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      responses:
+        '200':
+          description: The balances of the account and its verified, linked third-party bank account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BankFundsResponse'
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+
+  /api/v1/accounts/{id}/bank-funds/transactions:
+    get:
+      tags: [Accounts]
+      operationId: getBankTransactions
+      summary: The account's cash movements, newest first (LEAP-019)
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, format: int32, default: 50, minimum: 1, maximum: 100 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, format: int32, default: 0, minimum: 0 }
+      responses:
+        '200':
+          description: A page of movements.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankTransactionsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '422': { $ref: '#/components/responses/InvalidInput' }
+
+  /api/v1/accounts/{id}/bank-funds/deposits:
+    post:
+      tags: [Accounts]
+      operationId: depositBankFunds
+      summary: Deposit from the linked third-party bank account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankTransferRequest' }
+      responses:
+        '200':
+          description: The atomic transfer completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankFundsResponse' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '409': { $ref: '#/components/responses/InvalidInput' }
+
+  /api/v1/accounts/{id}/bank-funds/withdrawals:
+    post:
+      tags: [Accounts]
+      operationId: withdrawBankFunds
+      summary: Withdraw from the trading account to the linked third-party bank account
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BankTransferRequest' }
+      responses:
+        '200':
+          description: The atomic transfer completed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BankFundsResponse' }
+        '400': { $ref: '#/components/responses/InvalidInput' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '403': { $ref: '#/components/responses/AccountNotActive' }
+        '404': { $ref: '#/components/responses/AccountNotFound' }
+        '409': { $ref: '#/components/responses/InvalidInput' }
+
+  /api/v1/accounts/{id}/orders:
+    get:
+      tags: [Accounts]
+      operationId: getOrders
+      summary: Get order history
+      description: |
+        Every order recorded against the account, newest first, including rejected and cancelled
+        ones. This is the audit trail and it is never filtered by default.
+      parameters:
+        - $ref: '#/components/parameters/AccountIdPath'
+        - name: status
+          in: query
+          required: false
+          description: Restrict to one order status.
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: from
+          in: query
+          required: false
+          description: Include orders created on or after this instant.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: Include orders created on or before this instant.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Order history for the account.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderHistoryEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+
+  /api/v1/instruments:
+    get:
+      tags: [Instruments]
+      operationId: getInstruments
+      summary: Get tradable instruments
+      description: |
+        A page of the tradable instruments, by ticker (LEAP-015). Every filter is optional and
+        they combine; `search` matches part of the ticker or the name, case-insensitively. A
+        delisted instrument never appears.
+      parameters:
+        - name: pageSize
+          in: query
+          required: false
+          description: Number of instruments per page (default 20).
+          schema:
+            type: integer
+            format: int32
+            default: 20
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          required: false
+          description: Zero-based offset for pagination (default 0).
+          schema:
+            type: integer
+            format: int64
+            default: 0
+            minimum: 0
+        - name: search
+          in: query
+          required: false
+          description: Case-insensitive ticker or instrument-name search.
+          schema:
+            type: string
+            maxLength: 100
+        - name: exchange
+          in: query
+          required: false
+          description: Only this exchange (one of `GET /api/v1/instruments/filters`).
+          schema:
+            type: string
+        - name: sector
+          in: query
+          required: false
+          description: Only this sector.
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          description: Only this instrument type.
+          schema:
+            $ref: '#/components/schemas/InstrumentType'
+      responses:
+        '200':
+          description: Paginated list of tradable instruments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedInstrumentsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/instruments/filters:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentFilters
+      summary: The exchanges, sectors and types of the tradable instruments
+      description: The choices for the market list's filters, from the data rather than a constant.
+      responses:
+        '200':
+          description: The distinct values, each sorted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentFilters'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+
+  /api/v1/instruments/prices:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentPrices
+      summary: Get the latest price of several instruments
+      description: |
+        One price per symbol asked for, in the order asked, for the market list: the latest
+        `market-data` quote, else the close of the newest stored minute bar or daily candle. No
+        statistics, so a page of instruments costs one request. A symbol with no price comes back
+        with null prices and `stale: true`.
+      parameters:
+        - name: symbols
+          in: query
+          required: true
+          description: Comma-separated tickers, 1 to 100.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items:
+              type: string
+              maxLength: 20
+      responses:
+        '200':
+          description: The prices.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PriceSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/instruments/{symbol}:
+    get:
+      tags: [Instruments]
+      operationId: getInstrument
+      summary: Get one tradable instrument
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+      responses:
+        '200':
+          description: The instrument.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+
+  /api/v1/instruments/{symbol}/quote:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentQuote
+      summary: Get the latest quote and key statistics
+      description: |
+        The latest quote the platform holds for the instrument (from the `market-data` topic, else
+        the close of its latest minute bar), with when it was observed and whether that is past the
+        freshness window. Key statistics come from stored history; any figure the history cannot
+        back is null. The browser never calls Fauxnance.
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+      responses:
+        '200':
+          description: Quote and statistics.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentQuote'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+
+  /api/v1/instruments/{symbol}/signal:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentSignal
+      summary: A buy, sell or hold view from past daily prices (Sprint 10 stretch)
+      description: |
+        Trade advice and signals. The 20-day simple moving average against the 50-day one gives
+        the trend, the 14-day RSI filters out a stretched move, and the gap between the averages
+        gives the strength. Computed from the stored daily candles (no Fauxnance call), cached
+        per symbol for an hour. Fewer than 50 closes is HOLD with that reason. It informs; it
+        never places an order.
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema: { type: string, maxLength: 20 }
+      responses:
+        '200':
+          description: The signal, with the numbers and the sentence that produced it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstrumentSignal' }
+        '401': { $ref: '#/components/responses/Unauthorised' }
+        '404': { $ref: '#/components/responses/InstrumentNotFound' }
+
+  /api/v1/instruments/{symbol}/history:
+    get:
+      tags: [Instruments]
+      operationId: getInstrumentHistory
+      summary: Get price history for the chart
+      description: |
+        Open, high, low and close per bar, oldest first. `1D` returns one-minute bars recorded from
+        the live price feed; the longer ranges return daily candles.
+      parameters:
+        - $ref: '#/components/parameters/SymbolPath'
+        - name: range
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['1D', '1W', '1M', '6M', '1Y']
+            default: '1M'
+      responses:
+        '200':
+          description: Price history; empty when none is stored yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistory'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '404':
+          $ref: '#/components/responses/InstrumentNotFound'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        A JWT issued by the auth service. The claims contract is defined in `auth-api.yaml`.
+
+  parameters:
+    SymbolPath:
+      name: symbol
+      in: path
+      required: true
+      description: Instrument ticker symbol.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 20
+      example: AAPL
+    AccountIdPath:
+      name: id
+      in: path
+      required: true
+      description: The numeric account key, `ACCOUNTS.id`.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+
+  responses:
+    InstrumentNotFound:
+      description: No tradable instrument has that symbol (unknown or delisted).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: INS-404
+                message: Instrument not found
+    Unauthorised:
+      description: Missing, malformed, expired or wrongly signed token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    AccountNotFound:
+      description: No account exists with that key.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                errorCode: ACC-404
+                message: Account not found
+    AccountNotActive:
+      description: The account is SUSPENDED or CLOSED, or the token does not grant access to it.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notActive:
+              value:
+                errorCode: ACC-403
+                message: Account not active
+    InsufficientFunds:
+      description: A buy order costs more than the available cash balance.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            funds:
+              value:
+                errorCode: ORD-400
+                message: Insufficient funds
+    InvalidInput:
+      description: The request failed field validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+
+  schemas:
+
+    OrderSide:
+      type: string
+      enum: [BUY, SELL]
+      description: Direction of the order.
+
+    OrderStatus:
+      type: string
+      enum: [NEW, FILLED, REJECTED, CANCELLED]
+      description: |
+        `NEW` is the working state, held from acceptance until the Trade Executor resolves it.
+        `FILLED`, `REJECTED` and `CANCELLED` are terminal. There is no partial-fill state, so the
+        Trade Executor fills an order in full or rejects it.
+
+    AccountStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, CLOSED]
+      description: Only an ACTIVE account may place or cancel orders.
+
+    PlaceOrderRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, symbol, side, quantity, price, idempotencyKey]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: The numeric account key, `ACCOUNTS.id`. Must match the token's `accountId` claim.
+          example: 1
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: |
+            Instrument symbol, matching `INSTRUMENTS.symbol` and the Fauxnance symbol scheme:
+            a plain ticker for US equities, a `.NS` or `.BO` suffix for NSE or BSE, `FX:` for a
+            currency pair, `X:` for crypto.
+          examples: [ACME, AAPL, INFY.NS, 'FX:EURUSD']
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Whole units. Must be greater than zero, business rule 4.
+          example: 100
+        price:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+          description: |
+            Limit price per unit, to two decimal places. Must be greater than zero, business rule 5.
+            Serialise as a JSON number and hold it as `BigDecimal` in Java. Never use `double` for
+            money in the domain.
+          example: 25.50
+        idempotencyKey:
+          type: string
+          minLength: 8
+          maxLength: 100
+          description: |
+            Client-generated unique request identifier, normally a UUID. Enforced by a unique
+            constraint on `orders.idempotency_key`. Reuse returns `ORD-409`.
+          example: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+
+    OrderResponse:
+      type: object
+      additionalProperties: false
+      required: [orderId, status, message, symbol, side, quantity, price]
+      properties:
+        orderId:
+          type: string
+          description: The order identifier, displayed with an `ORD-` prefix over the stored UUID.
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        message:
+          type: string
+          description: Human-readable outcome. For display only. Never branch on this string.
+          example: Order accepted
+        symbol:
+          type: string
+          example: ACME
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          example: 100
+        price:
+          type: number
+          format: double
+          example: 25.50
+
+    OrderHistoryEntry:
+      type: object
+      additionalProperties: false
+      required: [orderId, accountId, symbol, side, quantity, price, status, createdOn,
+                 instrumentCurrency, accountCurrency, filledQuantity, estimatedValueAccountCurrency]
+      properties:
+        orderId:
+          type: string
+          example: ORD-6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        symbol:
+          type: string
+          example: ACME
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          example: 100
+        instrumentCurrency:
+          type: string
+          description: Currency used for prices and instrument values.
+        accountCurrency:
+          type: string
+          description: Account cash currency.
+        filledQuantity:
+          type: integer
+          format: int32
+        filledValue:
+          type: [number, 'null']
+          format: double
+        filledValueAccountCurrency:
+          type: [number, 'null']
+          format: double
+        feeAmountInstrumentCurrency:
+          type: [number, 'null']
+          format: double
+        feeAmount:
+          type: [number, 'null']
+          format: double
+          description: Commission, in the account currency.
+        cashAmountAccountCurrency:
+          type: [number, 'null']
+          format: double
+        estimatedValueAccountCurrency:
+          type: number
+          format: double
+        price:
+          type: number
+          format: double
+          description: The limit price submitted with the order.
+          example: 25.50
+        executedPrice:
+          type: [number, 'null']
+          format: double
+          description: The price the Trade Executor filled at. Null until the order is FILLED.
+          example: 25.48
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        idempotencyKey:
+          type: string
+          example: 6f2b1c2a-6a1e-4a4f-9c0d-2f7a1b3c4d5e
+        createdOn:
+          type: string
+          format: date-time
+          example: '2026-09-28T09:14:22Z'
+        rejectionReason:
+          type: [string, 'null']
+          description: |
+            Why the Trade Executor rejected the order. Null unless the order is REJECTED.
+            One of INSTRUMENT_NOT_TRADABLE, ACCOUNT_NOT_ACTIVE, INSUFFICIENT_FUNDS,
+            INSUFFICIENT_HOLDINGS, NOT_MARKETABLE, PRICE_UNAVAILABLE.
+          example: NOT_MARKETABLE
+
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, holderName, cashBalance, status, version, lastUpdated]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The numeric account key. This is what every other endpoint calls `accountId`.
+          example: 1
+        accountId:
+          type: string
+          maxLength: 32
+          description: |
+            The business account identifier, `ACCOUNTS.account_id`. This is the one field in the
+            contract where the name `accountId` means the string identifier rather than the numeric
+            key. It exists because the source domain model defines both.
+          example: ACC-000001
+        holderName:
+          type: string
+          example: Priya Menon
+        cashBalance:
+          type: number
+          format: double
+          description: Available cash, to two decimal places.
+          example: 24500.75
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        version:
+          type: integer
+          format: int32
+          description: Optimistic lock version. Increments on every write to the account row.
+          example: 7
+        lastUpdated:
+          type: string
+          format: date-time
+          example: '2026-09-28T09:14:22Z'
+
+    BankTransferRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, pinHash, idempotencyKey]
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          maximum: 99999999999999.9999
+        pinHash:
+          type: string
+          minLength: 60
+          maxLength: 60
+          description: Bcrypt client proof of the PIN, computed by the client; the raw PIN is never transmitted.
+        idempotencyKey:
+          type: string
+          format: uuid
+
+    BankFundsResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, bankAccountNumber, tradingBalance, bankBalance, availableToWithdraw, currency, asOf]
+      properties:
+        accountId: { type: integer, format: int64 }
+        bankAccountNumber: { type: string }
+        tradingBalance: { type: number, format: double }
+        bankBalance: { type: number, format: double }
+        availableToWithdraw:
+          type: number
+          format: double
+          description: >-
+            The trading balance less what open buy orders may still spend (unfilled quantity at
+            the limit price, plus the fee). Never below zero.
+        currency:
+          type: string
+          description: The account's currency, which is also the linked bank account's.
+        asOf: { type: string, format: date-time }
+
+    BankTransaction:
+      type: object
+      additionalProperties: false
+      required: [transactionId, type, amount, currency, at]
+      properties:
+        transactionId: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, BUY_SETTLEMENT, SELL_SETTLEMENT, DIVIDEND]
+        amount: { type: number, format: double }
+        currency: { type: string }
+        at: { type: string, format: date-time }
+
+    BankTransactionsResponse:
+      type: object
+      additionalProperties: false
+      required: [transactions, total, limit, offset]
+      properties:
+        transactions:
+          type: array
+          items: { $ref: '#/components/schemas/BankTransaction' }
+        total: { type: integer, format: int64 }
+        limit: { type: integer, format: int32 }
+        offset: { type: integer, format: int32 }
+
+    InstrumentSignal:
+      type: object
+      additionalProperties: false
+      required: [symbol, direction, strength, reason, closesUsed, computedAt, disclaimer]
+      properties:
+        symbol: { type: string }
+        direction: { type: string, enum: [BUY, SELL, HOLD] }
+        strength: { type: string, enum: [WEAK, MODERATE, STRONG] }
+        reason: { type: string, description: The sentence saying what produced the signal. }
+        sma20: { type: [number, 'null'], format: double }
+        sma50: { type: [number, 'null'], format: double }
+        rsi14: { type: [number, 'null'], format: double }
+        lastClose: { type: [number, 'null'], format: double }
+        closesUsed: { type: integer, format: int32 }
+        asOf:
+          type: [string, 'null']
+          format: date-time
+          description: The date of the latest daily close used.
+        computedAt: { type: string, format: date-time }
+        disclaimer: { type: string }
+
+    InstrumentFilters:
+      type: object
+      additionalProperties: false
+      required: [exchanges, sectors, types]
+      properties:
+        exchanges:
+          type: array
+          items: { type: string }
+        sectors:
+          type: array
+          items: { type: string }
+        types:
+          type: array
+          items: { $ref: '#/components/schemas/InstrumentType' }
+
+    BalanceResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, cashBalance, currency, asOf]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        cashBalance:
+          type: number
+          format: double
+          example: 24500.75
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 code.
+          example: USD
+        asOf:
+          type: string
+          format: date-time
+          example: '2026-09-28T09:14:22Z'
+
+    PositionResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, symbol, quantity, averageCost]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        symbol:
+          type: string
+          example: ACME
+        quantity:
+          type: integer
+          format: int32
+          description: Net held quantity. Never negative; short selling is out of scope.
+          minimum: 0
+          example: 100
+        averageCost:
+          type: number
+          format: double
+          description: |
+            Weighted average cost basis per unit. A buy recalculates it. A sell reduces quantity and
+            leaves it unchanged, which is what makes realised profit and loss computable later.
+          example: 25.50
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      description: |
+        The single error envelope for every failure. Clients branch on `errorCode`, never on
+        `message` and never on the HTTP status alone, since 404 and 409 each carry two codes.
+      properties:
+        errorCode:
+          type: string
+          enum: [ACC-404, ACC-403, INS-404, ORD-400, ORD-409, BNK-400, BNK-409, VAL-422, AUTH-401]
+          description: |
+            | Code | HTTP | Meaning |
+            |---|---|---|
+            | `ACC-404` | 404 | Account not found |
+            | `ACC-403` | 403 | Account not active, or not reachable with this token |
+            | `INS-404` | 404 | Instrument not found or not tradable |
+            | `ORD-400` | 400 | Insufficient funds |
+            | `ORD-409` | 409 | Insufficient holdings, duplicate order, or order not cancellable |
+            | `BNK-400` | 400 | A bank transfer was refused: amount, funds or PIN (one answer, so a wrong PIN is not revealed) |
+            | `BNK-409` | 409 | A bank transfer key was already used, so a retry cannot move money twice |
+            | `VAL-422` | 422 | Invalid input |
+            | `AUTH-401` | 401 | Unauthorised or invalid token |
+          example: ORD-409
+        message:
+          type: string
+          description: |
+            Short description for a human. Never include a stack trace, a SQL fragment, a class
+            name or an internal identifier. Leaking those is OWASP A05.
+          example: Insufficient holdings
+
+    InstrumentType:
+      type: string
+      enum: [EQUITY, BOND, ETF, FOREX, CRYPTO]
+      description: Instrument asset class.
+
+    InstrumentResponse:
+      type: object
+      additionalProperties: false
+      required: [symbol, name, type, exchange, currency, sector]
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 20
+          description: Instrument ticker symbol.
+          example: AAPL
+        name:
+          type: string
+          maxLength: 150
+          description: Display name of the instrument.
+          example: Apple Inc.
+        type:
+          $ref: '#/components/schemas/InstrumentType'
+        exchange:
+          type: string
+          maxLength: 50
+          description: Exchange where the instrument is traded.
+          example: NASDAQ
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          description: ISO 4217 currency code for instrument pricing.
+          example: USD
+        sector:
+          type: string
+          nullable: true
+          maxLength: 50
+          description: Business sector classification.
+          example: Technology
+
+    PaginatedInstrumentsResponse:
+      type: object
+      additionalProperties: false
+      required: [instruments, total, pageSize, offset]
+      properties:
+        instruments:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstrumentResponse'
+          description: List of instruments on this page.
+        total:
+          type: integer
+          format: int64
+          description: Total number of tradable instruments.
+          example: 42
+        pageSize:
+          type: integer
+          format: int32
+          description: Number of instruments returned on this page.
+          example: 20
+        offset:
+          type: integer
+          format: int64
+          description: Zero-based offset of this page.
+          example: 0
+
+    InstrumentQuote:
+      type: object
+      additionalProperties: false
+      required: [symbol, currency, stale]
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        bid:
+          type: [number, 'null']
+          description: Null when the price came from a stored bar rather than a live quote.
+        ask:
+          type: [number, 'null']
+        mid:
+          type: [number, 'null']
+          description: Midpoint of bid and ask, or the stored close. Null when no price exists yet.
+        asOf:
+          type: [string, 'null']
+          format: date-time
+          description: When the price was observed.
+        stale:
+          type: boolean
+          description: True when there is no price or it is older than the freshness window.
+        dayLow:
+          type: [number, 'null']
+        dayHigh:
+          type: [number, 'null']
+        previousClose:
+          type: [number, 'null']
+          description: Close of the latest daily candle before today (UTC).
+        week52Low:
+          type: [number, 'null']
+        week52High:
+          type: [number, 'null']
+
+    PricePoint:
+      type: object
+      additionalProperties: false
+      required: [time, open, high, low, close]
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: Start of the minute, or of the trading day (UTC).
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: [integer, 'null']
+          format: int64
+
+    PriceHistory:
+      type: object
+      additionalProperties: false
+      required: [symbol, range, interval, points]
+      properties:
+        symbol:
+          type: string
+        range:
+          type: string
+          enum: ['1D', '1W', '1M', '6M', '1Y']
+        interval:
+          type: string
+          enum: ['1m', '1d']
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/PricePoint'
+
+    OrderReviewRequest:
+      type: object
+      additionalProperties: false
+      required: [accountId, symbol, side, quantity, price]
+      description: A PlaceOrderRequest without the idempotency key; a review creates nothing.
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 1
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: ACME
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          example: 100
+        price:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+          example: 25.50
+
+    OrderReviewResponse:
+      type: object
+      additionalProperties: false
+      required: [symbol, side, quantity, price, currency, estimatedCost, feeRate, fee, total,
+                 estimatedCostAccountCurrency, feeAccountCurrency, totalAccountCurrency,
+                 cashBalance, accountCurrency]
+      properties:
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/OrderSide'
+        quantity:
+          type: integer
+          format: int32
+        price:
+          type: number
+          format: double
+        estimatedCostAccountCurrency:
+          type: number
+          format: double
+          description: Estimated notional in account currency.
+        feeAccountCurrency:
+          type: number
+          format: double
+          description: Estimated fee in account currency.
+        totalAccountCurrency:
+          type: number
+          format: double
+          description: Estimated total in account currency.
+        currency:
+          type: string
+          description: The instrument's currency; estimatedCost, fee and total are in it.
+        estimatedCost:
+          type: number
+          format: double
+          description: quantity x price.
+        feeRate:
+          type: number
+          format: double
+          description: Fraction of the trade value charged as commission (0.001 is 0.1%).
+        fee:
+          type: number
+          format: double
+          description: estimatedCost x feeRate, to two decimal places.
+        total:
+          type: number
+          format: double
+          description: What a BUY pays (cost + fee) or a SELL receives (cost - fee).
+        cashBalance:
+          type: number
+          format: double
+        accountCurrency:
+          type: string
+        cashRemaining:
+          type: [number, 'null']
+          format: double
+          description: Cash left after a BUY; null for a SELL or when the two currencies differ.
+
+    PriceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [symbol, stale]
+      properties:
+        symbol:
+          type: string
+          maxLength: 20
+        bid:
+          type: [number, 'null']
+        ask:
+          type: [number, 'null']
+        mid:
+          type: [number, 'null']
+          description: Midpoint of bid and ask, or the stored close. Null when there is no price.
+        asOf:
+          type: [string, 'null']
+          format: date-time
+        stale:
+          type: boolean

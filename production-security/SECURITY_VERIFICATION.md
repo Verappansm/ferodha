@@ -91,13 +91,13 @@ $false  (not found for both)
 ```powershell
 # Search for localhost references
 $bundleContent -match "localhost:3000"  # Auth API
-$bundleContent -match "localhost:8080"  # Trade API
+$bundleContent -match "localhost:8081"  # Trade API
 ```
 
 ### Expected Result:
 ```
 $true   (localhost:3000 found)
-$true   (localhost:8080 found)
+$true   (localhost:8081 found)
 ```
 
 ### Status:  PASS
@@ -188,7 +188,7 @@ Get-ChildItem dist/ -Recurse -Include "*.map"
 ```typescript
 // Should contain exactly 2 authorized origins
 - localhost:3000 (Auth Service)
-- localhost:8080 (Trade API)
+- localhost:8081 (Trade API)
 // Should NOT contain any external origins
 ```
 
@@ -211,7 +211,7 @@ Get-ChildItem dist/ -Recurse -Include "*.map"
 export const environment = {
   production: false,
   AUTH_API_URL: 'http://localhost:3000',
-  TRADE_API_URL: 'http://localhost:8080'
+  TRADE_API_URL: 'http://localhost:8081'
 };
 // Should NOT contain:
 // - Any API keys
@@ -297,7 +297,7 @@ Output location: C:\...\trading-ui\dist\trading-ui
 - [ ] Bundle file exists and is readable
 - [ ] FAUXNANCE_API_KEY not found in bundle
 - [ ] JWT_SECRET not found in bundle
-- [ ] Authorized endpoints (localhost:3000, :8080) found
+- [ ] Authorized endpoints (localhost:3000, :8081) found
 - [ ] No unauthorized external endpoints found
 - [ ] Source maps not deployed
 - [ ] Security interceptor properly implemented
@@ -336,7 +336,7 @@ Follow the test steps above individually to verify each security check.
 | Bundle Exists |  PASS | File found: 341.45 KB |
 | No API Keys |  PASS | Search: 0 found |
 | No JWT Secrets |  PASS | Search: 0 found |
-| Authorized APIs |  PASS | localhost:3000, :8080 verified |
+| Authorized APIs |  PASS | localhost:3000, :8081 verified |
 | No External APIs |  PASS | Search: 0 found |
 | No Source Maps |  PASS | .map files not present |
 | Interceptor |  PASS | Code review: properly implemented |

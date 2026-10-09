@@ -17,7 +17,7 @@ export enum ErrorCode {
   PasswordChangeRequired = 'AUTH-428',
   InvalidInput = 'VAL-422',
   Internal = 'INTERNAL-500',
-  // The admin routes' extra codes (design/admin-auth-api.yaml).
+  // The admin routes' extra codes (contracts/admin-auth-api.yaml).
   Forbidden = 'AUTH-403',
   AdminNotFound = 'ADM-404',
   AdminConflict = 'ADM-409',

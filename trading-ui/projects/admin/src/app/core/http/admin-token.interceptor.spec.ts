@@ -9,7 +9,7 @@ import {
   adminTokenInterceptor,
 } from './admin-token.interceptor';
 
-const TRADE = 'http://localhost:8080';
+const TRADE = 'http://localhost:8081';
 const AUTH = 'http://localhost:3000';
 
 describe('adminTokenInterceptor', () => {
@@ -63,7 +63,7 @@ describe('adminTokenInterceptor', () => {
   it('a third-party origin does not carry the admin token', () => {
     expect(authorizationSentTo('https://analytics.example.com/api/v1/admin/summary')).toBeNull();
     expect(
-      authorizationSentTo('http://localhost:8080.evil.example/api/v1/admin/summary'),
+      authorizationSentTo('http://localhost:8081.evil.example/api/v1/admin/summary'),
     ).toBeNull();
   });
 });

@@ -71,7 +71,7 @@ public final class JwtTestFixture {
 
     public static final String ADMIN_USER_ID = "55555555-5555-5555-5555-555555555555";
 
-    // An operations console token, as design/admin-auth-api.yaml describes:
+    // An operations console token, as contracts/admin-auth-api.yaml describes:
     // ADMIN role, admin-console audience, no accountId.
     public static String adminToken() {
         Instant now = Instant.now();

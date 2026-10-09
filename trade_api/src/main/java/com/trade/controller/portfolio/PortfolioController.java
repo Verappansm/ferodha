@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 import java.util.List;
 
-// The three routes of contracts/portfolio-api.yaml (design/portfolio-api.yaml),
+// The three routes of contracts/portfolio-api.yaml (contracts/portfolio-api.yaml),
 // served by trade_api as a module beside the order and account routes.
 @RestController
 @RequestMapping("/api/v1/portfolio/{accountId}")

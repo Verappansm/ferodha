@@ -8,7 +8,7 @@ export type { ProfileResponse, UpdateProfileRequest };
 
 /**
  * The signed-in user's profile on the auth service, over the client generated
- * from design/profile-api.yaml. The user comes from the token, never a parameter.
+ * from contracts/profile-api.yaml. The user comes from the token, never a parameter.
  */
 @Injectable({ providedIn: 'root' })
 export class ProfileApi {

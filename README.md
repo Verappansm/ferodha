@@ -4,8 +4,8 @@ Full-stack enterprise trading platform. Team 2's capstone build.
 
 ## Layout
 
-Each folder has a short README. Design write-ups are in `design/` (index:
-`design/README.md`); extension stories and contract departures are in
+Each folder has a short README. Design write-ups are in `contracts/` (index:
+`contracts/docs/README.md`); extension stories and contract departures are in
 `story_docs/`.
 
 - `trade_api/` — Trade REST API (Java, Spring Boot). Places and cancels orders, account reads.
@@ -15,9 +15,8 @@ Each folder has a short README. Design write-ups are in `design/` (index:
 - `java_module/` — Domain rules, frozen; copied into `trade_api` as source.
 - `database/` — Base Postgres schema, seed data, and integrity probes.
 - `kafka_pipeline/` — Kafka topic and dead-letter-topic creation scripts.
-- `fact_trades_etl/` — Incremental batch load of orders into a DuckDB FACT_TRADES star schema.
-- `analytics_etl/` — Fauxnance candle ingestion and the claims dashboard (separate pipeline).
-- `design/` — Contracts as implemented and design write-ups.
+- `etl/` — The ETL layer: Fauxnance candles and the claims dashboard (Sprint 4), and the incremental FACT_TRADES load (Sprint 7), into one DuckDB warehouse under `database/duckdb/`.
+- `contracts/` — Contracts as implemented and design write-ups.
 - `story_docs/` — Extension stories (LEAP-001 onwards) and every departure from the Neueda contracts.
 - `bruno/` — Bruno collection exercising the auth service end to end.
 - `scripts/` — Demo scripts and the JWT test-token generator.
@@ -32,7 +31,7 @@ cp .env.example .env   # fill in POSTGRES_*, JWT_SECRET, FAUXNANCE_API_URL, FAUX
 ```
 
 Brings up the stack, creates the Kafka topics, starts the trading UI on
-http://localhost:4200 and the admin console on http://localhost:4300, then walks the auth service and every trade-api
+http://localhost:4200 and the admin console on http://localhost:4200/admin, then walks the auth service and every trade-api
 endpoint with real tokens from the auth service, and ends with a tour of the
 UI. It works with either `docker compose` or the older `docker-compose`.
 `--no-ui` skips both UIs; `./scripts/demo.sh --stop-ui` stops them. The UIs need
@@ -52,7 +51,7 @@ instead of fill-or-reject at the tick.
 Sign in at http://localhost:4200 as `john.carter@example.com` with the
 password `seed-password-change-me`. A user who registers has no account until
 an administrator approves it, so only seeded users can sign in for now.
-Administrators sign in to the console at http://localhost:4300 as
+Administrators sign in to the console at http://localhost:4200/admin as
 `michael.brown@example.com` with the same password.
 
 ## Ports
@@ -65,11 +64,11 @@ the ones Neueda's contracts and `infra/README.md` use.
 | PostgreSQL | 5432 |
 | Kafka | 9092 |
 | Kafka UI | 8091 |
-| Trade REST API | 8080 |
+| Trade REST API | 8081 |
 | Trade Executor | 8082 |
 | Auth service | 3000 |
 | Trading UI (`ng serve`) | 4200 |
-| Admin console (`ng serve admin`) | 4300 |
+| Admin console (`ng serve admin`) | 4200, under `/admin` (its dev server: 127.0.0.1:4300, not published) |
 
 Docker publishes these ports on the host, so stop a native Postgres (or any
 other process on one of them) before `docker compose up`.

@@ -3,7 +3,7 @@ package com.trade.admin;
 import org.springframework.http.HttpStatus;
 
 // A refusal on an admin route, carrying its catalogue code and status
-// (design/admin-trade-api.yaml). Kept apart from the customer DomainException
+// (contracts/admin-trade-api.yaml). Kept apart from the customer DomainException
 // hierarchy: the admin codes are a separate catalogue, answered by
 // AdminExceptionHandler.
 public class AdminException extends RuntimeException {

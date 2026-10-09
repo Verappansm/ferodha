@@ -31,7 +31,7 @@ export interface AdminProfile {
 }
 
 /**
- * Admin sign-in and user management (design/admin-auth-api.yaml).
+ * Admin sign-in and user management (contracts/admin-auth-api.yaml).
  *
  * Admin sign-in follows the customer login's rules: the password is checked
  * first (or the decoy, for an unknown email), every failure is the same

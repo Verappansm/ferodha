@@ -5,7 +5,7 @@ import { ProfileApi, ProfileResponse } from '../../api/profile-api';
 import { errorMessage } from '../../core/errors/error-message';
 
 /**
- * The auth service's phone rule (design/profile-api.yaml): digits with
+ * The auth service's phone rule (contracts/profile-api.yaml): digits with
  * optional spaces, dashes and brackets and an optional leading +, at most 20
  * characters. Checked here so an invalid number is never sent.
  */

@@ -150,7 +150,7 @@ The scanner verifies:
 |-------|---------|
 |  No API Keys | Frontend doesn't contain FAUXNANCE_API_KEY |
 |  No Secrets | JWT_SECRET and other secrets not exposed |
-|  API Isolation | Frontend only calls localhost:3000, 8080 |
+|  API Isolation | Frontend only calls localhost:3000, 8081 |
 |  No External APIs | Market data API not called from frontend |
 |  No Source Maps | `.map` files not deployed |
 |  Build Security | Configuration is production-safe |

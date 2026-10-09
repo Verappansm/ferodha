@@ -102,7 +102,7 @@ export type ChartRange = PriceHistory.RangeEnum;
 
 /**
  * The Trade REST API as the rest of the application uses it, over the clients
- * generated from design/trade-api.yaml, watchlist-api.yaml and
+ * generated from contracts/trade-api.yaml, watchlist-api.yaml and
  * strategy-api.yaml. One plain method per call; nothing here builds a URL.
  */
 @Injectable({ providedIn: 'root' })
@@ -137,7 +137,11 @@ export class TradeApi {
   }
 
   /** LEAP-019: the account's cash movements, newest first. */
-  bankTransactions(accountId: number, limit = 50, offset = 0): Observable<BankTransactionsResponse> {
+  bankTransactions(
+    accountId: number,
+    limit = 50,
+    offset = 0,
+  ): Observable<BankTransactionsResponse> {
     return this.accounts.getBankTransactions(accountId, limit, offset);
   }
 
@@ -216,7 +220,7 @@ export class TradeApi {
     return this.orders.reviewOrder(order);
   }
 
-  // ===== Strategies (design/strategy-api.yaml) =====
+  // ===== Strategies (contracts/strategy-api.yaml) =====
 
   strategies(): Observable<StrategyResponse[]> {
     return this.strategiesApi.getStrategies();
@@ -243,7 +247,7 @@ export class TradeApi {
     return this.strategiesApi.getStrategyEvents(strategyId);
   }
 
-  // ===== Watchlists and price alerts (design/watchlist-api.yaml) =====
+  // ===== Watchlists and price alerts (contracts/watchlist-api.yaml) =====
 
   getWatchlists(): Observable<WatchlistResponse[]> {
     return this.watchlists.getWatchlists();
@@ -257,7 +261,10 @@ export class TradeApi {
     return this.watchlists.createWatchlist(request);
   }
 
-  updateWatchlist(watchlistId: string, request: UpdateWatchlistRequest): Observable<WatchlistResponse> {
+  updateWatchlist(
+    watchlistId: string,
+    request: UpdateWatchlistRequest,
+  ): Observable<WatchlistResponse> {
     return this.watchlists.updateWatchlist(watchlistId, request);
   }
 
@@ -269,12 +276,17 @@ export class TradeApi {
     return this.watchlists.getWatchlistItems(watchlistId);
   }
 
-  addWatchlistItem(watchlistId: string, request: AddWatchlistItemRequest): Observable<WatchlistItemResponse> {
+  addWatchlistItem(
+    watchlistId: string,
+    request: AddWatchlistItemRequest,
+  ): Observable<WatchlistItemResponse> {
     return this.watchlists.addWatchlistItem(watchlistId, request);
   }
 
   /** Adds one instrument to several watchlists at once. */
-  addWatchlistItemsBulk(request: BulkAddWatchlistItemsRequest): Observable<WatchlistItemResponse[]> {
+  addWatchlistItemsBulk(
+    request: BulkAddWatchlistItemsRequest,
+  ): Observable<WatchlistItemResponse[]> {
     return this.watchlists.addWatchlistItemsBulk(request);
   }
 
@@ -282,7 +294,10 @@ export class TradeApi {
     return this.watchlists.removeWatchlistItem(watchlistId, itemId);
   }
 
-  reorderWatchlistItems(watchlistId: string, request: ReorderWatchlistItemsRequest): Observable<unknown> {
+  reorderWatchlistItems(
+    watchlistId: string,
+    request: ReorderWatchlistItemsRequest,
+  ): Observable<unknown> {
     return this.watchlists.reorderWatchlistItems(watchlistId, request);
   }
 

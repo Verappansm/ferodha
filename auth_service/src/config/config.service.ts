@@ -90,7 +90,7 @@ export class AppConfigService implements OnModuleInit {
   get corsAllowedOrigins(): string[] {
     return parseOrigins(
       this.configService.get<string>('CORS_ALLOWED_ORIGINS') ||
-        'http://localhost:4200,http://localhost:4300',
+        'http://localhost:4200',
     );
   }
 

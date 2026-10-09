@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 // Deliberately hardcoded, not computed from historical returns - that's a
-// real analytical exercise (analytics_etl already does something close to
+// real analytical exercise (the etl/ candle pipeline already does something close to
 // it for its own claims) and out of scope for what this service needs,
 // which is "a plausible-looking amount of wiggle per symbol." Values are
 // a fraction of mid-price moved per tick's noise term, not an annualised

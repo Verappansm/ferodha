@@ -16,9 +16,9 @@ partial fills and TTL expiry of resting orders.
 ## Where the design lives
 
 - Sprint 7 asked us to record the topic, key and partition choices, and the
-  command that creates the topics: `design/kafka.md` and
-  `design/kafka-topic-setup.md`. The event envelope is in
-  `design/envelope-contract.md`.
+  command that creates the topics: `contracts/docs/kafka.md` and
+  `contracts/docs/kafka-topic-setup.md`. The event envelope is in
+  `contracts/docs/envelope-contract.md`.
 - The `market-sim` work (LEAP-003, LEAP-004) is in
   `story_docs/extension-stories.md`.
 

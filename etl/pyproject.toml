@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analytics-etl"
+version = "0.2.0"
+description = "The ETL layer: Fauxnance candles (Sprint 4) and the FACT_TRADES incremental load (Sprint 7), into one DuckDB warehouse."
+requires-python = ">=3.12"
+dependencies = [
+    "requests>=2.31",
+    "pandas>=2.0",
+    "duckdb>=1.0",
+    "plotly>=5.20",
+    "python-dotenv>=1.0",
+    "psycopg[binary]>=3.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+analytics-etl = "etl_pipeline.pipeline.main:main"
+analytics-etl-dashboard = "etl_pipeline.dashboard.build_report:main"
+etl = "etl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
