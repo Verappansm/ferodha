@@ -44,7 +44,7 @@ capped at 5 s), then sends the message to `orders.DLT`.
 
 - **Known gap: the sender and the retry scheduler are not built**
   (`notification/README.md:109,175`). EMAIL delivery is a stub that logs.
-  `design/notifications-api.yaml:27` promises a retry scheduler that doesn't
+  `contracts/notifications-api.yaml:27` promises a retry scheduler that doesn't
   exist. Today an alert stays `QUEUED` unless something calls the status
   route.
 - **Known gap: recording failures are lost.** `TradeEventNotificationListener`
@@ -74,4 +74,4 @@ the sender and the retry now exist (`notification/service/NotificationDispatcher
 catches every exception and commits the offset
 (`TradeEventNotificationListener.java:66-69`). A fill whose notification
 can't be recorded is lost, not dead-lettered, and nothing writes to
-`trade-events.DLT`. This is tracked as S-3 in `INTEGRATION-SEAMS.md`.
+`trade-events.DLT`. This is tracked as S-3 in `contracts/docs/INTEGRATION-SEAMS.md`.

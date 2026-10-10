@@ -12,7 +12,7 @@ export { Theme as ThemePreference } from './generated/preferences/model/theme';
 
 /**
  * The customer's preferences on the Trade REST API, over the client generated
- * from design/preferences-api.yaml. Addressed by the token's own account.
+ * from contracts/preferences-api.yaml. Addressed by the token's own account.
  */
 @Injectable({ providedIn: 'root' })
 export class PreferencesApi {

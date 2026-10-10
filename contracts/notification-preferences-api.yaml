@@ -1,0 +1,148 @@
+openapi: 3.1.0
+
+info:
+  title: Customer Notification Preferences (Trade REST API)
+  version: 1.0.0
+  summary: Notification channel preferences for trading accounts.
+  description: |
+    Notification channel preferences, served by the Trade REST API on port 8081. The routes
+    read the account from the verified access token only: there is no account id in the path,
+    so nobody can read or change anyone else's notification preferences. Since one user owns
+    exactly one trading account in this application, the account is identified by the `accountId`
+    claim in the JWT token.
+
+    The platform notifies customers of order outcomes (filled, rejected, cancelled) on the channel
+    they have elected. This API lets them view and change their election.
+
+    A `notificationChannel` is one of: `EMAIL` or `IN_APP`. A customer can set their preference
+    to either channel; the platform is responsible for delivering via the provisioned provider.
+
+servers:
+  - url: http://localhost:8081
+    description: Local development, run from Docker Compose
+  - url: http://trade-api:8081
+    description: Service name inside the Docker Compose network
+
+tags:
+  - name: Notification Preferences
+    description: Customer notification channel preferences for their trading account.
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/notification-preferences:
+    get:
+      tags: [Notification Preferences]
+      operationId: getNotificationPreferences
+      summary: Get the trading account's notification preferences
+      description: Returns the account's current notification channel preference.
+      responses:
+        '200':
+          description: The notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+    patch:
+      tags: [Notification Preferences]
+      operationId: updateNotificationPreferences
+      summary: Change the trading account's notification channel preference
+      description: |
+        Updates the account's notification channel. The platform will use this channel to send
+        future notifications about order outcomes (filled, rejected, cancelled).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNotificationPreferencesRequest'
+      responses:
+        '200':
+          description: The updated notification preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '422':
+          $ref: '#/components/responses/InvalidChannel'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        The customer access token issued by `POST /auth/login`. Must contain an `accountId`
+        claim that identifies the trading account.
+
+  responses:
+    Unauthorised:
+      description: Missing or invalid token, or the user is no longer active.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    InvalidChannel:
+      description: The notification channel is not one of the valid options.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: PREF-422
+                message: Invalid notification channel
+
+  schemas:
+
+    NotificationChannel:
+      type: string
+      enum: [EMAIL, IN_APP]
+      description: |
+        The channel on which to deliver notifications:
+        - `EMAIL`: Send to the user's email address.
+        - `IN_APP`: Store in the database for in-app notification center.
+
+    NotificationPreferencesResponse:
+      type: object
+      additionalProperties: false
+      required: [notificationChannel, updatedAt]
+      properties:
+        notificationChannel:
+          $ref: '#/components/schemas/NotificationChannel'
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the preference was last updated.
+
+    UpdateNotificationPreferencesRequest:
+      type: object
+      additionalProperties: false
+      required: [notificationChannel]
+      properties:
+        notificationChannel:
+          $ref: '#/components/schemas/NotificationChannel'
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, PREF-422]
+        message:
+          type: string

@@ -15,7 +15,7 @@ import { signIn } from './fixtures';
  * backoffice.ts). The cancel step needs the market-sim profile, where orders
  * rest on a book; on the default profile it reports itself skipped.
  */
-const ADMIN_URL = process.env['ADMIN_BASE_URL'] ?? 'http://localhost:4300';
+const ADMIN_URL = process.env['ADMIN_BASE_URL'] ?? 'http://localhost:4200/admin';
 const ADMIN_USER = process.env['E2E_ADMIN_USER'] ?? 'michael.brown@example.com';
 const ADMIN_PASSWORD = process.env['E2E_ADMIN_PASSWORD'] ?? 'seed-password-change-me';
 const SYMBOL = process.env['E2E_SYMBOL'] ?? 'AAPL';

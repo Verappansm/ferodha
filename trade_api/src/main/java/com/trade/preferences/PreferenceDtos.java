@@ -2,7 +2,7 @@ package com.trade.preferences;
 
 import java.util.List;
 
-// The shapes of design/preferences-api.yaml, plus the internal ChannelRoute
+// The shapes of contracts/preferences-api.yaml, plus the internal ChannelRoute
 // the notifications module receives. Enum names are the wire values.
 public final class PreferenceDtos {
 

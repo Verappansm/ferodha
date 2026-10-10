@@ -9,7 +9,7 @@ import { Session } from '../session/session';
 
 export type NotificationType = NotificationEventType;
 
-/** A notification as design/notifications-api.yaml describes it. */
+/** A notification as contracts/notifications-api.yaml describes it. */
 export type AppNotification = NotificationResponse;
 
 /** How often the bell's count is refreshed while someone is signed in. */

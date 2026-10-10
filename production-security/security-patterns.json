@@ -62,7 +62,7 @@
         },
         {
           "id": "trade-api",
-          "endpoint": "localhost:8080",
+          "endpoint": "localhost:8081",
           "service": "Trade API",
           "shouldFind": true,
           "description": "Account data, orders, positions, balance"

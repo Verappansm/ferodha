@@ -8,7 +8,7 @@ const BCRYPT_HASH = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
 /**
  * Password storage. bcrypt at cost 12 - the floor the contract allows
  * ("argon2id or bcrypt at cost 12 or above"). See
- * design/auth-password-hashing.md for why 12 and not higher.
+ * contracts/docs/auth-password-hashing.md for why 12 and not higher.
  * Never MD5, never SHA-256, never an unsalted hash.
  */
 @Injectable()

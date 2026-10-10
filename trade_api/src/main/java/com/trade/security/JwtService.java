@@ -20,7 +20,7 @@ import java.util.UUID;
 // whether the account it names is the one a request addresses is a service-
 // layer, not a filter, decision (see JwtAuthFilter and the account services).
 //
-// Admin console tokens (design/admin-auth-api.yaml) are verified by
+// Admin console tokens (contracts/admin-auth-api.yaml) are verified by
 // verifyAdmin() instead, and verify() refuses them: one token is never both.
 @Service
 public class JwtService {

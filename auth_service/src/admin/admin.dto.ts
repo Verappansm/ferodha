@@ -11,7 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 
-/** ReasonRequest in design/admin-auth-api.yaml: recorded in the audit log. */
+/** ReasonRequest in contracts/admin-auth-api.yaml: recorded in the audit log. */
 export class ReasonRequestDto {
   @ApiProperty({ minLength: 3, maxLength: 500 })
   @Transform(({ value }: { value: unknown }) =>

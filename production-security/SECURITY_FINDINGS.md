@@ -96,7 +96,7 @@ The bundle contains:
 - **Status:**  Verified in bundle
 
 #### Trade API
-- **Endpoint:** `localhost:8080`
+- **Endpoint:** `localhost:8081`
 - **Purpose:** Trade data operations
 - **Usage:** Get trades, execute trades, market data
 - **Status:**  Verified in bundle
@@ -124,7 +124,7 @@ Auth Service (localhost:3000)
      Handles authentication
      Stores API keys server-side
 
-Trade API (localhost:8080)
+Trade API (localhost:8081)
      Returns trade data
      Calls Pricing Generator (backend-to-backend)
      Pricing Generator has FAUXNANCE_API_KEY
@@ -156,7 +156,7 @@ Fauxnance API (Market Data)
 
 ### Search: API_URL (Patterns)
 - **Expected:** Only localhost URLs
-- **Result:**  localhost:3000 and localhost:8080 only
+- **Result:**  localhost:3000 and localhost:8081 only
 - **Status:** PASS
 
 ### Search: Fauxnance References
@@ -182,7 +182,7 @@ Fauxnance API (Market Data)
 export const environment = {
   production: false,
   AUTH_API_URL: 'http://localhost:3000',
-  TRADE_API_URL: 'http://localhost:8080'
+  TRADE_API_URL: 'http://localhost:8081'
 };
 ```
 
@@ -196,7 +196,7 @@ export const environment = {
 
 **Features:**
 -  Restricts credentials to authorized origins only
--  Implements token allowlist (localhost:3000, localhost:8080)
+-  Implements token allowlist (localhost:3000, localhost:8081)
 -  Prevents token leakage to external sites
 -  Properly implements HTTP interceptor
 
@@ -211,7 +211,7 @@ export const environment = {
 ```typescript
 // Only these origins can receive JWT tokens
 - localhost:3000 (Auth Service)
-- localhost:8080 (Trade API)
+- localhost:8081 (Trade API)
 ```
 
 **Status:**  SECURE - Exactly 2 authorized origins
@@ -233,7 +233,7 @@ export const environment = {
 
 ### Phase 3: API Endpoints
 -  Auth Service found (localhost:3000)
--  Trade API found (localhost:8080)
+-  Trade API found (localhost:8081)
 -  No unauthorized external endpoints
 
 ### Phase 4: Source Code
@@ -287,7 +287,7 @@ export const environment = {
 | No API keys in bundle |  PASS | Search results: 0 found |
 | No signing secrets |  PASS | Search results: 0 found |
 | No external API calls |  PASS | Search results: 0 found |
-| Authorized APIs only |  PASS | localhost:3000, 8080 verified |
+| Authorized APIs only |  PASS | localhost:3000, 8081 verified |
 | Source maps not deployed |  PASS | .map files not in dist/ |
 | Production build |  PASS | Minified code enabled |
 

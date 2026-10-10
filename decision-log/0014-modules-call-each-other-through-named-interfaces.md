@@ -50,7 +50,7 @@ flagged this as R1/O-1.
   per-order delegated token, not a borrowed one (0001).
 
 The full shapes, defaults and failure behaviour are written down in
-[`INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md).
+[`contracts/docs/INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md).
 
 ## Consequences
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!--
-    The operations console's statements (design/admin-trade-api.yaml). UUIDs
+    The operations console's statements (contracts/admin-trade-api.yaml). UUIDs
     and enums are read as text and written with an explicit cast, so no type
     handler is needed; every value is a bound parameter. A primitive record
     component is declared with MyBatis's underscore alias (_long, _int,

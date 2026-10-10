@@ -6,7 +6,7 @@ import type { UserStatus } from '../persistence/users.repository';
 /** The platform's role names, from the Sprint 3 Roles table. */
 export type PlatformRole = 'client' | 'admin' | 'analyst' | 'advisor';
 
-/** AdminUser in design/admin-auth-api.yaml. */
+/** AdminUser in contracts/admin-auth-api.yaml. */
 export interface AdminUser {
   id: string;
   name: string;

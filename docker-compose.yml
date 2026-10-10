@@ -26,7 +26,9 @@ services:
       - trade-net
 
   kafka:
-    image: apache/kafka:latest
+    # Pinned to the version infra/README.md names (Kafka 3.8, KRaft), so a
+    # rebuild months later gets the same broker.
+    image: apache/kafka:3.8.1
     container_name: trade-kafka
     # Only the external/host listener is published - other containers on
     # trade-net never go through the host port mapping, they use the
@@ -48,10 +50,10 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      # Auto-creation is off deliberately (Story 1) - orders/trade-events/
-      # market-data and their .DLT topics are created explicitly by
-      # kafka_pipeline/create_topics.sh and create_dlt_topics.sh, run once
-      # against this same container name (trade-kafka) after it's up.
+      # Auto-creation is off deliberately (Story 1): the topics are created
+      # explicitly, by the kafka-init service below on every `up` (the same
+      # topics and settings as kafka_pipeline/create_topics.sh and
+      # create_dlt_topics.sh, which still work against this container).
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092"]
@@ -59,6 +61,33 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      - trade-net
+
+  # One-shot: creates the six topics once the broker is healthy, then exits.
+  # Idempotent (--if-not-exists), so every `up` runs it safely; the services
+  # that produce or consume wait for it to finish.
+  kafka-init:
+    image: apache/kafka:3.8.1
+    container_name: trade-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        topic() {
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic "$$1" --partitions "$$2" --replication-factor 1 $${3:+--config retention.ms=$$3}
+        }
+        topic orders 3 604800000
+        topic trade-events 3 2592000000
+        topic market-data 6 86400000
+        topic orders.DLT 1
+        topic trade-events.DLT 1
+        topic market-data.DLT 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list
+    restart: "no"
     networks:
       - trade-net
 
@@ -81,7 +110,7 @@ services:
       context: ./trade_api
       dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "8081:8081"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -90,8 +119,20 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-signing-secret-please-change-later}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # The browser origin of the UI (which also serves /admin). On EC2:
+      # http://<public host>:4200.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # Outgoing mail (sign-up codes from auth-service, EMAIL notifications from
+      # trade-api). SMTP_HOST empty: nothing is sent; sign-up codes go to the
+      # auth-service log. Port and sender keep their defaults when unset,
+      # because an empty value fails both services' validation.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: "${MAIL_FROM:-Ferodha <no-reply@ferodha.local>}"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/actuator/health"]
       interval: 10s
       timeout: 3s
       start_period: 40s
@@ -99,8 +140,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     networks:
       - trade-net
 
@@ -123,6 +164,16 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trade}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:4200}
+      # Outgoing mail (sign-up codes from auth-service, EMAIL notifications from
+      # trade-api). SMTP_HOST empty: nothing is sent; sign-up codes go to the
+      # auth-service log. Port and sender keep their defaults when unset,
+      # because an empty value fails both services' validation.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: "${MAIL_FROM:-Ferodha <no-reply@ferodha.local>}"
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
       interval: 10s
@@ -140,10 +191,7 @@ services:
     build:
       context: ./trade_executor
       dockerfile: Dockerfile
-    # 8082 to match the reference architecture (leap-architecture.pages.dev)
-    # - previously left at the app's own default of 8081 to avoid touching
-    # a working config unprompted; now that everything is being wired
-    # together on one box with explicit port choices, applying it.
+    # 8082 to match the reference architecture (leap-architecture.pages.dev).
     ports:
       - "8082:8082"
     environment:
@@ -186,8 +234,8 @@ services:
     depends_on:
       trade-api:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     networks:
       - trade-net
 

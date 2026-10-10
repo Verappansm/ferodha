@@ -19,7 +19,8 @@
      UI packages (skip with -SkipBuild)
   5. Starts them in dependency order, waits for each health endpoint, and
      checks that trade-executor actually joined its Kafka consumer group
-  6. Starts the trading UI on port 4200 and the admin console on port 4300
+  6. Starts the trading UI on port 4200, with the admin console under /admin
+     (its own dev server listens on 127.0.0.1:4300 only, behind 4200's proxy)
      (Angular, ng serve; skip both with -SkipUi)
 
   Logs:  windows/.run/logs/<service>.log (+ .err.log)
@@ -90,7 +91,7 @@ $AdminUiPort = '4300'
 $PgDb = Get-Setting 'POSTGRES_DB' 'tradedb'
 $PgUser = Get-Setting 'POSTGRES_USER' 'postgres'
 $JwtSecret = Get-Setting 'JWT_SECRET' ''
-$TradeApiPort = Get-Setting 'TRADE_API_PORT' '8080'
+$TradeApiPort = Get-Setting 'TRADE_API_PORT' '8081'
 $ExecutorPort = Get-Setting 'TRADE_EXECUTOR_PORT' '8082'
 $AuthPort = Get-Setting 'AUTH_SERVICE_PORT' '3000'
 
@@ -277,7 +278,7 @@ if (-not $script:Psql) { Fail 'psql.exe not found. Add PostgreSQL\<version>\bin 
 Write-Pass "tools found (psql: $script:Psql)"
 
 $PortsToCheck = @($TradeApiPort, $ExecutorPort, $AuthPort)
-if (-not $SkipUi) { $PortsToCheck += @($UiPort, $AdminUiPort) }
+if (-not $SkipUi) { $PortsToCheck += @($UiPort, $AdminUiPort) }  # 4300: internal, still must be free
 foreach ($port in $PortsToCheck) {
     if (Test-Tcp 'localhost' ([int]$port) 500) { Fail "Port $port is already in use on this machine." }
 }
@@ -426,10 +427,11 @@ if (-not $SkipUi) {
         @('node_modules/@angular/cli/bin/ng.js', 'serve', 'trading-ui', '--port', $UiPort) `
         @{ NG_CLI_ANALYTICS = 'false' }
     Start-AppProcess 'admin-ui' $UiDir 'node' `
-        @('node_modules/@angular/cli/bin/ng.js', 'serve', 'admin', '--port', $AdminUiPort) `
+        @('node_modules/@angular/cli/bin/ng.js', 'serve', 'admin', '--host', '127.0.0.1', '--port', $AdminUiPort) `
         @{ NG_CLI_ANALYTICS = 'false' }
     Wait-Http 'trading-ui' "http://localhost:$UiPort/" 'app-root' 'trading-ui' 240 'text/html'
-    Wait-Http 'admin-ui' "http://localhost:$AdminUiPort/" 'adm-root' 'admin-ui' 240 'text/html'
+    # Through the trading UI's proxy: the address a browser uses, and proof both servers answer.
+    Wait-Http 'admin-ui' "http://localhost:$UiPort/admin/" 'adm-root' 'admin-ui' 240 'text/html'
 }
 
 # ---------------------------------------------------------------------------
@@ -459,7 +461,7 @@ Write-Host ''
 Write-Host '== ALL SERVICES RUNNING ==' -ForegroundColor Green
 if (-not $SkipUi) {
     Write-Host "  trading-ui        http://localhost:$UiPort   (sign in: john.carter@example.com / seed-password-change-me)"
-    Write-Host "  admin console     http://localhost:$AdminUiPort   (sign in: michael.brown@example.com / seed-password-change-me)"
+    Write-Host "  admin console     http://localhost:$UiPort/admin   (sign in: michael.brown@example.com / seed-password-change-me)"
 }
 Write-Host "  trade-api         http://localhost:$TradeApiPort"
 Write-Host "  trade-executor    http://localhost:$ExecutorPort/actuator/health"

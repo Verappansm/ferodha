@@ -11,11 +11,10 @@ export const validationSchema = Joi.object({
   POSTGRES_DB: Joi.string().required(),
   POSTGRES_USER: Joi.string().required(),
   POSTGRES_PASSWORD: Joi.string().required(),
-  // Comma-separated browser origins allowed to call this service (the
-  // trading UI on 4200, the operations console on 4300). An allow list, never "*".
-  CORS_ALLOWED_ORIGINS: Joi.string().default(
-    'http://localhost:4200,http://localhost:4300',
-  ),
+  // Comma-separated browser origins allowed to call this service: the trading
+  // UI's origin, which also serves the operations console under /admin. On a
+  // server, its public origin (http://<host>:4200). An allow list, never "*".
+  CORS_ALLOWED_ORIGINS: Joi.string().default('http://localhost:4200'),
   // Outgoing mail for the sign-up verification code. Leave SMTP_HOST unset in
   // development and the code is written to this service's log instead of mailed.
   SMTP_HOST: Joi.string().allow('').optional(),

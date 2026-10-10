@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Customer routes only, per design/preferences-api.yaml. Under /api/v1, so
+// Customer routes only, per contracts/preferences-api.yaml. Under /api/v1, so
 // JwtAuthFilter has verified the token before any of these run; the service
 // then compares the token's account with the one addressed. The internal
 // resolveChannel path is deliberately not mapped here.

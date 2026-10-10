@@ -8,11 +8,11 @@ trade-executor also runs the live price feed under both profiles (formerly the s
 | **Linux** (Docker) | Kafka broker | 9092 |
 | **Linux** (Docker) | Kafka UI | 8091 |
 | **Windows** (native) | PostgreSQL | 5432 |
-| **Windows** (native) | trade-api | 8080 |
+| **Windows** (native) | trade-api | 8081 |
 | **Windows** (native) | trade-executor | 8082 |
 | **Windows** (native) | auth-service | 3000 |
 | **Windows** (native) | trading-ui (Angular, `ng serve`) | 4200 |
-| **Windows** (native) | admin console (Angular, `ng serve admin`) | 4300 |
+| **Windows** (native) | admin console (Angular, `ng serve admin`), served at `4200/admin` | 4300, on 127.0.0.1 only |
 
 ```
 Windows                                           Linux (Docker)
@@ -156,7 +156,7 @@ If Windows Firewall asks whether to allow Java or Node, click **Allow**. The ser
 
 Then open:
 - **Trading UI:** http://localhost:4200, signed in as `john.carter@example.com` / `seed-password-change-me`
-- **Admin console:** http://localhost:4300, signed in as `michael.brown@example.com` / `seed-password-change-me`
+- **Admin console:** http://localhost:4200/admin, signed in as `michael.brown@example.com` / `seed-password-change-me`
 
 `-SkipUi` starts neither UI.
 
@@ -185,7 +185,7 @@ It ends with `== ALL STAGES PASSED ==`.
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\stop-windows.ps1       # Windows
 ```
-This stops every service the start script ran (with their child processes), anything java or node still listening on the platform ports (8080, 8082, 3000, 4200, 4300) after a run that failed part-way, and the local PostgreSQL service. Add `-KeepPostgres` to leave PostgreSQL running. Stopping and starting the PostgreSQL service needs a window opened as Administrator; `start-windows.ps1` starts the service again if it is stopped.
+This stops every service the start script ran (with their child processes), anything java or node still listening on the platform ports (8081, 8082, 3000, 4200, 4300) after a run that failed part-way, and the local PostgreSQL service. Add `-KeepPostgres` to leave PostgreSQL running. Stopping and starting the PostgreSQL service needs a window opened as Administrator; `start-windows.ps1` starts the service again if it is stopped.
 ```bash
 bash windows/kafka-linux.sh down                                         # Linux
 ```
@@ -242,6 +242,6 @@ The price feed behaves the same either way. trade-executor's own market-data pol
 | `psql failed` or `password authentication failed` | Check `POSTGRES_USER` and `POSTGRES_PASSWORD`, and set `PSQL_BIN_DIR` if psql isn't found. |
 | trade-api: `type "account_status_enum" already exists` | An older `database\apply.sh` ran a Sprint 8 migration on this database. Drop the `tradedb` database and run B5 again. |
 | Stage 3: `no token for john.carter@example.com`, or sign-in refused for a seed user | The database is older than the seed password, or than trade-api's Liquibase 012 (the browsers now send a digest of the password, B23). Drop `tradedb` and run B5 again. A user you registered yourself before that change has to register again. |
-| `Port 8080 is already in use` | A previous run is still up. Run `stop-windows.ps1`. |
+| `Port 8081 is already in use` | A previous run is still up. Run `stop-windows.ps1`. |
 | A service `exited during startup` | The script prints its log. Full logs are in `windows\.run\logs\<service>.log` and `.err.log`. |
 | `still waiting for trading-ui` until it fails, but http://localhost:4200 opens | Old copy of the script: the check asked the dev server for JSON, which it answers with 404. `git pull`. |

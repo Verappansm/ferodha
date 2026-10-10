@@ -16,7 +16,7 @@ export type SortKey = 'symbol' | 'value' | 'pnl';
 
 /**
  * The portfolio screen (LEAP-009): totals including cash, every holding
- * priced, and realised and unrealised P&L, from design/portfolio-api.yaml.
+ * priced, and realised and unrealised P&L, from contracts/portfolio-api.yaml.
  * Summary, holdings and P&L load separately, so one failure leaves the
  * others on screen.
  */

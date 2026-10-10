@@ -73,7 +73,7 @@ if (Test-Path $PidFile) {
 # 2. Anything java or node still listening on a platform port: a service
 #    from a run that failed part-way, or a UI started by hand.
 $Ports = @(
-    (Get-Setting 'TRADE_API_PORT' '8080'),
+    (Get-Setting 'TRADE_API_PORT' '8081'),
     (Get-Setting 'TRADE_EXECUTOR_PORT' '8082'),
     (Get-Setting 'AUTH_SERVICE_PORT' '3000'),
     '4200',

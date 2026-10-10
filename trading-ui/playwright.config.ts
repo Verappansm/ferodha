@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Environment variables:
  *   - UI_BASE_URL: The URL where the trading-ui Angular app is served (default: http://localhost:4200)
  *   - AUTH_API_URL: The auth service URL (default: http://localhost:3000)
- *   - TRADE_API_URL: The trade API URL (default: http://localhost:8080)
+ *   - TRADE_API_URL: The trade API URL (default: http://localhost:8081)
  *   - TEST_USERNAME: Email address for test login (required)
  *   - TEST_PASSWORD: Password for test login (required)
  */

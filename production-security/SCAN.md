@@ -238,7 +238,7 @@ Searches for sensitive data:
 ### Phase 3: API Endpoints (CRITICAL)
 Verifies authorized endpoints:
 -  localhost:3000 (Auth Service)
--  localhost:8080 (Trade API)
+-  localhost:8081 (Trade API)
 -  No external API calls
 
 **Result must be PASS - Any fail means calling external APIs**
@@ -273,7 +273,7 @@ Final verdict:
 | API key not found | No `FAUXNANCE_API_KEY` |  Key not exposed |
 | JWT secret not found | No `JWT_SECRET` |  Secret not exposed |
 | Auth endpoint | Only localhost:3000 |  Authorized only |
-| Trade endpoint | Only localhost:8080 |  Authorized only |
+| Trade endpoint | Only localhost:8081 |  Authorized only |
 | No external APIs | No external hosts |  No unauthorized calls |
 | Source maps | `.map` files absent |  Code protected |
 | HTML secure | No hardcoded secrets |  HTML safe |
