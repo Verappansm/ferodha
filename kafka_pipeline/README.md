@@ -13,5 +13,5 @@ are safe to run more than once.
 
 Sprint 7 asked us to record why the partition counts and keys are what they
 are, and to name the command that creates the topics. That is
-`design/kafka.md`. Step-by-step broker setup and verification is in
-`design/kafka-topic-setup.md`.
+`contracts/docs/kafka.md`. Step-by-step broker setup and verification is in
+`contracts/docs/kafka-topic-setup.md`.

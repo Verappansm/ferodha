@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 // Story 8's own worked example, recorded here since this repo has no
 // separate committed design-decisions doc for it (the same gap Story 1's
 // own audit found for the Kafka partition/key justification - there is no
-// design/ or docs/contracts/ directory anywhere in this repo to put it in
+// contracts/ or docs/contracts/ directory anywhere in this repo to put it in
 // instead, so it lives here, next to the code it governs, where nobody can
 // miss it while touching this class):
 //

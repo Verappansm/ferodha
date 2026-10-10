@@ -12,7 +12,7 @@ export type { TokenResponse, UserResponse, AccountStatusResponse };
 
 /**
  * The Auth service as the rest of the application uses it, over the client
- * generated from design/auth-api.yaml. Hides the generated overloads (observe,
+ * generated from contracts/auth-api.yaml. Hides the generated overloads (observe,
  * reportProgress, options) behind one plain method per call.
  */
 @Injectable({ providedIn: 'root' })

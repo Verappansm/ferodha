@@ -68,4 +68,4 @@ The "known gap" above is closed by [0013](0013-notifications-one-path-one-prefer
   and keeps no data of its own.
 
 The fallback rules in this entry are unchanged. The full seam is recorded in
-[`INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md#2-seam-a-notifications--preferences).
+[`contracts/docs/INTEGRATION-SEAMS.md`](../INTEGRATION-SEAMS.md#2-seam-a-notifications--preferences).

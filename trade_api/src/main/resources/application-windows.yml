@@ -6,7 +6,7 @@
 # on localhost in this setup, so a missing value fails at startup instead of
 # silently pointing the producer at a broker that doesn't exist.
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8081}
 
 spring:
   kafka:

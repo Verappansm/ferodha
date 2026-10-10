@@ -20,8 +20,8 @@ Configuration is read from the repository-root `.env` (template:
 - **Login throttle:** 5 failed logins per IP, then a 15-minute cooldown counted
   from the first failure. Only failures count.
 - **Security review:** `security-review/sprint8-review.md`.
-- **Password hashing and the cost factor:** `design/auth-password-hashing.md`.
+- **Password hashing and the cost factor:** `contracts/docs/auth-password-hashing.md`.
 
-The full write-up of the service is in `design/auth-service.md`: endpoints,
+The full write-up of the service is in `contracts/docs/auth-service.md`: endpoints,
 the user-first registration flow, the throttle and the tokens. Where we depart
 from `contracts/auth-api.yaml`, the reason is in `story_docs/contract-breach.md`.

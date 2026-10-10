@@ -21,7 +21,7 @@ __pycache__/
 build/
 
 # Generated DuckDB warehouse files. Regenerate them with each pipeline's own
-# load commands (analytics_etl/README.md, fact_trades_etl/README.md); never
+# load commands (etl/README.md); never
 # commit a populated database.
 *.duckdb
 

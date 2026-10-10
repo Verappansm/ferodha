@@ -9,7 +9,7 @@ export function getTestConfig() {
   const password = process.env.TEST_PASSWORD;
   const uiBaseUrl = process.env.UI_BASE_URL || 'http://localhost:4200';
   const authApiUrl = process.env.AUTH_API_URL || 'http://localhost:3000';
-  const tradeApiUrl = process.env.TRADE_API_URL || 'http://localhost:8080';
+  const tradeApiUrl = process.env.TRADE_API_URL || 'http://localhost:8081';
 
   if (!username || !password) {
     throw new Error('TEST_USERNAME and TEST_PASSWORD environment variables must be set');

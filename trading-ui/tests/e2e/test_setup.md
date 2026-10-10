@@ -22,7 +22,7 @@ Optional (defaults shown):
 ```bash
 export UI_BASE_URL="http://localhost:4200"
 export AUTH_API_URL="http://localhost:3000"
-export TRADE_API_URL="http://localhost:8080"
+export TRADE_API_URL="http://localhost:8081"
 ```
 
 ### 3. Ensure Stack is Running
@@ -30,7 +30,7 @@ export TRADE_API_URL="http://localhost:8080"
 The tests require the full stack to be running:
 
 - Auth service on http://localhost:3000
-- Trade API on http://localhost:8080
+- Trade API on http://localhost:8081
 - Postgres on localhost:5432
 - Kafka on localhost:9092
 
@@ -100,7 +100,7 @@ The whole life cycle, each run with a brand-new customer:
 
 What they need beyond the other suites:
 
-- **The admin console** on `ADMIN_BASE_URL` (default `http://localhost:4300`).
+- **The admin console** on `ADMIN_BASE_URL` (default `http://localhost:4200/admin`).
 - **No mail server** (`SMTP_HOST` unset): the sign-up code is read from the auth
   service log. It is found in `windows/.run/logs/auth-service.log` (Windows setup)
   or `docker logs auth-service` (Docker); set `E2E_AUTH_LOG` to the log file otherwise.

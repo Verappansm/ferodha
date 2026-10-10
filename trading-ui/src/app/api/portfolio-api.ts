@@ -20,7 +20,7 @@ export interface PnlQuery {
 
 /**
  * The portfolio and P&L routes as the rest of the application uses them, over
- * the client generated from design/portfolio-api.yaml. One plain method per call.
+ * the client generated from contracts/portfolio-api.yaml. One plain method per call.
  */
 @Injectable({ providedIn: 'root' })
 export class PortfolioApi {

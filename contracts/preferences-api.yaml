@@ -1,0 +1,270 @@
+openapi: 3.1.0
+
+info:
+  title: Customer Preferences API
+  version: 1.0.0
+  summary: Read, change and reset one customer's preferences (LEAP-010).
+  description: |
+    Served by the Trade REST API (`com.trade.preferences`) on the same port, behind the same JWT
+    verification as every other `/api/v1/**` route. The Angular UI generates its typed client from
+    this file.
+
+    ## Scoping
+
+    Every route is addressed by the numeric account key, `ACCOUNTS.id`. A token whose `accountId`
+    claim does not match the account in the path is `ACC-403`, 403 - another account's preferences
+    are refused, never returned empty.
+
+    ## Defaults
+
+    A customer who has never saved anything reads the platform defaults, and nothing is written
+    until they change a setting. A saved value overrides only that setting. `customised` lists the
+    settings that hold a saved value; every other setting is the default.
+
+    ## What is stored and what is referenced
+
+    The channel is stored here. The contact detail behind it (the email address) is not copied: it
+    is read from the customer's user record when needed and returned masked.
+
+    ## Internal resolution
+
+    The notifications module resolves a channel through the `PreferencesService` Java interface,
+    in-process. There is deliberately no HTTP route for it, so no token can reach it.
+  contact:
+    name: Team 2
+
+servers:
+  - url: http://localhost:8081
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/accounts/{id}/preferences:
+    parameters:
+      - $ref: '#/components/parameters/AccountIdPath'
+    get:
+      operationId: getPreferences
+      summary: The customer's preferences, merged with the defaults.
+      tags: [Preferences]
+      responses:
+        '200':
+          description: Effective preferences.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+    patch:
+      operationId: updatePreferences
+      summary: Save the settings sent; settings left out keep their current value.
+      tags: [Preferences]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferencesUpdateRequest'
+      responses:
+        '200':
+          description: Effective preferences after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+    delete:
+      operationId: resetPreferences
+      summary: Forget every saved setting, so the defaults apply again.
+      tags: [Preferences]
+      responses:
+        '200':
+          description: The defaults, now in effect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferencesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/AccountNotActive'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AccountIdPath:
+      name: id
+      in: path
+      required: true
+      description: The numeric account key, `ACCOUNTS.id`. Must match the token's `accountId` claim.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+      example: 1
+
+  responses:
+    Unauthorised:
+      description: Missing, malformed, expired or wrongly signed token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthorised:
+              value:
+                errorCode: AUTH-401
+                message: Unauthorised
+    AccountNotActive:
+      description: The token does not grant access to this account.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            forbidden:
+              value:
+                errorCode: ACC-403
+                message: Account not active
+    InvalidInput:
+      description: A value outside what the setting accepts.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalid:
+              value:
+                errorCode: VAL-422
+                message: Invalid input
+
+  schemas:
+    NotificationChannel:
+      type: string
+      enum: [IN_APP, EMAIL]
+      description: Where trade alerts go. `IN_APP` is the bell and toast, and is always deliverable.
+
+    Theme:
+      type: string
+      enum: [LIGHT, DARK]
+
+    NumberFormat:
+      type: string
+      enum: [INDIAN, INTERNATIONAL]
+      description: '`INDIAN` groups as 1,00,000.00; `INTERNATIONAL` groups as 100,000.00.'
+
+    StartPage:
+      type: string
+      enum: [DASHBOARD, PORTFOLIO, WATCHLIST, ORDERS]
+      description: The screen opened after sign-in.
+
+    NotifyOn:
+      type: object
+      additionalProperties: false
+      required: [orderFilled, orderRejected, orderCancelled, priceAlerts]
+      properties:
+        orderFilled:
+          type: boolean
+        orderRejected:
+          type: boolean
+        orderCancelled:
+          type: boolean
+        priceAlerts:
+          type: boolean
+
+    NotifyOnUpdate:
+      type: object
+      additionalProperties: false
+      description: Only the flags sent are changed.
+      properties:
+        orderFilled:
+          type: boolean
+        orderRejected:
+          type: boolean
+        orderCancelled:
+          type: boolean
+        priceAlerts:
+          type: boolean
+
+    PreferencesResponse:
+      type: object
+      additionalProperties: false
+      required: [accountId, defaultAccountId, notificationChannel, notifyOn, theme, numberFormat,
+                 compactTables, hideBalances, startPage, customised]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+          example: 1
+        defaultAccountId:
+          type: integer
+          format: int64
+          description: The account applied at sign-in. Always one the customer owns.
+          example: 1
+        notificationChannel:
+          $ref: '#/components/schemas/NotificationChannel'
+        contactDetail:
+          type: [string, 'null']
+          description: The masked email behind `EMAIL`, read from the user record. Null if none is on file.
+          example: r****@gmail.com
+        notifyOn:
+          $ref: '#/components/schemas/NotifyOn'
+        theme:
+          $ref: '#/components/schemas/Theme'
+        numberFormat:
+          $ref: '#/components/schemas/NumberFormat'
+        compactTables:
+          type: boolean
+        hideBalances:
+          type: boolean
+        startPage:
+          $ref: '#/components/schemas/StartPage'
+        customised:
+          type: array
+          description: Names of the settings holding a saved value. Empty for a customer on defaults.
+          items:
+            type: string
+          example: [theme, startPage]
+
+    PreferencesUpdateRequest:
+      type: object
+      additionalProperties: false
+      description: Every field is optional. A field left out keeps its current value.
+      properties:
+        notificationChannel:
+          $ref: '#/components/schemas/NotificationChannel'
+        notifyOn:
+          $ref: '#/components/schemas/NotifyOnUpdate'
+        theme:
+          $ref: '#/components/schemas/Theme'
+        numberFormat:
+          $ref: '#/components/schemas/NumberFormat'
+        compactTables:
+          type: boolean
+        hideBalances:
+          type: boolean
+        startPage:
+          $ref: '#/components/schemas/StartPage'
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+        message:
+          type: string

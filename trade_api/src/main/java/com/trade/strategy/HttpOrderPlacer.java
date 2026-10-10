@@ -18,7 +18,7 @@ public class HttpOrderPlacer implements OrderPlacer {
 
     private final RestClient client;
 
-    public HttpOrderPlacer(@Value("${server.port:8080}") int port) {
+    public HttpOrderPlacer(@Value("${server.port:8081}") int port) {
         this.client = RestClient.builder().baseUrl("http://localhost:" + port).build();
     }
 

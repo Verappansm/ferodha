@@ -8,7 +8,7 @@ import { click, pause, say, type } from './demo-kit';
  * finishes green is also a check that every page and its main buttons work.
  */
 const UI = process.env.UI_BASE_URL ?? 'http://localhost:4200';
-const ADMIN = process.env.ADMIN_BASE_URL ?? 'http://localhost:4300';
+const ADMIN = process.env.ADMIN_BASE_URL ?? 'http://localhost:4200/admin';
 const CUSTOMER = process.env.DEMO_USER ?? 'e2e.trader@example.com';
 const ADMIN_USER = process.env.DEMO_ADMIN ?? 'michael.brown@example.com';
 const PASSWORD = process.env.DEMO_PASSWORD ?? 'seed-password-change-me';

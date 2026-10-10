@@ -1,0 +1,1119 @@
+openapi: 3.1.0
+
+info:
+  title: Trade REST API - administration
+  version: 0.1.0
+  summary: Operations routes for the admin console, served by trade_api under /api/v1/admin.
+  description: |
+    Team 2 extension (LEAP-011, LEAP-021 to LEAP-023), not part of Neueda's contracts. It is kept
+    beside `trade-api.yaml`, in the same style, and the admin console's client is generated from it.
+
+    ## Who may call it
+
+    Every route requires an admin access token: a JWT issued by `POST /auth/admin/login`
+    (`admin-auth-api.yaml`) whose `roles` contain `ADMIN` and whose `aud` is `admin-console`.
+    Customer tokens are refused with `AUTH-403`, and admin tokens are refused on the customer
+    routes, because they carry no `accountId`. The admin console's route guard is a usability
+    control; this check is the security control.
+
+    ## Every decision is recorded
+
+    Each state change takes a `reason` and writes one row to the admin audit log (actor, action,
+    target, reason, time), readable through `GET /api/v1/admin/audit`.
+
+    ## Errors
+
+    The same envelope as `trade-api.yaml`, with two codes added for this surface:
+
+    | Code | HTTP | Meaning |
+    |---|---|---|
+    | `AUTH-401` | 401 | Missing, expired or invalid token |
+    | `AUTH-403` | 403 | A valid token that is not an admin token |
+    | `VAL-422` | 422 | A field is not acceptable |
+    | `ADM-404` | 404 | The request, account, instrument or order does not exist |
+    | `ADM-409` | 409 | The target is not in a state that allows this action (for example a request already decided, or an account already closed) |
+  contact:
+    name: Team 2
+  license:
+    name: Instructional use only
+
+servers:
+  - url: http://localhost:8081
+    description: Local development (Docker and the Windows profile).
+
+security:
+  - adminBearer: []
+
+tags:
+  - name: AdminOverview
+  - name: AdminAccountRequests
+  - name: AdminAccounts
+  - name: AdminInstruments
+  - name: AdminFees
+  - name: AdminOrders
+  - name: AdminSystem
+
+paths:
+  /api/v1/admin/summary:
+    get:
+      tags: [AdminOverview]
+      operationId: getSummary
+      summary: Headline counts for the console's overview
+      responses:
+        '200':
+          description: The counts, as of now.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/account-requests:
+    get:
+      tags: [AdminAccountRequests]
+      operationId: listAccountRequests
+      summary: Account-opening requests, oldest first
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AccountRequestStatus'
+      responses:
+        '200':
+          description: The requests in that state (all states when omitted).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/account-requests/{id}/approve:
+    post:
+      tags: [AdminAccountRequests]
+      operationId: approveAccountRequest
+      summary: Approve a pending request, opening the trading account
+      description: |
+        Opens exactly one `Accounts` row for the applicant, linked to the given bank account
+        (created in the simulated bank if it does not exist yet), and marks the request APPROVED
+        with the deciding admin and time. The applicant can sign in from then on.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveAccountRequest'
+      responses:
+        '200':
+          description: The request, now APPROVED, with the new account's id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/account-requests/{id}/reject:
+    post:
+      tags: [AdminAccountRequests]
+      operationId: rejectAccountRequest
+      summary: Reject a pending request with a reason the applicant will see
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonRequest'
+      responses:
+        '200':
+          description: The request, now REJECTED.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/accounts:
+    get:
+      tags: [AdminAccounts]
+      operationId: listAccounts
+      summary: Trading accounts, searchable by owner name, email or account reference
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page of accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/accounts/{id}/suspend:
+    post:
+      tags: [AdminAccounts]
+      operationId: suspendAccount
+      summary: Suspend an ACTIVE account; it can no longer place or cancel orders (ACC-403)
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/accounts/{id}/reactivate:
+    post:
+      tags: [AdminAccounts]
+      operationId: reactivateAccount
+      summary: Return a SUSPENDED account to ACTIVE
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/accounts/{id}/close:
+    post:
+      tags: [AdminAccounts]
+      operationId: closeAccount
+      summary: Close an account permanently; refused while it has working orders
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/Account'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/instruments:
+    get:
+      tags: [AdminInstruments]
+      operationId: listInstruments
+      summary: Every instrument, tradable or not
+      parameters:
+        - $ref: '#/components/parameters/Query'
+        - name: exchange
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/InstrumentType'
+        - name: tradable
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page of instruments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [AdminInstruments]
+      operationId: addInstrument
+      summary: Add a new tradable instrument
+      description: |
+        The ticker is the key, so adding one that exists is `ADM-409`. Prices come from the live
+        feed, which can only price a symbol the market-data provider knows: an unknown ticker is
+        listed but has no price, and cannot be traded, until it does.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInstrumentRequest'
+      responses:
+        '201':
+          description: The new instrument.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminInstrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/fees/summary:
+    get:
+      tags: [AdminFees]
+      operationId: getFeeSummary
+      summary: Commission taken, all time and this month
+      description: |
+        The sum of the commission on filled customer orders, in USD (INR converted at the fixed
+        90 INR = 1 USD the executor settles at), with the unconverted per-currency figures.
+      responses:
+        '200':
+          description: The fee totals.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/fees/by-user:
+    get:
+      tags: [AdminFees]
+      operationId: listFeesByUser
+      summary: Commission paid per customer account
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Query'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page, largest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeeUserPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/fees/by-instrument:
+    get:
+      tags: [AdminFees]
+      operationId: listFeesByInstrument
+      summary: Commission taken per instrument, in USD
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '200':
+          description: Every instrument that earned a fee, largest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeeInstrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/instruments/{id}/delist:
+    post:
+      tags: [AdminInstruments]
+      operationId: delistInstrument
+      summary: Stop new orders in an instrument (INS-404 at placement); holdings are untouched
+      parameters:
+        - $ref: '#/components/parameters/InstrumentId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/Instrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/instruments/{id}/list:
+    post:
+      tags: [AdminInstruments]
+      operationId: listInstrument
+      summary: Make a delisted instrument tradable again
+      parameters:
+        - $ref: '#/components/parameters/InstrumentId'
+      requestBody:
+        $ref: '#/components/requestBodies/Reason'
+      responses:
+        '200':
+          $ref: '#/components/responses/Instrument'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/InvalidInput'
+
+  /api/v1/admin/orders:
+    get:
+      tags: [AdminOrders]
+      operationId: listOrders
+      summary: Every order on the platform, newest first
+      parameters:
+        - name: accountId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: symbol
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/AdminOrderStatus'
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page of orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/health:
+    get:
+      tags: [AdminSystem]
+      operationId: getSystemHealth
+      summary: The health of every platform component, checked server-side
+      description: |
+        trade_api probes each component (its own database and Kafka connections, the auth service's
+        `/health`, the executor's `/actuator/health`) and reports the result, so the browser never
+        calls an internal service and no internal address reaches the bundle.
+      responses:
+        '200':
+          description: One entry per component.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/admin/audit:
+    get:
+      tags: [AdminSystem]
+      operationId: listAuditEntries
+      summary: The admin audit log, newest first
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+      responses:
+        '200':
+          description: One page of audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '401':
+          $ref: '#/components/responses/Unauthorised'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: An admin access token from `POST /auth/admin/login`.
+
+  parameters:
+    RequestId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AccountId:
+      name: id
+      in: path
+      required: true
+      description: The numeric account key, `ACCOUNTS.id`.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    InstrumentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FromDate:
+      name: from
+      in: query
+      required: false
+      description: First day to include (UTC date, inclusive).
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      required: false
+      description: Last day to include (UTC date, inclusive).
+      schema:
+        type: string
+        format: date
+    Query:
+      name: q
+      in: query
+      required: false
+      description: Case-insensitive text search.
+      schema:
+        type: string
+        maxLength: 100
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Zero-based page number.
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+
+  requestBodies:
+    Reason:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ReasonRequest'
+
+  responses:
+    Account:
+      description: The account after the change.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AdminAccount'
+    Instrument:
+      description: The instrument after the change.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/AdminInstrument'
+    Unauthorised:
+      description: Missing, expired or invalid token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: The token is valid but is not an admin token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The target does not exist.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: The target's state does not allow this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidInput:
+      description: A field is not acceptable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ReasonRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+          description: Why the action was taken. Recorded in the audit log.
+
+    ApproveAccountRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        bankAccountNumber:
+          type: string
+          minLength: 4
+          maxLength: 50
+          description: >-
+            Optional. The account is the one the simulated bank holds under the applicant's
+            verified email, never created or chosen here. If given, it must be that one.
+          example: BANK-100004
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: USD
+          description: >-
+            Optional. The account opens in the currency of the bank account it is linked to, so
+            money moves between them one for one. If given, it must be that currency.
+        note:
+          type: string
+          maxLength: 500
+          description: Optional note recorded in the audit log.
+
+    AccountRequestStatus:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+
+    AccountRequest:
+      type: object
+      additionalProperties: false
+      required: [requestId, userId, applicantName, applicantEmail, currency, status, requestedAt]
+      properties:
+        requestId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        applicantName:
+          type: string
+        applicantEmail:
+          type: string
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/AccountRequestStatus'
+        requestedAt:
+          type: string
+          format: date-time
+        reason:
+          type: [string, 'null']
+          description: The rejection reason, shown to the applicant.
+        decidedByName:
+          type: [string, 'null']
+        decidedAt:
+          type: [string, 'null']
+          format: date-time
+        accountId:
+          type: [integer, 'null']
+          format: int64
+          description: The account opened on approval.
+
+    AccountStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, CLOSED]
+
+    AdminAccount:
+      type: object
+      additionalProperties: false
+      required: [accountId, businessRef, ownerName, ownerEmail, currency, cashBalance, status, createdOn]
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        businessRef:
+          type: string
+          example: ACC-000001
+        ownerName:
+          type: string
+        ownerEmail:
+          type: string
+        currency:
+          type: string
+        cashBalance:
+          type: number
+          format: double
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        workingOrders:
+          type: integer
+          description: Orders at NEW or PARTIALLY_FILLED.
+        createdOn:
+          type: string
+          format: date-time
+
+    AccountPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminAccount'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    InstrumentType:
+      type: string
+      enum: [EQUITY, BOND, ETF, FOREX, CRYPTO]
+
+    AdminInstrument:
+      type: object
+      additionalProperties: false
+      required: [instrumentId, symbol, name, exchange, currency, type, tradable]
+      properties:
+        instrumentId:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        name:
+          type: string
+        exchange:
+          type: string
+        currency:
+          type: string
+        type:
+          $ref: '#/components/schemas/InstrumentType'
+        sector:
+          type: [string, 'null']
+        tradable:
+          type: boolean
+        changedByName:
+          type: [string, 'null']
+        changedAt:
+          type: [string, 'null']
+          format: date-time
+
+    InstrumentPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminInstrument'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    CreateInstrumentRequest:
+      type: object
+      additionalProperties: false
+      required: [ticker, name, exchange, currency, type, reason]
+      properties:
+        ticker:
+          type: string
+          pattern: '^[A-Z0-9][A-Z0-9.\-]{0,19}$'
+          example: NEWCO
+        name:
+          type: string
+          maxLength: 150
+        exchange:
+          type: string
+          maxLength: 50
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          example: USD
+        type:
+          $ref: '#/components/schemas/InstrumentType'
+        sector:
+          type: string
+          maxLength: 50
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 500
+
+    FeeByCurrency:
+      type: object
+      additionalProperties: false
+      required: [currency, orders, fees]
+      properties:
+        currency:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        fees:
+          type: number
+
+    FeeSummary:
+      type: object
+      additionalProperties: false
+      required: [currency, totalFees, feesThisMonth, feeOrders, byCurrency, partial]
+      properties:
+        currency:
+          type: string
+          description: The currency of the totals (USD).
+        totalFees:
+          type: number
+        feesThisMonth:
+          type: number
+        feeOrders:
+          type: integer
+          format: int64
+        byCurrency:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeByCurrency'
+        partial:
+          type: boolean
+          description: True when a currency could not be converted and is left out of the totals.
+
+    FeeUser:
+      type: object
+      additionalProperties: false
+      required: [userId, name, email, accountId, currency, orders, fees]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+        accountId:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        fees:
+          type: number
+          description: In the account's own currency.
+        feesUsd:
+          type: [number, 'null']
+          description: The same amount in USD; null when the currency cannot be converted.
+
+    FeeUserPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeeUser'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    FeeInstrument:
+      type: object
+      additionalProperties: false
+      required: [symbol, name, orders, feesUsd]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        orders:
+          type: integer
+          format: int64
+        feesUsd:
+          type: number
+
+    AdminOrderStatus:
+      type: string
+      enum: [NEW, PARTIALLY_FILLED, FILLED, REJECTED, CANCELLED]
+      description: Every status trade_api stores, including PARTIALLY_FILLED (contract-breach.md, B13).
+
+    AdminOrder:
+      type: object
+      additionalProperties: false
+      required: [orderId, accountId, ownerEmail, symbol, side, quantity, price, status, createdOn]
+      properties:
+        orderId:
+          type: string
+        accountId:
+          type: integer
+          format: int64
+        ownerEmail:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: integer
+        filledQuantity:
+          type: [integer, 'null']
+        price:
+          type: number
+          format: double
+        executedPrice:
+          type: [number, 'null']
+          format: double
+        status:
+          $ref: '#/components/schemas/AdminOrderStatus'
+        source:
+          type: [string, 'null']
+          description: PORTAL for customer orders, RANDOMIZER for market-sim liquidity.
+        createdOn:
+          type: string
+          format: date-time
+
+    OrderPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminOrder'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    AdminSummary:
+      type: object
+      additionalProperties: false
+      required: [pendingRequests, activeUsers, suspendedUsers, activeAccounts, ordersToday, ordersWorking, tradableInstruments]
+      properties:
+        pendingRequests:
+          type: integer
+        activeUsers:
+          type: integer
+        suspendedUsers:
+          type: integer
+        activeAccounts:
+          type: integer
+        ordersToday:
+          type: integer
+        ordersWorking:
+          type: integer
+        tradableInstruments:
+          type: integer
+
+    ComponentStatus:
+      type: string
+      enum: [UP, DEGRADED, DOWN]
+
+    ComponentHealth:
+      type: object
+      additionalProperties: false
+      required: [name, status]
+      properties:
+        name:
+          type: string
+          example: trade-executor
+        status:
+          $ref: '#/components/schemas/ComponentStatus'
+        detail:
+          type: [string, 'null']
+        latencyMs:
+          type: [integer, 'null']
+
+    SystemHealth:
+      type: object
+      additionalProperties: false
+      required: [checkedAt, components]
+      properties:
+        checkedAt:
+          type: string
+          format: date-time
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentHealth'
+
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, actorName, action, targetType, targetId, at]
+      properties:
+        id:
+          type: integer
+          format: int64
+        actorName:
+          type: string
+        action:
+          type: string
+          example: ACCOUNT_SUSPENDED
+        targetType:
+          type: string
+          enum: [ACCOUNT_REQUEST, ACCOUNT, USER, INSTRUMENT]
+        targetId:
+          type: string
+        reason:
+          type: [string, 'null']
+        at:
+          type: string
+          format: date-time
+
+    AuditPage:
+      type: object
+      additionalProperties: false
+      required: [items, page, size, totalItems]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        page:
+          type: integer
+        size:
+          type: integer
+        totalItems:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+          enum: [AUTH-401, AUTH-403, VAL-422, ADM-404, ADM-409]
+        message:
+          type: string
+          description: For a developer reading a log. Never branch on it.
+        reason:
+          type: string
+          description: |
+            Present only on an ADM-409 a business rule raised (an approval the applicant or
+            the bank side has to act on first). A sentence written for the operator, naming
+            nothing they cannot already see; the console shows it as given.

@@ -6,7 +6,7 @@ same port, same container, its own package, table and contract.
 
 | Piece | Where |
 |---|---|
-| Contract | `design/preferences-api.yaml` |
+| Contract | `contracts/preferences-api.yaml` |
 | Routes | `PreferencesController` - `GET`, `PATCH`, `DELETE /api/v1/accounts/{id}/preferences` |
 | Interface other modules use | `PreferencesService` |
 | Defaults | `PreferenceDefaults` |

@@ -90,7 +90,7 @@ export function provideAdminClients(urls: {
 
 /**
  * Every admin call the console makes, over the clients generated from
- * design/admin-trade-api.yaml and design/admin-auth-api.yaml. One plain method
+ * contracts/admin-trade-api.yaml and contracts/admin-auth-api.yaml. One plain method
  * per call; pages never touch the generated services directly.
  */
 @Injectable({ providedIn: 'root' })

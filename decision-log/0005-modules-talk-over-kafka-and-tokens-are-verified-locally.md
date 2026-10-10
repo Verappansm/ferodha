@@ -47,7 +47,7 @@ and idempotency checks as a customer's order (see 0001).
   limit, and the OWASP review lists it as an accepted risk (A04).
 - **Kafka is now a trust boundary.** The executor trusts the payload of an
   `orders` message, so anyone who can produce to that topic controls the
-  settlement inputs. That risk is open as O-2/O-5 in `OWASP-SECURITY-REVIEW.md`.
+  settlement inputs. That risk is open as O-2/O-5 in `contracts/docs/OWASP-SECURITY-REVIEW.md`.
 - Internal REST routes can't be protected by `JwtAuthFilter` (it only knows
   customer and admin tokens), so the team keeps internal calls in process. The
   leftover `/notifications/internal/*` routes are the exception and are slated

@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-// The request and response bodies of design/admin-trade-api.yaml, one record
+// The request and response bodies of contracts/admin-trade-api.yaml, one record
 // per schema, field names exactly as the contract spells them.
 public final class AdminDtos {
 
