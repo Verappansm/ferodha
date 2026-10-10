@@ -56,8 +56,9 @@ Administrators sign in to the console at http://localhost:4200/admin as
 
 ## Ports
 
-One set of host ports, the same under Docker and on the Windows profile, and
-the ones Neueda's contracts and `infra/README.md` use.
+One set of host ports, the same under Docker and on the Windows profile. They
+follow Neueda's `infra/README.md`, except the Trade REST API, which the
+deployment brief moves to 8081 (`story_docs/contract-breach.md`, B38).
 
 | Service | Port |
 |---|---|
@@ -72,6 +73,71 @@ the ones Neueda's contracts and `infra/README.md` use.
 
 Docker publishes these ports on the host, so stop a native Postgres (or any
 other process on one of them) before `docker compose up`.
+
+## Configuration
+
+Every service takes its configuration from environment variables at start-up.
+The files in the repository hold only defaults and placeholders; no secret is
+committed.
+
+### Where configuration is defined
+
+| Component | Runtime | Definition | Profiles and variants |
+|---|---|---|---|
+| Trade REST API | Spring Boot | `trade_api/src/main/resources/application.yml` | `application-windows.yml` |
+| Trade Executor | Spring Boot | `trade_executor/src/main/resources/application.yml` | `application-windows.yml`, `application-market-sim.yml` |
+| Auth service | NestJS | `auth_service/src/config/validation.schema.ts` (variables, defaults, validation); `config.service.ts` (typed access) | none |
+| Trading UI, admin console | Angular | `trading-ui/src/environments/environment.ts`, `trading-ui/projects/admin/src/environments/environment.ts`; `trading-ui/angular.json`; `trading-ui/proxy.conf.json` | none |
+| ETL layer | Python | `etl/src/etl/warehouse.py`, `etl/src/etl/config.py`, `etl/src/etl_pipeline/config.py` | none |
+
+Each runtime uses its native mechanism. The two Spring services declare every
+setting in `application.yml` as `${VARIABLE:default}`, so the same artefact runs
+locally, under Docker and on EC2 without a rebuild. The auth service validates
+its variables at start-up and refuses to start when a required one is missing.
+The Angular applications run in the browser and cannot read server-side
+configuration: they derive the API addresses from the host that served the
+page, and the build fixes the admin console's base path (`/admin/`).
+
+### Where values are supplied
+
+| Environment | Source |
+|---|---|
+| Docker Compose (local or EC2) | `.env` at the repository root (copied from `.env.example`), passed to each container by `docker-compose.yml` |
+| Windows profile | `windows/.env.windows` (copied from `windows/.env.windows.example`), loaded by `windows/start-windows.ps1` |
+| A single service run directly | The shell environment; otherwise the defaults in its definition |
+
+`.env` and `windows/.env.windows` are git-ignored.
+
+### Variables
+
+| Variable | Used by | Default | Notes |
+|---|---|---|---|
+| `POSTGRES_HOST`, `POSTGRES_PORT` | trade-api, trade-executor, auth-service, ETL | `localhost`, `5432` | `postgres:5432` inside Docker |
+| `POSTGRES_DB`, `POSTGRES_USER` | as above | `tradedb`, `trade` (Docker) | |
+| `POSTGRES_PASSWORD` | as above | `trade` (Docker only) | Secret |
+| `KAFKA_BOOTSTRAP_SERVERS` | trade-api, trade-executor | `localhost:9092` | `kafka:29092` inside Docker; no default under the `windows` profile |
+| `JWT_SECRET` | trade-api, auth-service | development value (Docker only) | Secret; at least 32 characters; identical in both services |
+| `CORS_ALLOWED_ORIGINS` | trade-api, auth-service | `http://localhost:4200` | The browser origin of the UI; on EC2, `http://<public-host>:4200` |
+| `FAUXNANCE_API_URL`, `FAUXNANCE_API_KEY` | trade-executor, ETL | none | Secret key; without it there are no live prices and orders are rejected |
+| `SPRING_PROFILES_ACTIVE` | trade-executor | empty | `market-sim` for order-book matching and the market maker |
+| `SERVER_PORT` | trade-api, trade-executor | `8081`, `8082` | |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | auth-service, trade-api | none | Secret password; with `SMTP_HOST` unset, no mail is sent and sign-up codes are written to the auth-service log (development only). Not passed by `docker-compose.yml` |
+| `DUCKDB_PATH` | ETL | `database/duckdb/analytics.duckdb` | |
+
+### Deployment on EC2
+
+1. Copy `.env.example` to `.env` and set `JWT_SECRET`, `POSTGRES_PASSWORD`,
+   `FAUXNANCE_API_URL`, `FAUXNANCE_API_KEY` and
+   `CORS_ALLOWED_ORIGINS=http://<public-host>:4200`.
+2. `docker compose up -d --build` starts PostgreSQL, Kafka (with its topics,
+   created by `kafka-init`), trade-api, trade-executor and auth-service.
+3. In `trading-ui`, `npm ci`, then `npm run start:admin` and
+   `npm run start:public`. The trading UI listens on all interfaces on 4200
+   and serves the admin console at `/admin`; the console's own server listens
+   on 127.0.0.1:4300 only.
+4. Open inbound 4200 (UI), 8081 (Trade REST API) and 3000 (auth service) in
+   the instance's security group: the browser calls both APIs directly. Keep
+   5432, 9092, 8082 and 8091 closed.
 
 ## Development setup
 
