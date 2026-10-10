@@ -121,14 +121,16 @@ page, and the build fixes the admin console's base path (`/admin/`).
 | `FAUXNANCE_API_URL`, `FAUXNANCE_API_KEY` | trade-executor, ETL | none | Secret key; without it there are no live prices and orders are rejected |
 | `SPRING_PROFILES_ACTIVE` | trade-executor | empty | `market-sim` for order-book matching and the market maker |
 | `SERVER_PORT` | trade-api, trade-executor | `8081`, `8082` | |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | auth-service, trade-api | none | Secret password; with `SMTP_HOST` unset, no mail is sent and sign-up codes are written to the auth-service log (development only). Not passed by `docker-compose.yml` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | auth-service, trade-api | none | Secret password; with `SMTP_HOST` unset, no mail is sent and sign-up codes are written to the auth-service log (development only). |
 | `DUCKDB_PATH` | ETL | `database/duckdb/analytics.duckdb` | |
 
 ### Deployment on EC2
 
 1. Copy `.env.example` to `.env` and set `JWT_SECRET`, `POSTGRES_PASSWORD`,
    `FAUXNANCE_API_URL`, `FAUXNANCE_API_KEY` and
-   `CORS_ALLOWED_ORIGINS=http://<public-host>:4200`.
+   `CORS_ALLOWED_ORIGINS=http://<public-host>:4200`. Set the `SMTP_*`
+   variables too for real email (for Gmail: `smtp.gmail.com`, port 587 and an
+   App Password); left empty, sign-up codes are written to the auth-service log.
 2. `docker compose up -d --build` starts PostgreSQL, Kafka (with its topics,
    created by `kafka-init`), trade-api, trade-executor and auth-service.
 3. In `trading-ui`, `npm ci`, then `npm run start:admin` and
