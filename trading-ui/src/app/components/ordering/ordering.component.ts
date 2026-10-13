@@ -28,6 +28,7 @@ import {
   OrderReviewResponse,
 } from '../../api/trade-api';
 import { LIMIT_BUFFER, suggestedLimitPrice } from '../../core/format/limit-price';
+import { newIdempotencyKey } from '../../core/http/idempotency-key';
 import { DatePipe } from '@angular/common';
 import { MoneyPipe } from '../../core/format/money.pipe';
 import { errorMessage } from '../../core/errors/error-message';
@@ -465,7 +466,7 @@ export class OrderingComponent {
     }
 
     const isRetry = this.pendingKey !== null;
-    const idempotencyKey = (this.pendingKey ??= crypto.randomUUID());
+    const idempotencyKey = (this.pendingKey ??= newIdempotencyKey());
     const { symbol, side, quantity, price } = this.form.getRawValue();
 
     this.isSubmitting.set(true);
