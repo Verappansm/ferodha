@@ -12,6 +12,7 @@ import {
 import { MoneyPipe } from '../../core/format/money.pipe';
 import { Session } from '../../core/session/session';
 import { errorMessage } from '../../core/errors/error-message';
+import { newIdempotencyKey } from '../../core/http/idempotency-key';
 import bcrypt from 'bcryptjs';
 
 /**
@@ -140,7 +141,7 @@ export class BankComponent implements OnInit {
       this.error.set('The amount can have at most 2 decimal places.');
       return;
     }
-    const idempotencyKey = (this.pendingKey ??= crypto.randomUUID());
+    const idempotencyKey = (this.pendingKey ??= newIdempotencyKey());
     this.isSubmitting.set(true);
     try {
       const result = await firstValueFrom(
