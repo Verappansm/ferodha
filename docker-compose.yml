@@ -112,7 +112,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: ${DB_HOST:-postgres}
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
@@ -159,7 +159,9 @@ services:
       NODE_ENV: development
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-signing-secret-please-change-later}
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: ${DB_HOST:-postgres}
+      # RDS needs SSL; node-pg turns it on only from PGSSLMODE (no-verify on RDS).
+      PGSSLMODE: ${PGSSLMODE:-}
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
@@ -196,7 +198,7 @@ services:
       - "8082:8082"
     environment:
       SERVER_PORT: 8082
-      POSTGRES_HOST: postgres
+      POSTGRES_HOST: ${DB_HOST:-postgres}
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-tradedb}
       POSTGRES_USER: ${POSTGRES_USER:-trade}
