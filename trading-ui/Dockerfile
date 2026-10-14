@@ -2,7 +2,7 @@
 # served by nginx, the trading UI at / and the console at /admin/ (its baseHref).
 # One origin for both, so the APIs' CORS allow list needs only this address.
 
-# Build stage: `npm run build` builds both apps into dist/.
+# Build stage: both apps into dist/ (what `npm run build` does, one at a time).
 FROM node:24-alpine AS build
 WORKDIR /app
 
@@ -10,7 +10,17 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
-RUN npm run build
+RUN npx ng build admin
+# `ng build trading-ui` writes its output and prints "Output location", then
+# never exits: an esbuild service process it started stays open, so a plain
+# RUN waits forever. Run it in the background and finish the step once it has
+# succeeded, reported an error or exited; the step's end discards the leftover
+# process.
+RUN (npx ng build trading-ui > /tmp/build.log 2>&1; echo "ng exited with $?" >> /tmp/build.log) & \
+    until grep -qE "Output location|\[ERROR\]|ng exited with" /tmp/build.log 2>/dev/null; do sleep 1; done; \
+    sleep 1; \
+    cat /tmp/build.log; \
+    grep -q "Output location" /tmp/build.log && test -f dist/trading-ui/browser/index.html
 
 # Runtime stage: static files only, no Node.
 FROM nginx:1.27-alpine
