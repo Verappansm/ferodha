@@ -1,0 +1,34 @@
+# EKS cluster for Ferodha. Create it from the repository root:
+#   eksctl create cluster -f k8s/cluster.example.yaml
+#
+# The nodes go into the VPC that already holds the RDS instance, so the pods reach
+# RDS directly (a cluster in its own new VPC would need VPC peering first). Fill in
+# the two subnet IDs: public subnets of the RDS instance's VPC, in two different
+# availability zones (k8s/README.md, step 2, lists them).
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: ferodha
+  region: ap-south-1
+vpc:
+  subnets:
+    public:
+      ap-south-1a: { id: <SUBNET_ID_A> }
+      ap-south-1b: { id: <SUBNET_ID_B> }
+managedNodeGroups:
+  - name: workers
+    instanceType: t3.medium        # Kafka + two JVMs + Node + nginx fit on two of these
+    minSize: 2
+    desiredCapacity: 2
+    maxSize: 3
+    volumeSize: 30
+    privateNetworking: false       # the default VPC has public subnets only (no NAT)
+iam:
+  withOIDC: true
+addons:
+  - name: vpc-cni
+  - name: kube-proxy
+  - name: coredns
+  - name: aws-ebs-csi-driver       # Kafka's disk (base/storageclass.yaml)
+    wellKnownPolicies:
+      ebsCSIController: true

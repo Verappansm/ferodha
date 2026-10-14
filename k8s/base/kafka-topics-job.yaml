@@ -1,0 +1,42 @@
+# Creates the six topics, then finishes: the same topics, partitions and retention as
+# kafka-init in docker-compose.yml. --if-not-exists makes it safe to run again, but a
+# finished Job can't be changed: to re-run it, first
+#   kubectl -n ferodha delete job kafka-topics
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics
+spec:
+  backoffLimit: 10
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels: { app: kafka-topics }
+    spec:
+      enableServiceLinks: false
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topics
+          image: apache/kafka:3.8.1
+          command:
+            - bash
+            - -c
+            - |
+              set -eu
+              BS=kafka:29092
+              export PATH=/opt/kafka/bin:$PATH
+              until kafka-topics.sh --bootstrap-server $BS --list >/dev/null 2>&1; do echo "waiting for Kafka"; sleep 5; done
+              topic() {
+                kafka-topics.sh --bootstrap-server $BS --create --if-not-exists --topic "$1" \
+                  --partitions "$2" --replication-factor 1 ${3:+--config retention.ms=$3}
+              }
+              topic orders 3 604800000
+              topic trade-events 3 2592000000
+              topic market-data 6 86400000
+              topic orders.DLT 1
+              topic trade-events.DLT 1
+              topic market-data.DLT 1
+              kafka-topics.sh --bootstrap-server $BS --list
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }

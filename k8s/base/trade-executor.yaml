@@ -1,0 +1,67 @@
+# Trade executor (Spring Boot) on 8082: settles orders, and also runs the price feed
+# and the market maker. EXACTLY ONE copy, never two even during a rollout (a second
+# would publish duplicate ticks and counter-orders). No browser calls it.
+# It writes to the settlement columns trade-api's Liquibase adds, so it waits for trade-api.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trade-executor
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app: trade-executor }
+  template:
+    metadata:
+      labels: { app: trade-executor }
+    spec:
+      enableServiceLinks: false
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001 }
+      initContainers:
+        - name: wait-for-trade-api
+          image: busybox:1.36
+          command: ["sh", "-c", "until wget -q -O /dev/null http://trade-api:8081/actuator/health; do echo waiting for trade-api; sleep 5; done"]  # gitleaks:allow (a URL, not a key)
+      containers:
+        - name: trade-executor
+          image: trade-executor
+          ports:
+            - { name: http, containerPort: 8082 }
+          envFrom:
+            - configMapRef: { name: ferodha-config }
+            - secretRef: { name: ferodha-secrets }
+          env:
+            - { name: SERVER_PORT, value: "8082" }
+            - { name: EXECUTOR_MARKET_DATA_POLLER_ENABLED, value: "false" }
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError" }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          startupProbe:
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 250m, memory: 640Mi }
+            limits: { memory: 1280Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trade-executor
+spec:
+  type: ClusterIP
+  selector: { app: trade-executor }
+  ports:
+    - { name: http, port: 8082, targetPort: http }

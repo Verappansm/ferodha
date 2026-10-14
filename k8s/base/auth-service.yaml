@@ -1,0 +1,56 @@
+# Auth service (NestJS) on 3000. It links users to Accounts.id, which trade-api's
+# Liquibase adds, so it starts only once trade-api is healthy (as under compose).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: auth-service }
+  template:
+    metadata:
+      labels: { app: auth-service }
+    spec:
+      enableServiceLinks: false
+      # The image's user is "node" (uid 1000); Kubernetes needs the number to check non-root.
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000 }
+      initContainers:
+        - name: wait-for-trade-api
+          image: busybox:1.36
+          command: ["sh", "-c", "until wget -q -O /dev/null http://trade-api:8081/actuator/health; do echo waiting for trade-api; sleep 5; done"]  # gitleaks:allow (a URL, not a key)
+      containers:
+        - name: auth-service
+          image: auth-service
+          ports:
+            - { name: http, containerPort: 3000 }
+          envFrom:
+            - configMapRef: { name: ferodha-config }
+            - secretRef: { name: ferodha-secrets }
+          env:
+            - { name: PORT, value: "3000" }
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+spec:
+  type: ClusterIP
+  selector: { app: auth-service }
+  ports:
+    - { name: http, port: 3000, targetPort: http }

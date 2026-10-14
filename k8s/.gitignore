@@ -1,0 +1,2 @@
+# Real secrets are never committed: copy base/secrets.env.example to base/secrets.env.
+secrets.env
