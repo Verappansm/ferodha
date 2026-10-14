@@ -240,6 +240,46 @@ services:
         condition: service_completed_successfully
     networks:
       - trade-net
+      
+  trading-ui:
+    container_name: trading-ui
+    build:
+      context: ./trading-ui
+      dockerfile: Dockerfile
+      args:
+        APP: public
+    ports:
+      - "4200:4200"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+    healthcheck:
+      test: ["CMD","wget","-q","--spider", "http://localhost:4200/"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 10
+    networks:
+      - trade-net
+  
+  trading-admin:
+    container_name: trading-admin
+    build:
+      context: ./trading-ui
+      dockerfile: Dockerfile
+      args:
+        APP: admin
+    ports:
+      - "4300:4300"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+    healthcheck:
+      test: ["CMD","wget","-q","--spider", "http://localhost:4300/"]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      retries: 10
+    networks:
+      - trade-net
 
 networks:
   trade-net:

@@ -14,7 +14,7 @@
     "e2e:ui": "playwright test --ui",
     "demo": "playwright test -c playwright.demo.config.ts --project=present",
     "demo:check": "playwright test -c playwright.demo.config.ts --project=check",
-    "start:admin": "ng serve admin",
+    "start:admin": "ng serve admin --host 0.0.0.0 --allowed-hosts",
     "start:public": "ng serve trading-ui --host 0.0.0.0 --allowed-hosts"
   },
   "private": true,
