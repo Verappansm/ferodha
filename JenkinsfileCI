@@ -1,0 +1,106 @@
+// CI: build the four images and push them to ECR with the tag 1.<build number>.
+// Adapted from the course kit (Cloud-Deployment-Setup/jenkins/JenkinsfileCI) to our
+// folders. The trading UI needs no build-time URLs: it finds the APIs on the page's
+// own hostname (k8s/base/gateway.yaml), so no BUILD_ENV is passed.
+// Copy the printed IMAGE_TAG into JenkinsfileCD.
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  triggers {
+    githubPush()
+    pollSCM('H */2 * * *')
+  }
+
+  parameters {
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
+  }
+
+  environment {
+    AWS_REGION = 'ap-south-1'
+    AUTH_REPO = 'etp-auth-service'
+    ORDER_REPO = 'etp-order-service'
+    EXECUTOR_REPO = 'etp-executor-service'
+    FRONTEND_REPO = 'etp-frontend'
+    AUTH_LOCAL_IMAGE = 'auth-service'
+    ORDER_LOCAL_IMAGE = 'trade-api'
+    EXECUTOR_LOCAL_IMAGE = 'trade-executor'
+    FRONTEND_LOCAL_IMAGE = 'trading-ui'
+  }
+
+  stages {
+    stage('Checkout SCM') {
+      steps {
+        checkout scm
+        script {
+          env.AWS_REGION = params.AWS_REGION?.trim() ?: 'ap-south-1'
+          env.RELEASE_TAG = "1.${env.BUILD_NUMBER}"
+        }
+      }
+    }
+
+    stage('Validate build agent') {
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          command -v aws >/dev/null
+          command -v docker >/dev/null
+          test -f auth_service/Dockerfile
+          test -f trade_api/Dockerfile
+          test -f trade_executor/Dockerfile
+          test -f trading-ui/Dockerfile
+        '''
+      }
+    }
+
+    stage('Build and push ECR') {
+      steps {
+        script {
+          env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+          env.REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+        }
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+
+            for repo in "$AUTH_REPO" "$ORDER_REPO" "$EXECUTOR_REPO" "$FRONTEND_REPO"; do
+              aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$repo" >/dev/null 2>&1 || \
+              aws ecr create-repository --region "$AWS_REGION" --repository-name "$repo" \
+                --image-scanning-configuration scanOnPush=true \
+                --encryption-configuration encryptionType=AES256 >/dev/null
+            done
+
+            docker build -t "$AUTH_LOCAL_IMAGE:$RELEASE_TAG" ./auth_service
+            docker build -t "$ORDER_LOCAL_IMAGE:$RELEASE_TAG" ./trade_api
+            docker build -t "$EXECUTOR_LOCAL_IMAGE:$RELEASE_TAG" ./trade_executor
+            docker build -t "$FRONTEND_LOCAL_IMAGE:$RELEASE_TAG" ./trading-ui
+
+            declare -A IMAGE_MAP=(
+              ["$AUTH_REPO"]="$AUTH_LOCAL_IMAGE"
+              ["$ORDER_REPO"]="$ORDER_LOCAL_IMAGE"
+              ["$EXECUTOR_REPO"]="$EXECUTOR_LOCAL_IMAGE"
+              ["$FRONTEND_REPO"]="$FRONTEND_LOCAL_IMAGE"
+            )
+            for repo in "${!IMAGE_MAP[@]}"; do
+              docker tag "${IMAGE_MAP[$repo]}:$RELEASE_TAG" "$REGISTRY/$repo:$RELEASE_TAG"
+              docker push "$REGISTRY/$repo:$RELEASE_TAG"
+            done
+            echo "CI image tag: $RELEASE_TAG"
+            echo "IMAGE_TAG=$RELEASE_TAG"
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker logout "${REGISTRY:-}" || true'
+    }
+  }
+}
