@@ -192,7 +192,8 @@ pipeline {
           gateway_host() {
             kubectl -n "$K8S_NAMESPACE" get svc gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
           }
-          CORS="$CORS_ALLOWED_ORIGINS"
+          # Jenkins does not pass an empty variable to the shell at all, hence the :- default.
+          CORS="${CORS_ALLOWED_ORIGINS:-}"
           if [ -z "$CORS" ]; then
             LB=$(gateway_host)
             if [ -n "$LB" ]; then CORS="http://$LB:4200"; fi
