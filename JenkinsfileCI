@@ -1,3 +1,8 @@
+// CI: build the four images and push them to ECR with the tag 1.<build number>.
+// Adapted from the course kit (Cloud-Deployment-Setup/jenkins/JenkinsfileCI) to our
+// folders. The trading UI needs no build-time URLs: it finds the APIs on the page's
+// own hostname (k8s/base/gateway.yaml), so no BUILD_ENV is passed.
+// Copy the printed IMAGE_TAG into JenkinsfileCD.
 pipeline {
   agent any
 
@@ -15,7 +20,6 @@ pipeline {
 
   parameters {
     string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
-    string(name: 'K8S_OVERLAY', defaultValue: 'k8s/overlays/four-lb', description: 'Overlay used for frontend build URLs')
   }
 
   environment {
@@ -25,9 +29,9 @@ pipeline {
     EXECUTOR_REPO = 'etp-executor-service'
     FRONTEND_REPO = 'etp-frontend'
     AUTH_LOCAL_IMAGE = 'auth-service'
-    ORDER_LOCAL_IMAGE = 'order-service'
-    EXECUTOR_LOCAL_IMAGE = 'executor-service'
-    FRONTEND_LOCAL_IMAGE = 'frontend'
+    ORDER_LOCAL_IMAGE = 'trade-api'
+    EXECUTOR_LOCAL_IMAGE = 'trade-executor'
+    FRONTEND_LOCAL_IMAGE = 'trading-ui'
   }
 
   stages {
@@ -36,7 +40,6 @@ pipeline {
         checkout scm
         script {
           env.AWS_REGION = params.AWS_REGION?.trim() ?: 'ap-south-1'
-          env.K8S_OVERLAY = params.K8S_OVERLAY?.trim() ?: 'k8s/overlays/four-lb'
           env.RELEASE_TAG = "1.${env.BUILD_NUMBER}"
         }
       }
@@ -48,10 +51,10 @@ pipeline {
           set -euo pipefail
           command -v aws >/dev/null
           command -v docker >/dev/null
-          test -f services/auth_service/Dockerfile
-          test -f services/trade-api/Dockerfile
-          test -f services/executor/Dockerfile
-          test -f frontend/Dockerfile
+          test -f auth_service/Dockerfile
+          test -f trade_api/Dockerfile
+          test -f trade_executor/Dockerfile
+          test -f trading-ui/Dockerfile
         '''
       }
     }
@@ -60,7 +63,7 @@ pipeline {
       steps {
         script {
           env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
-          env.REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${params.AWS_REGION}.amazonaws.com"
+          env.REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
         }
         sh '''#!/usr/bin/env bash
             set -euo pipefail
@@ -73,15 +76,10 @@ pipeline {
                 --encryption-configuration encryptionType=AES256 >/dev/null
             done
 
-            AUTH_URL=$(awk -F= '$1 == "AUTH_SERVICE_URL" {print $2}' "${K8S_OVERLAY}/urls.env")
-            ORDER_URL=$(awk -F= '$1 == "ORDER_SERVICE_URL" {print $2}' "${K8S_OVERLAY}/urls.env")
-            FRONTEND_URL=$(awk -F= '$1 == "FRONTEND_URL" {print $2}' "${K8S_OVERLAY}/urls.env")
-            BUILD_ENV="AUTH_SERVICE_URL=$AUTH_URL AUTH_SERVICE_PORT=3000 ORDER_SERVICE_URL=$ORDER_URL ORDER_SERVICE_PORT=8081 FRONTEND_URL=$FRONTEND_URL FRONTEND_PORT=80"
-
-            docker build -t "$AUTH_LOCAL_IMAGE:$RELEASE_TAG" ./services/auth_service
-            docker build -t "$ORDER_LOCAL_IMAGE:$RELEASE_TAG" ./services/trade-api
-            docker build -t "$EXECUTOR_LOCAL_IMAGE:$RELEASE_TAG" ./services/executor
-            docker build --build-arg "BUILD_ENV=$BUILD_ENV" -t "$FRONTEND_LOCAL_IMAGE:$RELEASE_TAG" ./frontend
+            docker build -t "$AUTH_LOCAL_IMAGE:$RELEASE_TAG" ./auth_service
+            docker build -t "$ORDER_LOCAL_IMAGE:$RELEASE_TAG" ./trade_api
+            docker build -t "$EXECUTOR_LOCAL_IMAGE:$RELEASE_TAG" ./trade_executor
+            docker build -t "$FRONTEND_LOCAL_IMAGE:$RELEASE_TAG" ./trading-ui
 
             declare -A IMAGE_MAP=(
               ["$AUTH_REPO"]="$AUTH_LOCAL_IMAGE"
