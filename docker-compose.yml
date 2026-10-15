@@ -241,6 +241,26 @@ services:
     networks:
       - trade-net
 
+  # Trading UI and admin console, built for production and served by nginx:
+  # the UI at http://<host>:4200 and the console at http://<host>:4200/admin.
+  # The browser calls trade-api (8081) and auth-service (3000) directly, so
+  # CORS_ALLOWED_ORIGINS must be this address.
+  trading-ui:
+    container_name: trading-ui
+    build:
+      context: ./trading-ui
+      dockerfile: Dockerfile
+    ports:
+      - "4200:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    networks:
+      - trade-net
+
 networks:
   trade-net:
     name: trade-net

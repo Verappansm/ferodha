@@ -13,7 +13,9 @@ repos:
         exclude: ^trading-ui/(src|projects/admin/src)/app/api/generated/
       - id: check-merge-conflict
       - id: check-added-large-files
+      # Kubernetes manifests (k8s/) hold several documents separated by ---.
       - id: check-yaml
+        args: [--allow-multiple-documents]
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.1

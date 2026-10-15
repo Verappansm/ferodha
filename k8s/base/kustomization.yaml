@@ -1,0 +1,36 @@
+# Everything Ferodha needs on Kubernetes. Apply from the repository root:
+#   kubectl apply -k k8s/base
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ferodha
+resources:
+  - namespace.yaml
+  - storageclass.yaml
+  - kafka.yaml
+  - kafka-topics-job.yaml
+  - trade-api.yaml
+  - auth-service.yaml
+  - trade-executor.yaml
+  - trading-ui.yaml
+  - gateway.yaml
+configMapGenerator:
+  - name: ferodha-config
+    envs: [config.env]             # non-secret settings
+secretGenerator:
+  - name: ferodha-secrets
+    envs: [secrets.env]            # your copy of secrets.env.example (git-ignored)
+# The images pushed to ECR (ECR.md). Replace <AWS_ACCOUNT_ID> (README step 4 does it
+# with one command). A new image tag is a new rollout: change newTag, apply again.
+images:
+  - name: trade-api
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
+    newTag: latest
+  - name: auth-service
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
+    newTag: latest
+  - name: trade-executor
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
+    newTag: latest
+  - name: trading-ui
+    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
+    newTag: latest

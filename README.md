@@ -68,8 +68,8 @@ deployment brief moves to 8081 (`story_docs/contract-breach.md`, B38).
 | Trade REST API | 8081 |
 | Trade Executor | 8082 |
 | Auth service | 3000 |
-| Trading UI (`ng serve`) | 4200 |
-| Admin console (`ng serve admin`) | 4200, under `/admin` (its dev server: 127.0.0.1:4300, not published) |
+| Trading UI | 4200 (Docker: nginx; locally: `ng serve`) |
+| Admin console | 4200, under `/admin` (locally its dev server is 127.0.0.1:4300, not published) |
 
 Docker publishes these ports on the host, so stop a native Postgres (or any
 other process on one of them) before `docker compose up`.
@@ -132,12 +132,12 @@ page, and the build fixes the admin console's base path (`/admin/`).
    variables too for real email (for Gmail: `smtp.gmail.com`, port 587 and an
    App Password); left empty, sign-up codes are written to the auth-service log.
 2. `docker compose up -d --build` starts PostgreSQL, Kafka (with its topics,
-   created by `kafka-init`), trade-api, trade-executor and auth-service.
-3. In `trading-ui`, `npm ci`, then `npm run start:admin` and
-   `npm run start:public`. The trading UI listens on all interfaces on 4200
-   and serves the admin console at `/admin`; the console's own server listens
-   on 127.0.0.1:4300 only.
-4. Open inbound 4200 (UI), 8081 (Trade REST API) and 3000 (auth service) in
+   created by `kafka-init`), trade-api, trade-executor, auth-service and
+   trading-ui. trading-ui is a production build of the trading UI and the
+   admin console served by nginx: `http://<public-host>:4200` and
+   `http://<public-host>:4200/admin`. To use RDS instead of the bundled
+   PostgreSQL, set `DB_HOST` to its endpoint and `PGSSLMODE=no-verify`.
+3. Open inbound 4200 (UI), 8081 (Trade REST API) and 3000 (auth service) in
    the instance's security group: the browser calls both APIs directly. Keep
    5432, 9092, 8082 and 8091 closed.
 

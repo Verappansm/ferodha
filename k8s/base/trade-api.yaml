@@ -1,0 +1,62 @@
+# Trade REST API (Spring Boot) on 8081. Runs the Liquibase changesets on RDS when it
+# starts, so auth-service and trade-executor wait for it to be healthy.
+# One replica: its unpublished-order sweeper and notification jobs run in every copy.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trade-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trade-api }
+  template:
+    metadata:
+      labels: { app: trade-api }
+    spec:
+      enableServiceLinks: false
+      # The image's user is the named user "app"; Kubernetes needs a number to check non-root.
+      securityContext: { runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, fsGroup: 10001 }
+      containers:
+        - name: trade-api
+          image: trade-api
+          ports:
+            - { name: http, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: ferodha-config }
+            - secretRef: { name: ferodha-secrets }
+          env:
+            - { name: SERVER_PORT, value: "8081" }
+            # Read by the JVM itself: the heap follows the container's memory limit.
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError" }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+          startupProbe:                          # the first start runs every changeset
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests: { cpu: 250m, memory: 640Mi }
+            limits: { memory: 1280Mi }
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trade-api
+spec:
+  type: ClusterIP
+  selector: { app: trade-api }
+  ports:
+    - { name: http, port: 8081, targetPort: http }

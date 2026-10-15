@@ -1,0 +1,39 @@
+# Trading UI and admin console: the nginx image from trading-ui/Dockerfile, the UI at /
+# and the console at /admin/. Reached by browsers through the gateway (gateway.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: trading-ui }
+  template:
+    metadata:
+      labels: { app: trading-ui }
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: trading-ui
+          image: trading-ui
+          ports:
+            - { name: http, containerPort: 80 }
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-ui
+spec:
+  type: ClusterIP
+  selector: { app: trading-ui }
+  ports:
+    - { name: http, port: 80, targetPort: http }
