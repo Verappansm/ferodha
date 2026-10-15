@@ -173,9 +173,10 @@ pipeline {
           set -euo pipefail
           # Point this workspace's kustomization.yaml at our account and the chosen tag,
           # so one apply rolls out the right images (trade-executor never runs twice).
+          # The tag is quoted: kustomize rejects an unquoted 1.7 because YAML reads it as a number.
           sed -i -e "s#<AWS_ACCOUNT_ID>#$AWS_ACCOUNT_ID#g" \
                  -e "s#dkr.ecr.ap-south-1.amazonaws.com#dkr.ecr.$AWS_REGION.amazonaws.com#g" \
-                 -e "s#newTag: .*#newTag: $IMAGE_TAG#" k8s/base/kustomization.yaml
+                 -e "s#newTag: .*#newTag: '$IMAGE_TAG'#" k8s/base/kustomization.yaml
           grep -E 'newName|newTag' k8s/base/kustomization.yaml
 
           # The namespace first, so the server-side dry run can check namespaced objects.
