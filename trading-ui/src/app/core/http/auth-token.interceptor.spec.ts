@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { Session } from '../session/session';
 import { authTokenInterceptor } from './auth-token.interceptor';
-import { TOKEN_ALLOW_LIST, tokenAllowList } from './token-allow-list';
+import { mayCarryToken, TOKEN_ALLOW_LIST, tokenAllowList } from './token-allow-list';
 
 const TRADE = 'http://localhost:8081';
 const AUTH = 'http://localhost:3000';
@@ -189,6 +189,23 @@ describe('authTokenInterceptor', () => {
       http.post(`${AUTH}/auth/login`, {}).subscribe();
       backend.expectOne(`${AUTH}/auth/login`).flush({});
       expect(refresh).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('behind one address (CloudFront, or the gateway on port 80)', () => {
+    const SITE = 'https://d1example.cloudfront.net';
+    const list = tokenAllowList({ authApiUrl: `${SITE}/auth-api`, tradeApiUrl: SITE });
+
+    it('the protected routes under the auth prefix and the trade API carry the token', () => {
+      expect(mayCarryToken(`${SITE}/auth-api/auth/me`, list)).toBe(true);
+      expect(mayCarryToken(`${SITE}/auth-api/profile`, list)).toBe(true);
+      expect(mayCarryToken(`${SITE}/api/v1/orders`, list)).toBe(true);
+    });
+
+    it('the UI pages and the open auth routes on the same address do not', () => {
+      expect(mayCarryToken(`${SITE}/profile`, list)).toBe(false);
+      expect(mayCarryToken(`${SITE}/auth-api/auth/login`, list)).toBe(false);
+      expect(mayCarryToken(`${SITE}/main.js`, list)).toBe(false);
     });
   });
 });

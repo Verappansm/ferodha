@@ -15,10 +15,17 @@ export function adminTokenAllowList(urls: {
   tradeApiUrl: string;
 }): TokenDestination[] {
   return [
-    { origin: new URL(urls.tradeApiUrl).origin, paths: ['/api/v1/admin/'] },
+    destination(urls.tradeApiUrl, ['/api/v1/admin/']),
     // /admin/... only: /auth/admin/login takes no header.
-    { origin: new URL(urls.authApiUrl).origin, paths: ['/admin/'] },
+    destination(urls.authApiUrl, ['/admin/']),
   ];
+}
+
+/** The API's paths under its base URL, which may carry a path (`/auth-api`). */
+function destination(apiUrl: string, paths: string[]): TokenDestination {
+  const base = new URL(apiUrl);
+  const prefix = base.pathname.replace(/\/$/, '');
+  return { origin: base.origin, paths: paths.map((path) => prefix + path) };
 }
 
 export const ADMIN_TOKEN_ALLOW_LIST = new InjectionToken<TokenDestination[]>(

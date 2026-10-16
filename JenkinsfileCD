@@ -22,10 +22,11 @@ pipeline {
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'ferodha', description: 'Existing EKS cluster (k8s/cluster.example.yaml)')
     string(name: 'RDS_HOST', defaultValue: '', description: 'Required: RDS endpoint (POSTGRES_HOST)')
     string(name: 'RDS_PORT', defaultValue: '5432', description: 'RDS PostgreSQL port (POSTGRES_PORT)')
-    string(name: 'RDS_DATABASE', defaultValue: '', description: 'Required: database name (POSTGRES_DB)')
-    string(name: 'RDS_USER', defaultValue: '', description: 'Required: database user (POSTGRES_USER)')
-    string(name: 'CORS_ALLOWED_ORIGINS', defaultValue: '', description: 'Required: http://<gateway load balancer DNS>:4200 (kubectl -n ferodha get svc gateway)')
-    string(name: 'FAUXNANCE_API_URL', defaultValue: '', description: 'Required: market data API base URL')
+    string(name: 'RDS_DATABASE', defaultValue: 'postgres', description: 'Database name (POSTGRES_DB)')
+    string(name: 'RDS_USER', defaultValue: 'postgres', description: 'Database user (POSTGRES_USER); the password is POSTGRES_PASSWORD in the etp-k8s-secrets-env credential')
+    string(name: 'CORS_ALLOWED_ORIGINS', defaultValue: '', description: 'Leave empty: the pipeline uses http://<gateway load balancer DNS>:4200. Set it only to allow a different address.')
+    string(name: 'CLOUDFRONT_URL', defaultValue: '', description: 'Optional: https://<distribution>.cloudfront.net once CloudFront is set up (cloudfront/README.md); added to CORS_ALLOWED_ORIGINS')
+    string(name: 'FAUXNANCE_API_URL', defaultValue: 'https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1/', description: 'Market data API base URL')
     string(name: 'K8S_OVERLAY', defaultValue: 'k8s/base', description: 'Kustomize directory')
     string(name: 'K8S_NAMESPACE', defaultValue: 'ferodha', description: 'Namespace of the manifests')
     booleanParam(name: 'AUTO_AUTHORIZE_RDS', defaultValue: true, description: 'Only after RDS connectivity fails, allow the EKS cluster security group into RDS on TCP 5432')
@@ -45,7 +46,7 @@ pipeline {
         checkout scm
         sh 'git rev-parse HEAD; test -f k8s/base/config.env; test -f k8s/base/kustomization.yaml'
         script {
-          ['IMAGE_TAG', 'RDS_HOST', 'RDS_DATABASE', 'RDS_USER', 'CORS_ALLOWED_ORIGINS', 'FAUXNANCE_API_URL'].each { name ->
+          ['IMAGE_TAG', 'RDS_HOST', 'RDS_DATABASE', 'RDS_USER', 'FAUXNANCE_API_URL'].each { name ->
             if (!params[name]?.trim()) {
               error("${name} is required." + (name == 'IMAGE_TAG' ? ' Run JenkinsfileCI first and enter its pushed ECR tag.' : ''))
             }
@@ -60,6 +61,8 @@ pipeline {
           env.POSTGRES_DB = params.RDS_DATABASE.trim()
           env.POSTGRES_USER = params.RDS_USER.trim()
           env.CORS_ALLOWED_ORIGINS = params.CORS_ALLOWED_ORIGINS.trim()
+          // https://x.cloudfront.net/ -> https://x.cloudfront.net: CORS compares origins exactly.
+          env.CLOUDFRONT_URL = (params.CLOUDFRONT_URL ?: '').trim().replaceAll('/+$', '')
           env.FAUXNANCE_API_URL = params.FAUXNANCE_API_URL.trim()
         }
       }
@@ -71,12 +74,13 @@ pipeline {
             set -euo pipefail
             # The committed config.env holds placeholders; fill in this workspace's copy.
             # awk with ENVIRON takes the values literally (URLs may contain & or /).
-            for key in POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER CORS_ALLOWED_ORIGINS FAUXNANCE_API_URL; do
+            # CORS_ALLOWED_ORIGINS is filled in at deploy time, from the load balancer.
+            for key in POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER FAUXNANCE_API_URL; do
               KEY="$key" awk 'BEGIN { k = ENVIRON["KEY"] } index($0, k "=") == 1 { print k "=" ENVIRON[k]; next } { print }' \
                 k8s/base/config.env > k8s/base/config.env.tmp
               mv k8s/base/config.env.tmp k8s/base/config.env
             done
-            grep -E '^(POSTGRES_|CORS_|FAUXNANCE_API_URL)' k8s/base/config.env
+            grep -E '^(POSTGRES_|FAUXNANCE_API_URL)' k8s/base/config.env
 
             command -v aws >/dev/null
             command -v kubectl >/dev/null
@@ -179,10 +183,50 @@ pipeline {
                  -e "s#newTag: .*#newTag: '$IMAGE_TAG'#" k8s/base/kustomization.yaml
           grep -E 'newName|newTag' k8s/base/kustomization.yaml
 
+          # CORS: the browser's origin is the gateway load balancer on :4200 (gateway.yaml).
+          # Taken from the running gateway Service unless given as a parameter; on the very
+          # first deploy the Service does not exist yet, so apply, wait for its address,
+          # then apply again with it.
+          set_config() {
+            KEY="$1" VALUE="$2" awk 'BEGIN { k = ENVIRON["KEY"] } index($0, k "=") == 1 { print k "=" ENVIRON["VALUE"]; next } { print }' \
+              k8s/base/config.env > k8s/base/config.env.tmp
+            mv k8s/base/config.env.tmp k8s/base/config.env
+          }
+          gateway_host() {
+            kubectl -n "$K8S_NAMESPACE" get svc gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
+          }
+          # Jenkins does not pass an empty variable to the shell at all, hence the :- default.
+          CORS="${CORS_ALLOWED_ORIGINS:-}"
+          if [ -z "$CORS" ]; then
+            LB=$(gateway_host)
+            if [ -n "$LB" ]; then CORS="http://$LB:4200"; fi
+          fi
+          # CloudFront's address is a second origin for the same app (gateway.yaml, port 80).
+          with_cloudfront() { if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "$1,$CLOUDFRONT_URL"; else echo "$1"; fi; }
+          set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "${CORS:-http://pending.invalid:4200}")"
+
           # The namespace first, so the server-side dry run can check namespaced objects.
           kubectl apply -f k8s/base/namespace.yaml
           kubectl apply --dry-run=server -k "$K8S_OVERLAY"
           kubectl apply -k "$K8S_OVERLAY"
+
+          if [ -z "$CORS" ]; then
+            echo 'First deploy: waiting for the gateway load balancer address'
+            LB=''
+            for _ in $(seq 60); do
+              LB=$(gateway_host)
+              if [ -n "$LB" ]; then break; fi
+              sleep 5
+            done
+            if [ -z "$LB" ]; then
+              echo 'The gateway load balancer got no address: are the subnets tagged (k8s/README.md step 2)?' >&2
+              exit 1
+            fi
+            CORS="http://$LB:4200"
+            set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "$CORS")"
+            kubectl apply -k "$K8S_OVERLAY"
+          fi
+          grep '^CORS_ALLOWED_ORIGINS=' k8s/base/config.env
 
           # trade-api runs Liquibase first; auth-service and trade-executor wait for it.
           kubectl -n "$K8S_NAMESPACE" rollout status statefulset/kafka --timeout=600s
@@ -191,6 +235,9 @@ pipeline {
           done
           kubectl -n "$K8S_NAMESPACE" get pods -o wide
           kubectl -n "$K8S_NAMESPACE" get svc
+          echo "Open $CORS (UI) and $CORS/admin (console). A new load balancer name can take a few minutes to resolve."
+          echo "CloudFront origin (cloudfront/README.md): ${CORS#http://} without :4200, HTTP only, port 80"
+          if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "Through CloudFront: $CLOUDFRONT_URL and $CLOUDFRONT_URL/admin"; fi
         '''
       }
     }

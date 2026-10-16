@@ -7,6 +7,16 @@
 #   http://<lb>:4200 -> trading-ui    http://<lb>:3000 -> auth-service
 #   http://<lb>:8081 -> trade-api
 # CORS_ALLOWED_ORIGINS (config.env) is therefore http://<lb>:4200.
+#
+# Port 80 is the same app on ONE address with no ports, for CloudFront (https, which
+# only reaches an origin on one port) or http://<lb>/ directly. The UI, opened
+# without a port, calls the APIs by path (trading-ui/src/environments):
+#   /auth-api/*  -> auth-service (prefix removed)   /api/v1/*  -> trade-api
+#   everything else -> trading-ui (the UI, and the admin console at /admin/)
+# The auth API sits under /auth-api because its /profile and /admin/... paths are
+# also pages of the UI and the console. Through CloudFront the browser's origin is
+# https://<distribution>.cloudfront.net, so CORS_ALLOWED_ORIGINS lists that too
+# (JenkinsfileCD's CLOUDFRONT_URL).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -33,6 +43,12 @@ data:
       listen 8081;
       location / { proxy_pass http://trade-api:8081; }
     }
+    server {
+      listen 80;
+      location /auth-api/ { proxy_pass http://auth-service:3000/; }
+      location /api/ { proxy_pass http://trade-api:8081; }
+      location / { proxy_pass http://trading-ui:80; }
+    }
     # The gateway's own health check, for the probes below.
     server {
       listen 8080;
@@ -52,13 +68,14 @@ spec:
       labels: { app: gateway }
       annotations:
         # Bump this when default.conf changes, so the pod restarts and reloads it.
-        config-version: "1"
+        config-version: "2"
     spec:
       enableServiceLinks: false
       containers:
         - name: nginx
           image: nginx:1.27-alpine
           ports:
+            - { name: web, containerPort: 80 }
             - { name: ui, containerPort: 4200 }
             - { name: auth, containerPort: 3000 }
             - { name: api, containerPort: 8081 }
@@ -88,6 +105,7 @@ spec:
   type: LoadBalancer
   selector: { app: gateway }
   ports:
+    - { name: web, port: 80, targetPort: web }
     - { name: ui, port: 4200, targetPort: ui }
     - { name: auth, port: 3000, targetPort: auth }
     - { name: api, port: 8081, targetPort: api }

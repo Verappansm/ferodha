@@ -7,6 +7,7 @@ import {
   ADMIN_TOKEN_ALLOW_LIST,
   adminTokenAllowList,
   adminTokenInterceptor,
+  mayCarryAdminToken,
 } from './admin-token.interceptor';
 
 const TRADE = 'http://localhost:8081';
@@ -65,5 +66,14 @@ describe('adminTokenInterceptor', () => {
     expect(
       authorizationSentTo('http://localhost:8081.evil.example/api/v1/admin/summary'),
     ).toBeNull();
+  });
+
+  it('behind one address, only the prefixed admin API carries the token, not the console pages', () => {
+    const SITE = 'https://d1example.cloudfront.net';
+    const list = adminTokenAllowList({ authApiUrl: `${SITE}/auth-api`, tradeApiUrl: SITE });
+    expect(mayCarryAdminToken(`${SITE}/auth-api/admin/users`, list)).toBe(true);
+    expect(mayCarryAdminToken(`${SITE}/api/v1/admin/summary`, list)).toBe(true);
+    expect(mayCarryAdminToken(`${SITE}/admin/users`, list)).toBe(false);
+    expect(mayCarryAdminToken(`${SITE}/auth-api/auth/admin/login`, list)).toBe(false);
   });
 });
