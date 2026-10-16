@@ -20,7 +20,7 @@ pipeline {
     string(name: 'IMAGE_TAG', defaultValue: '', description: 'Required: the ECR tag printed by JenkinsfileCI (IMAGE_TAG=1.N)')
     string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
     string(name: 'EKS_CLUSTER_NAME', defaultValue: 'ferodha', description: 'Existing EKS cluster (k8s/cluster.example.yaml)')
-    string(name: 'RDS_HOST', defaultValue: '', description: 'Required: RDS endpoint (POSTGRES_HOST)')
+    string(name: 'RDS_HOST', defaultValue: 'database-1.c5omusos41a0.ap-south-1.rds.amazonaws.com', description: 'Required: RDS endpoint (POSTGRES_HOST)')
     string(name: 'RDS_PORT', defaultValue: '5432', description: 'RDS PostgreSQL port (POSTGRES_PORT)')
     string(name: 'RDS_DATABASE', defaultValue: 'postgres', description: 'Database name (POSTGRES_DB)')
     string(name: 'RDS_USER', defaultValue: 'postgres', description: 'Database user (POSTGRES_USER); the password is POSTGRES_PASSWORD in the etp-k8s-secrets-env credential')
