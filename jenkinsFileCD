@@ -25,6 +25,7 @@ pipeline {
     string(name: 'RDS_DATABASE', defaultValue: 'postgres', description: 'Database name (POSTGRES_DB)')
     string(name: 'RDS_USER', defaultValue: 'postgres', description: 'Database user (POSTGRES_USER); the password is POSTGRES_PASSWORD in the etp-k8s-secrets-env credential')
     string(name: 'CORS_ALLOWED_ORIGINS', defaultValue: '', description: 'Leave empty: the pipeline uses http://<gateway load balancer DNS>:4200. Set it only to allow a different address.')
+    string(name: 'CLOUDFRONT_URL', defaultValue: '', description: 'Optional: https://<distribution>.cloudfront.net once CloudFront is set up (cloudfront/README.md); added to CORS_ALLOWED_ORIGINS')
     string(name: 'FAUXNANCE_API_URL', defaultValue: 'https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1/', description: 'Market data API base URL')
     string(name: 'K8S_OVERLAY', defaultValue: 'k8s/base', description: 'Kustomize directory')
     string(name: 'K8S_NAMESPACE', defaultValue: 'ferodha', description: 'Namespace of the manifests')
@@ -60,6 +61,8 @@ pipeline {
           env.POSTGRES_DB = params.RDS_DATABASE.trim()
           env.POSTGRES_USER = params.RDS_USER.trim()
           env.CORS_ALLOWED_ORIGINS = params.CORS_ALLOWED_ORIGINS.trim()
+          // https://x.cloudfront.net/ -> https://x.cloudfront.net: CORS compares origins exactly.
+          env.CLOUDFRONT_URL = (params.CLOUDFRONT_URL ?: '').trim().replaceAll('/+$', '')
           env.FAUXNANCE_API_URL = params.FAUXNANCE_API_URL.trim()
         }
       }
@@ -198,7 +201,9 @@ pipeline {
             LB=$(gateway_host)
             if [ -n "$LB" ]; then CORS="http://$LB:4200"; fi
           fi
-          set_config CORS_ALLOWED_ORIGINS "${CORS:-http://pending.invalid:4200}"
+          # CloudFront's address is a second origin for the same app (gateway.yaml, port 80).
+          with_cloudfront() { if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "$1,$CLOUDFRONT_URL"; else echo "$1"; fi; }
+          set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "${CORS:-http://pending.invalid:4200}")"
 
           # The namespace first, so the server-side dry run can check namespaced objects.
           kubectl apply -f k8s/base/namespace.yaml
@@ -218,10 +223,10 @@ pipeline {
               exit 1
             fi
             CORS="http://$LB:4200"
-            set_config CORS_ALLOWED_ORIGINS "$CORS"
+            set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "$CORS")"
             kubectl apply -k "$K8S_OVERLAY"
           fi
-          echo "CORS_ALLOWED_ORIGINS=$CORS"
+          grep '^CORS_ALLOWED_ORIGINS=' k8s/base/config.env
 
           # trade-api runs Liquibase first; auth-service and trade-executor wait for it.
           kubectl -n "$K8S_NAMESPACE" rollout status statefulset/kafka --timeout=600s
@@ -231,6 +236,8 @@ pipeline {
           kubectl -n "$K8S_NAMESPACE" get pods -o wide
           kubectl -n "$K8S_NAMESPACE" get svc
           echo "Open $CORS (UI) and $CORS/admin (console). A new load balancer name can take a few minutes to resolve."
+          echo "CloudFront origin (cloudfront/README.md): ${CORS#http://} without :4200, HTTP only, port 80"
+          if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "Through CloudFront: $CLOUDFRONT_URL and $CLOUDFRONT_URL/admin"; fi
         '''
       }
     }
