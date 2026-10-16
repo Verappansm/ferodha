@@ -1,0 +1,251 @@
+// CD: deploy an image tag pushed by JenkinsfileCI to the existing EKS cluster
+// (k8s/cluster.example.yaml, namespace ferodha). Run manually with parameters.
+// Adapted from the course kit (Cloud-Deployment-Setup/jenkins/JenkinsfileCD) to our
+// k8s/base manifests and setting names.
+//
+// Secrets come from the Jenkins "Secret file" credential etp-k8s-secrets-env, laid
+// out like k8s/base/secrets.env.example (POSTGRES_PASSWORD, JWT_SECRET,
+// FAUXNANCE_API_KEY, SMTP_USER, SMTP_PASSWORD). Nothing secret is in this file.
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    skipDefaultCheckout(true)
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  parameters {
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Required: the ECR tag printed by JenkinsfileCI (IMAGE_TAG=1.N)')
+    string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
+    string(name: 'EKS_CLUSTER_NAME', defaultValue: 'ferodha', description: 'Existing EKS cluster (k8s/cluster.example.yaml)')
+    string(name: 'RDS_HOST', defaultValue: '', description: 'Required: RDS endpoint (POSTGRES_HOST)')
+    string(name: 'RDS_PORT', defaultValue: '5432', description: 'RDS PostgreSQL port (POSTGRES_PORT)')
+    string(name: 'RDS_DATABASE', defaultValue: 'postgres', description: 'Database name (POSTGRES_DB)')
+    string(name: 'RDS_USER', defaultValue: 'postgres', description: 'Database user (POSTGRES_USER); the password is POSTGRES_PASSWORD in the etp-k8s-secrets-env credential')
+    string(name: 'CORS_ALLOWED_ORIGINS', defaultValue: '', description: 'Leave empty: the pipeline uses http://<gateway load balancer DNS>:4200. Set it only to allow a different address.')
+    string(name: 'CLOUDFRONT_URL', defaultValue: '', description: 'Optional: https://<distribution>.cloudfront.net once CloudFront is set up (cloudfront/README.md); added to CORS_ALLOWED_ORIGINS')
+    string(name: 'FAUXNANCE_API_URL', defaultValue: 'https://y4t9nq2bqf.execute-api.eu-west-2.amazonaws.com/v1/', description: 'Market data API base URL')
+    string(name: 'K8S_OVERLAY', defaultValue: 'k8s/base', description: 'Kustomize directory')
+    string(name: 'K8S_NAMESPACE', defaultValue: 'ferodha', description: 'Namespace of the manifests')
+    booleanParam(name: 'AUTO_AUTHORIZE_RDS', defaultValue: true, description: 'Only after RDS connectivity fails, allow the EKS cluster security group into RDS on TCP 5432')
+  }
+
+  environment {
+    AUTH_REPO = 'etp-auth-service'
+    ORDER_REPO = 'etp-order-service'
+    EXECUTOR_REPO = 'etp-executor-service'
+    FRONTEND_REPO = 'etp-frontend'
+  }
+
+  stages {
+    stage('Checkout SCM') {
+      steps {
+        deleteDir()
+        checkout scm
+        sh 'git rev-parse HEAD; test -f k8s/base/config.env; test -f k8s/base/kustomization.yaml'
+        script {
+          ['IMAGE_TAG', 'RDS_HOST', 'RDS_DATABASE', 'RDS_USER', 'FAUXNANCE_API_URL'].each { name ->
+            if (!params[name]?.trim()) {
+              error("${name} is required." + (name == 'IMAGE_TAG' ? ' Run JenkinsfileCI first and enter its pushed ECR tag.' : ''))
+            }
+          }
+          env.AWS_REGION = params.AWS_REGION.trim()
+          env.EKS_CLUSTER_NAME = params.EKS_CLUSTER_NAME.trim()
+          env.IMAGE_TAG = params.IMAGE_TAG.trim()
+          env.K8S_OVERLAY = params.K8S_OVERLAY.trim()
+          env.K8S_NAMESPACE = params.K8S_NAMESPACE.trim()
+          env.POSTGRES_HOST = params.RDS_HOST.trim()
+          env.POSTGRES_PORT = params.RDS_PORT.trim()
+          env.POSTGRES_DB = params.RDS_DATABASE.trim()
+          env.POSTGRES_USER = params.RDS_USER.trim()
+          env.CORS_ALLOWED_ORIGINS = params.CORS_ALLOWED_ORIGINS.trim()
+          // https://x.cloudfront.net/ -> https://x.cloudfront.net: CORS compares origins exactly.
+          env.CLOUDFRONT_URL = (params.CLOUDFRONT_URL ?: '').trim().replaceAll('/+$', '')
+          env.FAUXNANCE_API_URL = params.FAUXNANCE_API_URL.trim()
+        }
+      }
+    }
+
+    stage('Validate existing EKS cluster') {
+      steps {
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            # The committed config.env holds placeholders; fill in this workspace's copy.
+            # awk with ENVIRON takes the values literally (URLs may contain & or /).
+            # CORS_ALLOWED_ORIGINS is filled in at deploy time, from the load balancer.
+            for key in POSTGRES_HOST POSTGRES_PORT POSTGRES_DB POSTGRES_USER FAUXNANCE_API_URL; do
+              KEY="$key" awk 'BEGIN { k = ENVIRON["KEY"] } index($0, k "=") == 1 { print k "=" ENVIRON[k]; next } { print }' \
+                k8s/base/config.env > k8s/base/config.env.tmp
+              mv k8s/base/config.env.tmp k8s/base/config.env
+            done
+            grep -E '^(POSTGRES_|FAUXNANCE_API_URL)' k8s/base/config.env
+
+            command -v aws >/dev/null
+            command -v kubectl >/dev/null
+            test -f "$K8S_OVERLAY/kustomization.yaml"
+            aws eks describe-cluster --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" \
+              --query 'cluster.status' --output text | grep -qx ACTIVE
+            aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+            kubectl get nodes -o wide
+            test -n "$(kubectl get pods -n kube-system -l app.kubernetes.io/name=aws-ebs-csi-driver --no-headers)" || {
+              echo 'aws-ebs-csi-driver is not installed on the existing cluster.' >&2
+              exit 1
+            }
+        '''
+      }
+    }
+
+    stage('Test RDS connectivity first') {
+      steps {
+        script {
+            def result = sh(script: '''#!/usr/bin/env bash
+              set +e
+              kubectl delete pod jenkins-rds-test --ignore-not-found >/dev/null
+              kubectl run jenkins-rds-test --rm -i --restart=Never \\
+                --image=postgres:16 \\
+                --env="DB_HOST=$POSTGRES_HOST" --env="DB_PORT=$POSTGRES_PORT" \\
+                --env="DB_NAME=$POSTGRES_DB" --env="DB_USER=$POSTGRES_USER" \\
+                --command -- sh -c 'pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"'
+              printf '%s' "$?"
+            ''', returnStdout: true).trim()
+            env.RDS_TEST_FAILED = result.endsWith('0') ? 'false' : 'true'
+            echo "RDS connectivity test failed: ${env.RDS_TEST_FAILED}"
+        }
+      }
+    }
+
+    stage('Authorize RDS only after failed test') {
+      when {
+        allOf {
+          expression { params.AUTO_AUTHORIZE_RDS }
+          environment name: 'RDS_TEST_FAILED', value: 'true'
+        }
+      }
+      steps {
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            RDS_INSTANCE_ID=$(aws rds describe-db-instances --region "$AWS_REGION" --query "DBInstances[?Endpoint.Address=='$POSTGRES_HOST'].DBInstanceIdentifier | [0]" --output text)
+            test -n "$RDS_INSTANCE_ID" -a "$RDS_INSTANCE_ID" != None
+            RDS_SECURITY_GROUP_ID=$(aws rds describe-db-instances --region "$AWS_REGION" --db-instance-identifier "$RDS_INSTANCE_ID" --query 'DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId' --output text)
+            # The security group EKS puts on every node (k8s/README.md step 5).
+            EKS_CLUSTER_SECURITY_GROUP_ID=$(aws eks describe-cluster --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME" --query 'cluster.resourcesVpcConfig.clusterSecurityGroupId' --output text)
+            aws ec2 authorize-security-group-ingress --region "$AWS_REGION" --group-id "$RDS_SECURITY_GROUP_ID" --protocol tcp --port 5432 --source-group "$EKS_CLUSTER_SECURITY_GROUP_ID" || echo 'RDS ingress rule already exists.'
+        '''
+      }
+    }
+
+    stage('Retry RDS test') {
+      when {
+        environment name: 'RDS_TEST_FAILED', value: 'true'
+      }
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          kubectl delete pod jenkins-rds-test --ignore-not-found >/dev/null
+          kubectl run jenkins-rds-test --rm -i --restart=Never \
+            --image=postgres:16 \
+            --env="DB_HOST=$POSTGRES_HOST" --env="DB_PORT=$POSTGRES_PORT" \
+            --env="DB_NAME=$POSTGRES_DB" --env="DB_USER=$POSTGRES_USER" \
+            --command -- sh -c 'pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME"'
+        '''
+      }
+    }
+
+    stage('Verify selected ECR images') {
+      steps {
+        script {
+            env.AWS_ACCOUNT_ID = sh(script: 'aws sts get-caller-identity --query Account --output text', returnStdout: true).trim()
+            env.REGISTRY = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+        }
+        sh '''#!/usr/bin/env bash
+            set -euo pipefail
+            for repo in "$AUTH_REPO" "$ORDER_REPO" "$EXECUTOR_REPO" "$FRONTEND_REPO"; do
+              aws ecr describe-images --region "$AWS_REGION" --repository-name "$repo" --image-ids imageTag="$IMAGE_TAG" >/dev/null
+            done
+        '''
+      }
+    }
+
+    stage('Inject secrets and deploy selected images') {
+      steps {
+        withCredentials([file(credentialsId: 'etp-k8s-secrets-env', variable: 'SECRETS_FILE')]) {
+          sh 'install -m 600 "$SECRETS_FILE" k8s/base/secrets.env'
+        }
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          # Point this workspace's kustomization.yaml at our account and the chosen tag,
+          # so one apply rolls out the right images (trade-executor never runs twice).
+          # The tag is quoted: kustomize rejects an unquoted 1.7 because YAML reads it as a number.
+          sed -i -e "s#<AWS_ACCOUNT_ID>#$AWS_ACCOUNT_ID#g" \
+                 -e "s#dkr.ecr.ap-south-1.amazonaws.com#dkr.ecr.$AWS_REGION.amazonaws.com#g" \
+                 -e "s#newTag: .*#newTag: '$IMAGE_TAG'#" k8s/base/kustomization.yaml
+          grep -E 'newName|newTag' k8s/base/kustomization.yaml
+
+          # CORS: the browser's origin is the gateway load balancer on :4200 (gateway.yaml).
+          # Taken from the running gateway Service unless given as a parameter; on the very
+          # first deploy the Service does not exist yet, so apply, wait for its address,
+          # then apply again with it.
+          set_config() {
+            KEY="$1" VALUE="$2" awk 'BEGIN { k = ENVIRON["KEY"] } index($0, k "=") == 1 { print k "=" ENVIRON["VALUE"]; next } { print }' \
+              k8s/base/config.env > k8s/base/config.env.tmp
+            mv k8s/base/config.env.tmp k8s/base/config.env
+          }
+          gateway_host() {
+            kubectl -n "$K8S_NAMESPACE" get svc gateway -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
+          }
+          # Jenkins does not pass an empty variable to the shell at all, hence the :- default.
+          CORS="${CORS_ALLOWED_ORIGINS:-}"
+          if [ -z "$CORS" ]; then
+            LB=$(gateway_host)
+            if [ -n "$LB" ]; then CORS="http://$LB:4200"; fi
+          fi
+          # CloudFront's address is a second origin for the same app (gateway.yaml, port 80).
+          with_cloudfront() { if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "$1,$CLOUDFRONT_URL"; else echo "$1"; fi; }
+          set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "${CORS:-http://pending.invalid:4200}")"
+
+          # The namespace first, so the server-side dry run can check namespaced objects.
+          kubectl apply -f k8s/base/namespace.yaml
+          kubectl apply --dry-run=server -k "$K8S_OVERLAY"
+          kubectl apply -k "$K8S_OVERLAY"
+
+          if [ -z "$CORS" ]; then
+            echo 'First deploy: waiting for the gateway load balancer address'
+            LB=''
+            for _ in $(seq 60); do
+              LB=$(gateway_host)
+              if [ -n "$LB" ]; then break; fi
+              sleep 5
+            done
+            if [ -z "$LB" ]; then
+              echo 'The gateway load balancer got no address: are the subnets tagged (k8s/README.md step 2)?' >&2
+              exit 1
+            fi
+            CORS="http://$LB:4200"
+            set_config CORS_ALLOWED_ORIGINS "$(with_cloudfront "$CORS")"
+            kubectl apply -k "$K8S_OVERLAY"
+          fi
+          grep '^CORS_ALLOWED_ORIGINS=' k8s/base/config.env
+
+          # trade-api runs Liquibase first; auth-service and trade-executor wait for it.
+          kubectl -n "$K8S_NAMESPACE" rollout status statefulset/kafka --timeout=600s
+          for d in trade-api auth-service trade-executor trading-ui gateway; do
+            kubectl -n "$K8S_NAMESPACE" rollout status deployment/$d --timeout=600s
+          done
+          kubectl -n "$K8S_NAMESPACE" get pods -o wide
+          kubectl -n "$K8S_NAMESPACE" get svc
+          echo "Open $CORS (UI) and $CORS/admin (console). A new load balancer name can take a few minutes to resolve."
+          echo "CloudFront origin (cloudfront/README.md): ${CORS#http://} without :4200, HTTP only, port 80"
+          if [ -n "${CLOUDFRONT_URL:-}" ]; then echo "Through CloudFront: $CLOUDFRONT_URL and $CLOUDFRONT_URL/admin"; fi
+        '''
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'rm -f k8s/base/secrets.env'
+    }
+  }
+}
