@@ -19,12 +19,17 @@ k8s/
     ├── auth-service.yaml        3000, waits for trade-api
     ├── trade-executor.yaml      8082, exactly one copy, waits for trade-api
     ├── trading-ui.yaml          nginx: UI at /, admin console at /admin/
-    └── gateway.yaml             ONE load balancer: :4200 UI, :3000 auth, :8081 trade API
+    └── gateway.yaml             ONE load balancer: :4200 UI, :3000 auth, :8081 trade API,
+                                 and :80, everything on one address by path (CloudFront)
 ```
 
 The browser reaches everything through one hostname:
 `http://<lb>:4200` (UI), `http://<lb>:4200/admin` (console), and the APIs on
 `:3000` and `:8081` of the same host, which is how the UI finds them.
+Port 80 of the same load balancer serves the whole app on one address, the APIs by
+path (`/auth-api/*`, `/api/v1/*`): that is the origin for HTTPS through CloudFront
+(`cloudfront/README.md`). Deploying through Jenkins instead: `JenkinsfileCI` and
+`JenkinsfileCD` at the repository root, and `diff.md`.
 
 ## Steps
 
