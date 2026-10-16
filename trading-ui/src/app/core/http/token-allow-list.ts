@@ -25,15 +25,19 @@ export function tokenAllowList(urls: {
 }): TokenDestination[] {
   return [
     // Every Trade REST API route is protected.
-    { origin: new URL(urls.tradeApiUrl).origin, paths: ['/api/v1/'] },
+    destination(urls.tradeApiUrl, ['/api/v1/']),
     // On the Auth service only /auth/me, /auth/logout-all and /profile are
     // protected. /auth/login, /auth/register, /auth/refresh and
     // /auth/account-status are `security: []` and take no header.
-    {
-      origin: new URL(urls.authApiUrl).origin,
-      paths: ['/auth/me', '/auth/logout-all', '/profile'],
-    },
+    destination(urls.authApiUrl, ['/auth/me', '/auth/logout-all', '/profile']),
   ];
+}
+
+/** The API's paths under its base URL, which may carry a path (`/auth-api`). */
+function destination(apiUrl: string, paths: string[]): TokenDestination {
+  const base = new URL(apiUrl);
+  const prefix = base.pathname.replace(/\/$/, '');
+  return { origin: base.origin, paths: paths.map((path) => prefix + path) };
 }
 
 /** True only when the URL is on a listed origin and a listed path. */
