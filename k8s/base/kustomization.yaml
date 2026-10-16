@@ -23,14 +23,14 @@ secretGenerator:
 # with one command). A new image tag is a new rollout: change newTag, apply again.
 images:
   - name: trade-api
-    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
-    newTag: latest
+    newName: 997229934485.dkr.ecr.ap-south-1.amazonaws.com/etp-order-service
+    newTag: 20261015-1
   - name: auth-service
-    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
-    newTag: latest
+    newName: 997229934485.dkr.ecr.ap-south-1.amazonaws.com/etp-auth-service
+    newTag: 20261015-1
   - name: trade-executor
-    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
-    newTag: latest
+    newName: 997229934485.dkr.ecr.ap-south-1.amazonaws.com/etp-executor-service
+    newTag: 20261015-1
   - name: trading-ui
-    newName: <AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
-    newTag: latest
+    newName: 997229934485.dkr.ecr.ap-south-1.amazonaws.com/etp-frontend
+    newTag: 20261015-1
