@@ -3,6 +3,7 @@ package com.trade.service;
 import com.trade.domain.Instrument;
 import com.trade.domain.InstrumentRepository;
 import com.trade.dto.InstrumentQuoteDto;
+import com.trade.dto.IntradayPricePoint;
 import com.trade.dto.PriceHistoryResponseDto;
 import com.trade.dto.PricePointDto;
 import com.trade.dto.PriceSnapshotDto;
@@ -14,6 +15,7 @@ import com.trade.mapper.PortfolioMapper;
 import com.trade.mapper.PriceBarRow;
 import com.trade.mapper.PriceRangeRow;
 import com.trade.mapper.StoredPriceRow;
+import com.trade.mapper.SymbolCloseRow;
 import com.trade.service.portfolio.LatestQuotes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +31,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -157,6 +160,68 @@ public class MarketDataService {
                             quote.asOf() == null || quote.asOf().isBefore(freshAfter)));
         }
         return prices;
+    }
+
+    /** A symbol's latest price, when it was seen, and the close of the trading day before today. */
+    public record PriceMove(BigDecimal price, OffsetDateTime asOf, BigDecimal previousClose) {
+    }
+
+    /**
+     * The latest price and the previous daily close of each symbol, for list screens
+     * such as the watchlist: two queries for all of them, where getQuote takes several
+     * per symbol. A symbol with neither is absent.
+     */
+    public Map<String, PriceMove> getPriceMoves(Collection<String> symbols) {
+        List<String> wanted = symbols.stream()
+                .filter(symbol -> symbol != null && !symbol.isBlank())
+                .map(symbol -> symbol.trim().toUpperCase())
+                .distinct()
+                .toList();
+        if (wanted.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, BigDecimal> previousCloses = new HashMap<>();
+        for (StoredPriceRow row : historyMapper.findClosesBefore(wanted, now().toLocalDate())) {
+            previousCloses.put(row.symbol(), row.price());
+        }
+        Map<String, PriceMove> moves = new HashMap<>();
+        for (int from = 0; from < wanted.size(); from += MAX_PRICE_SYMBOLS) {
+            List<PriceSnapshotDto> prices;
+            try {
+                prices = getPrices(wanted.subList(from, Math.min(from + MAX_PRICE_SYMBOLS, wanted.size())));
+            } catch (InvalidParameterException impossible) {
+                // Each slice holds 1 to MAX_PRICE_SYMBOLS non-blank symbols.
+                throw new IllegalStateException(impossible);
+            }
+            for (PriceSnapshotDto price : prices) {
+                BigDecimal previousClose = previousCloses.get(price.symbol());
+                if (price.mid() != null || previousClose != null) {
+                    moves.put(price.symbol(), new PriceMove(price.mid(), price.asOf(), previousClose));
+                }
+            }
+        }
+        return moves;
+    }
+
+    /**
+     * The last day's minute closes of each symbol, oldest first: the 1D chart's data
+     * (getHistory) for a whole list in one query. A symbol with no bars is absent.
+     */
+    public Map<String, List<IntradayPricePoint>> getIntradayCloses(Collection<String> symbols) {
+        List<String> wanted = symbols.stream()
+                .filter(symbol -> symbol != null && !symbol.isBlank())
+                .map(symbol -> symbol.trim().toUpperCase())
+                .distinct()
+                .toList();
+        if (wanted.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<IntradayPricePoint>> closes = new HashMap<>();
+        for (SymbolCloseRow row : historyMapper.findMinuteClosesForSymbols(wanted, now().minus(MINUTE_RANGES.get("1D")))) {
+            closes.computeIfAbsent(row.symbol(), symbol -> new ArrayList<>())
+                    .add(new IntradayPricePoint(row.time(), row.close().doubleValue()));
+        }
+        return closes;
     }
 
     /**

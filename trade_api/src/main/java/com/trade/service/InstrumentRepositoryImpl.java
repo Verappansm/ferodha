@@ -7,9 +7,13 @@ import com.trade.mapper.InstrumentMapper;
 import com.trade.mapper.InstrumentRow;
 import org.springframework.stereotype.Component;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 public class InstrumentRepositoryImpl implements InstrumentRepository {
@@ -28,6 +32,16 @@ public class InstrumentRepositoryImpl implements InstrumentRepository {
     @Override
     public Optional<Instrument> findByInstrumentId(UUID instrumentId) {
         return instrumentMapper.findByInstrumentId(instrumentId).map(InstrumentRepositoryImpl::toDomain);
+    }
+
+    @Override
+    public Map<UUID, Instrument> findByInstrumentIds(Collection<UUID> instrumentIds) {
+        if (instrumentIds.isEmpty()) {
+            return Map.of();
+        }
+        return instrumentMapper.findByInstrumentIds(instrumentIds).stream()
+                .map(InstrumentRepositoryImpl::toDomain)
+                .collect(Collectors.toMap(Instrument::getInstrumentId, Function.identity()));
     }
 
     @Override

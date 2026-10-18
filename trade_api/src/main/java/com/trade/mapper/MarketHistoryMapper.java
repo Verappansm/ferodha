@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,4 +27,13 @@ public interface MarketHistoryMapper {
 
     // The close of the latest daily candle before the given day.
     Optional<BigDecimal> findCloseBefore(@Param("symbol") String symbol, @Param("day") LocalDate day);
+
+    // findCloseBefore for many symbols in one query; a symbol with no candle is absent
+    // (never called with an empty collection).
+    List<StoredPriceRow> findClosesBefore(@Param("symbols") Collection<String> symbols, @Param("day") LocalDate day);
+
+    // findMinuteBars' closes for many symbols in one query, oldest first per symbol
+    // (never called with an empty collection).
+    List<SymbolCloseRow> findMinuteClosesForSymbols(@Param("symbols") Collection<String> symbols,
+                                                    @Param("from") OffsetDateTime from);
 }

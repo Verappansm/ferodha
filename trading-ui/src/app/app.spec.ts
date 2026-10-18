@@ -72,4 +72,32 @@ describe('App', () => {
       (fixture.nativeElement as HTMLElement).querySelector('[data-testid="sign-out"]'),
     ).toBeNull();
   });
+
+  it('the menu button folds the links open and shut, and Escape or a link closes them', async () => {
+    isSignedIn.set(true);
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const toggle = root.querySelector<HTMLButtonElement>('[data-testid="nav-toggle"]')!;
+    const panel = () => root.querySelector('#main-nav')!;
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    toggle.click();
+    await fixture.whenStable();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Close menu');
+    expect(panel().classList).toContain('open');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await fixture.whenStable();
+    expect(panel().classList).not.toContain('open');
+
+    toggle.click();
+    await fixture.whenStable();
+    panel().querySelector<HTMLAnchorElement>('a[href="/orders"]')!.click();
+    await fixture.whenStable();
+    expect(panel().classList).not.toContain('open');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  });
 });

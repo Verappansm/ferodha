@@ -32,6 +32,17 @@
         ORDER BY display_order ASC
     </select>
 
+    <select id="findByWatchlistIds" resultMap="watchlistItemRow">
+        SELECT item_id, watchlist_id, instrument_id, display_order, added_at, alert_price, alert_direction,
+               alert_status, alert_triggered_at, alert_triggered_price
+        FROM Watchlist_Items
+        WHERE watchlist_id IN
+        <foreach collection="watchlistIds" item="watchlistId" open="(" separator="," close=")">
+            #{watchlistId}
+        </foreach>
+        ORDER BY display_order ASC
+    </select>
+
     <insert id="insert">
         INSERT INTO Watchlist_Items (item_id, watchlist_id, instrument_id, display_order, added_at)
         VALUES (#{itemId}, #{watchlistId}, #{instrumentId}, #{displayOrder}, #{addedAt})

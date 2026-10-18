@@ -5,6 +5,7 @@ import com.trade.mapper.WatchlistItemRow;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,16 @@ public class WatchlistItemRepositoryImpl implements WatchlistItemRepository {
     @Override
     public List<WatchlistItem> findByWatchlistId(UUID watchlistId) {
         return watchlistItemMapper.findByWatchlistId(watchlistId).stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public List<WatchlistItem> findByWatchlistIds(Collection<UUID> watchlistIds) {
+        if (watchlistIds.isEmpty()) {
+            return List.of();
+        }
+        return watchlistItemMapper.findByWatchlistIds(watchlistIds).stream()
                 .map(this::toDomain)
                 .toList();
     }

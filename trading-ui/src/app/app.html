@@ -4,19 +4,50 @@
   @if (session.isSignedIn()) {
     <header class="navbar">
       <div class="navbar-inner">
+        <!-- Below the width where every link fits, the links fold into this menu. -->
+        <button
+          type="button"
+          class="icon-btn nav-toggle"
+          data-testid="nav-toggle"
+          aria-controls="main-nav"
+          [attr.aria-expanded]="navOpen()"
+          [attr.aria-label]="navOpen() ? 'Close menu' : 'Open menu'"
+          (click)="toggleNav($event)"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            @if (navOpen()) {
+              <path d="M18 6 6 18M6 6l12 12" />
+            } @else {
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            }
+          </svg>
+        </button>
+
         <a class="nav-brand" routerLink="/dashboard">
-          <span class="brand-mark" aria-hidden="true">F</span>
+          <img class="brand-mark" src="favicon.svg" alt="" width="30" height="30" />
           Ferodha
         </a>
 
-        <nav aria-label="Main" class="nav-main">
+        <nav
+          aria-label="Main"
+          class="nav-main"
+          id="main-nav"
+          [class.open]="navOpen()"
+          (click)="$event.stopPropagation()"
+        >
           <ul class="nav-links">
             @for (link of links; track link.path) {
               <li>
-                <a [routerLink]="link.path" routerLinkActive="active">{{ link.label }}</a>
+                <a [routerLink]="link.path" routerLinkActive="active" (click)="closeNav()">{{
+                  link.label
+                }}</a>
               </li>
             }
           </ul>
+          <a class="btn btn-primary nav-panel-trade" routerLink="/order" (click)="closeNav()">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            Trade
+          </a>
         </nav>
 
         <div class="nav-actions">
@@ -80,7 +111,9 @@
             >
               <span class="avatar" aria-hidden="true">{{ initial() }}</span>
               <span class="visually-hidden">Account menu</span>
-              <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+              <svg class="caret" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
             </button>
 
             @if (menuOpen()) {

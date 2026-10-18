@@ -1,12 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  NavigationEnd,
-  Router,
-  RouterLink,
-  RouterLinkActive,
-  RouterOutlet,
-} from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { PreferencesStore } from './core/preferences/preferences.store';
 import {
@@ -42,8 +36,8 @@ const TOAST_TITLES: Record<NotificationType, string> = {
   templateUrl: './app.html',
   styleUrl: './app.css',
   host: {
-    '(document:click)': 'closeMenu()',
-    '(document:keydown.escape)': 'closeMenu()',
+    '(document:click)': 'closeMenu(); closeNav()',
+    '(document:keydown.escape)': 'closeMenu(); closeNav()',
   },
 })
 export class App {
@@ -58,6 +52,8 @@ export class App {
 
   protected readonly links = NAV_LINKS;
   protected readonly menuOpen = signal(false);
+  /** The folded main navigation on narrow screens. */
+  protected readonly navOpen = signal(false);
   /** The first letter of the signed-in email, for the account button. */
   protected readonly initial = computed(() => this.session.user()?.username?.charAt(0) ?? '?');
 
@@ -67,11 +63,25 @@ export class App {
         filter((e) => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => this.menuOpen.set(false));
+      .subscribe(() => {
+        this.menuOpen.set(false);
+        this.navOpen.set(false);
+      });
+  }
+
+  protected toggleNav(event: Event): void {
+    event.stopPropagation();
+    this.menuOpen.set(false);
+    this.navOpen.update((open) => !open);
+  }
+
+  protected closeNav(): void {
+    this.navOpen.set(false);
   }
 
   protected toggleMenu(event: Event): void {
     event.stopPropagation();
+    this.navOpen.set(false);
     this.menuOpen.update((open) => !open);
   }
 

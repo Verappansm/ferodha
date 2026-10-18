@@ -25,6 +25,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -87,15 +91,31 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponseDto("VAL-422", "Invalid input"));
     }
 
-    // Malformed JSON, or a path/query value that cannot convert to the type
-    // the handler declares (e.g. a non-numeric account id) - a transport-
+    // Malformed JSON, a path/query value that cannot convert to the type the
+    // handler declares (e.g. a non-numeric account id), or a required query
+    // parameter or header left out - a transport-
     // level input failure the DTO's Bean Validation annotations never get a
     // chance to see, but still VAL-422 to the caller.
-    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class, MissingRequestHeaderException.class})
     public ResponseEntity<ErrorResponseDto> handleMalformedRequest(Exception exception) {
         log.warn("Request body or parameter could not be read: {}", exception.getMessage());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .body(new ErrorResponseDto("VAL-422", "Invalid input"));
+    }
+
+    // A path no endpoint serves, or a method the path does not take: the caller's
+    // mistake, not a server failure, so a 404 / 405 rather than INTERNAL-500.
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponseDto> handleNoRoute(NoResourceFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponseDto("RES-404", "Not found"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponseDto> handleWrongMethod(HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(new ErrorResponseDto("RES-405", "Method not allowed"));
     }
 
     // A genuinely unanticipated failure. Still leaves as the one envelope -

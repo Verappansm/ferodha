@@ -63,4 +63,42 @@
         LIMIT 1
     </select>
 
+    <resultMap id="closeRow" type="com.trade.mapper.StoredPriceRow">
+        <constructor>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="price" javaType="java.math.BigDecimal"/>
+            <arg column="as_of" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findClosesBefore" resultMap="closeRow">
+        SELECT DISTINCT ON (symbol) symbol, close AS price, candle_time::timestamp AT TIME ZONE 'UTC' AS as_of
+        FROM market_candles
+        WHERE interval = '1d' AND candle_time &lt; #{day}
+          AND symbol IN
+        <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
+            #{symbol}
+        </foreach>
+        ORDER BY symbol, candle_time DESC
+    </select>
+
+    <resultMap id="symbolCloseRow" type="com.trade.mapper.SymbolCloseRow">
+        <constructor>
+            <arg column="symbol" javaType="java.lang.String"/>
+            <arg column="time" javaType="java.time.OffsetDateTime"/>
+            <arg column="close" javaType="java.math.BigDecimal"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findMinuteClosesForSymbols" resultMap="symbolCloseRow">
+        SELECT symbol, bar_start AS time, close
+        FROM market_bars
+        WHERE bar_start &gt;= #{from}
+          AND symbol IN
+        <foreach collection="symbols" item="symbol" open="(" separator="," close=")">
+            #{symbol}
+        </foreach>
+        ORDER BY symbol, bar_start
+    </select>
+
 </mapper>

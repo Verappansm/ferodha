@@ -13,8 +13,6 @@ import {
   BulkAddWatchlistItemsRequest,
   IntradayPricePoint,
   InstrumentResponse,
-  PriceHistory,
-  PricePoint,
   PriceSnapshot,
   CreatePriceAlertRequest,
   UpdatePriceAlertRequest,
@@ -200,6 +198,9 @@ export class WatchlistComponent implements OnDestroy {
   readonly columnDefs = computed<ColDef<WatchlistRow>[]>(() => {
     const isEditing = this.isEditing();
     const editingAlertId = this.editingAlertItemId();
+    // More columns than fit on most screens: the ticker stays pinned on the left and,
+    // where there is room, the row's buttons on the right, so only the middle scrolls.
+    const pinActions = typeof window === 'undefined' || window.innerWidth >= 768 ? 'right' : undefined;
 
     const defs: any[] = [
       {
@@ -207,6 +208,7 @@ export class WatchlistComponent implements OnDestroy {
         headerName: 'Ticker',
         width: 96,
         minWidth: 90,
+        pinned: 'left',
         cellClass: 'wl-symbol',
       },
       {
@@ -220,8 +222,8 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'lastPrice',
         headerName: 'Price',
-        width: 130,
-        minWidth: 110,
+        width: 120,
+        minWidth: 96,
         type: 'rightAligned',
         valueFormatter: (p: ValueFormatterParams<WatchlistRow, number>) => {
           // Get real-time price from price map
@@ -238,8 +240,8 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'dayChangePercent',
         headerName: 'Day change',
-        width: 120,
-        minWidth: 110,
+        width: 116,
+        minWidth: 100,
         type: 'rightAligned',
         valueFormatter: (p: ValueFormatterParams<WatchlistRow, number>) => {
           const pct = p.value;
@@ -257,16 +259,16 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'intradayData',
         headerName: 'Today',
-        width: 130,
-        minWidth: 110,
+        width: 120,
+        minWidth: 100,
         cellRenderer: SparklineRenderer,
         cellStyle: { padding: '4px 8px' },
       },
       {
         field: 'alertPrice',
         headerName: 'Alert at',
-        width: 120,
-        minWidth: 110,
+        width: 110,
+        minWidth: 96,
         type: 'rightAligned',
         valueFormatter: (p: ValueFormatterParams<WatchlistRow, number | null>) => {
           return p.value != null
@@ -307,8 +309,8 @@ export class WatchlistComponent implements OnDestroy {
       {
         field: 'alertStatus',
         headerName: 'Alert state',
-        width: 150,
-        minWidth: 130,
+        width: 130,
+        minWidth: 110,
         // The state the server records, as a word (not colour alone).
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const row = params.data;
@@ -344,6 +346,9 @@ export class WatchlistComponent implements OnDestroy {
         maxWidth: 110,
         suppressAutoSize: true,
         suppressMovable: true,
+        pinned: pinActions,
+        // Centres the buttons in the row's height.
+        cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end' },
         hide: !isEditing,
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const button = document.createElement('button');
@@ -366,6 +371,9 @@ export class WatchlistComponent implements OnDestroy {
         maxWidth: 160,
         suppressAutoSize: true,
         suppressMovable: true,
+        pinned: pinActions,
+        // Centres the buttons in the row's height.
+        cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end' },
         hide: isEditing,
         cellRenderer: (params: ICellRendererParams<WatchlistRow>) => {
           const container = document.createElement('div');
@@ -493,9 +501,8 @@ export class WatchlistComponent implements OnDestroy {
           alertTriggeredPrice: i.alertTriggeredPrice ?? null,
         }));
         this.editRows.set(rows);
-        // Fetch real prices and intraday data
-        this.enrichItemsWithPricesAndChart(rows);
-        // Start auto-refresh for prices
+        // The sparklines arrive with the items. The live prices: fetched now and then
+        // every few seconds by the refresh.
         this.startPriceRefresh(watchlistId);
       },
       error: (err) => {
@@ -521,35 +528,6 @@ export class WatchlistComponent implements OnDestroy {
       clearInterval(this.priceRefreshInterval);
       this.priceRefreshInterval = null;
     }
-  }
-
-  private enrichItemsWithPricesAndChart(rows: WatchlistRow[]): void {
-    if (rows.length === 0) return;
-
-    const symbols = rows.map((r: WatchlistRow) => r.symbol);
-
-    // Load real-time prices for display (matching instruments component pattern)
-    this.loadRealTimePrices(symbols);
-
-    // Fetch intraday chart data for each symbol
-    symbols.forEach((symbol: string) => {
-      this.tradeApi.history(symbol, PriceHistory.RangeEnum._1D).subscribe({
-        next: (history: PriceHistory) => {
-          const intradayPoints = history.points.map((point: PricePoint) => ({
-            timestamp: point.time,
-            price: point.close || point.open || 0,
-          }));
-          const row = rows.find((r: WatchlistRow) => r.symbol === symbol);
-          if (row) {
-            row.intradayData = intradayPoints;
-          }
-          this.editRows.set([...rows]);
-        },
-        error: () => {
-          // Chart data is optional, don't fail if not available
-        },
-      });
-    });
   }
 
   /** Fetch real-time prices for all symbols - matches instruments component pattern */

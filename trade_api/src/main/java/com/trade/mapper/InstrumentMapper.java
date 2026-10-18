@@ -3,6 +3,7 @@ package com.trade.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,9 @@ public interface InstrumentMapper {
     Optional<InstrumentRow> findBySymbol(@Param("symbol") String symbol);
 
     Optional<InstrumentRow> findByInstrumentId(@Param("instrumentId") UUID instrumentId);
+
+    /** Every instrument with one of these ids, in one query (never called with an empty collection). */
+    List<InstrumentRow> findByInstrumentIds(@Param("instrumentIds") Collection<UUID> instrumentIds);
 
     List<InstrumentRow> findAllTradable(@Param("limit") int limit, @Param("offset") long offset);
 

@@ -11,8 +11,5 @@
   - `./scripts/demo.sh --fresh` wipes the database volume first.
   - `./scripts/demo.sh --no-ui` skips the UI; `--stop-ui` stops it.
   - `NONINTERACTIVE=1 ./scripts/demo.sh` runs without pauses.
-- `generate_jwt.py`: kept for the record from Sprint 6, when there was no auth
-  service. Nothing uses it now, and its default token (issuer `trade-api-test`)
-  is refused by trade_api; get real tokens from the auth service.
 
 The Windows split setup has its own test, `windows/test-windows.sh`.
