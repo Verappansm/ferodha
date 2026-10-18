@@ -4,6 +4,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15,6 +16,9 @@ public interface WatchlistItemMapper {
     Optional<WatchlistItemRow> findById(@Param("itemId") UUID itemId);
 
     List<WatchlistItemRow> findByWatchlistId(@Param("watchlistId") UUID watchlistId);
+
+    /** The items of all these watchlists, in one query (never called with an empty collection). */
+    List<WatchlistItemRow> findByWatchlistIds(@Param("watchlistIds") Collection<UUID> watchlistIds);
 
     void insert(WatchlistItemRow row);
 

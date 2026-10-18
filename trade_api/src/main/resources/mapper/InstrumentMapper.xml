@@ -27,6 +27,15 @@
         WHERE instrument_id = #{instrumentId}
     </select>
 
+    <select id="findByInstrumentIds" resultMap="instrumentRow">
+        SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
+        FROM Instruments
+        WHERE instrument_id IN
+        <foreach collection="instrumentIds" item="instrumentId" open="(" separator="," close=")">
+            #{instrumentId}
+        </foreach>
+    </select>
+
     <select id="findAllTradable" resultMap="instrumentRow">
         SELECT instrument_id, ticker, name, type, currency, tradable, exchange, sector
         FROM Instruments

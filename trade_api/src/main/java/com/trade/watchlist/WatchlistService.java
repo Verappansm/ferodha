@@ -5,7 +5,7 @@ import com.trade.domain.InstrumentRepository;
 import com.trade.dto.AddWatchlistItemRequest;
 import com.trade.dto.BulkAddWatchlistItemsRequest;
 import com.trade.dto.CreateWatchlistRequest;
-import com.trade.dto.InstrumentQuoteDto;
+import com.trade.dto.IntradayPricePoint;
 import com.trade.dto.PriceAlertDtos;
 import com.trade.dto.ReorderWatchlistItemsRequest;
 import com.trade.dto.UpdateWatchlistRequest;
@@ -17,8 +17,6 @@ import com.trade.exception.WatchlistConflictException;
 import com.trade.exception.WatchlistItemNotFoundException;
 import com.trade.exception.WatchlistNotFoundException;
 import com.trade.service.MarketDataService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,13 +26,14 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class WatchlistService {
-
-    private static final Logger log = LoggerFactory.getLogger(WatchlistService.class);
 
     private final WatchlistRepository watchlistRepository;
     private final WatchlistItemRepository watchlistItemRepository;
@@ -68,10 +67,9 @@ public class WatchlistService {
     }
 
     public List<WatchlistResponse> getWatchlists(UUID userId) {
-        return watchlistRepository.findByUserId(userId).stream()
+        return toWatchlistResponses(watchlistRepository.findByUserId(userId).stream()
                 .sorted(Comparator.comparingInt(Watchlist::getDisplayOrder))
-                .map(this::toWatchlistResponse)
-                .toList();
+                .toList());
     }
 
     public Optional<WatchlistResponse> getWatchlist(UUID userId, UUID watchlistId) {
@@ -136,7 +134,7 @@ public class WatchlistService {
         );
         watchlistItemRepository.save(item);
 
-        return toWatchlistItemResponse(item, instrument);
+        return toItemResponses(List.of(item), false).get(0);
     }
 
     @Transactional
@@ -159,14 +157,8 @@ public class WatchlistService {
                 .filter(w -> w.getUserId().equals(userId))
                 .orElseThrow(() -> new WatchlistNotFoundException(watchlistId.toString()));
 
-        return watchlistItemRepository.findByWatchlistId(watchlistId).stream()
-                .sorted(Comparator.comparingInt(WatchlistItem::getDisplayOrder))
-                .map(item -> {
-                    Instrument instrument = instrumentRepository.findByInstrumentId(item.getInstrumentId())
-                            .orElse(null);
-                    return toWatchlistItemResponse(item, instrument);
-                })
-                .toList();
+        // The one list on screen, so its sparklines come with it (no request per item).
+        return toItemResponses(watchlistItemRepository.findByWatchlistId(watchlistId), true);
     }
 
     @Transactional
@@ -259,18 +251,66 @@ public class WatchlistService {
     // Helper methods
 
     private WatchlistResponse toWatchlistResponse(Watchlist watchlist) {
-        List<WatchlistItemResponse> items = watchlistItemRepository.findByWatchlistId(watchlist.getWatchlistId()).stream()
-                .sorted(Comparator.comparingInt(WatchlistItem::getDisplayOrder))
-                .map(item -> {
-                    Instrument instrument = instrumentRepository.findByInstrumentId(item.getInstrumentId())
-                            .orElse(null);
-                    return toWatchlistItemResponse(item, instrument);
-                })
-                .toList();
-        return new WatchlistResponse(watchlist.getWatchlistId(), watchlist.getName(), watchlist.getDisplayOrder(), items);
+        return toWatchlistResponses(List.of(watchlist)).get(0);
     }
 
-    private WatchlistItemResponse toWatchlistItemResponse(WatchlistItem item, Instrument instrument) {
+    // The items of every watchlist in one query, then their instruments and prices
+    // through toItemResponses: a fixed handful of queries however many lists and items
+    // there are, instead of several per item.
+    private List<WatchlistResponse> toWatchlistResponses(List<Watchlist> watchlists) {
+        if (watchlists.isEmpty()) {
+            return List.of();
+        }
+        List<WatchlistItem> allItems = watchlistItemRepository.findByWatchlistIds(
+                watchlists.stream().map(Watchlist::getWatchlistId).toList());
+        Map<UUID, WatchlistItemResponse> responses = toItemResponses(allItems, false).stream()
+                .collect(Collectors.toMap(WatchlistItemResponse::itemId, response -> response));
+        Map<UUID, List<WatchlistItem>> itemsByList = allItems.stream()
+                .collect(Collectors.groupingBy(WatchlistItem::getWatchlistId));
+        return watchlists.stream()
+                .map(watchlist -> new WatchlistResponse(
+                        watchlist.getWatchlistId(),
+                        watchlist.getName(),
+                        watchlist.getDisplayOrder(),
+                        itemsByList.getOrDefault(watchlist.getWatchlistId(), List.of()).stream()
+                                .sorted(Comparator.comparingInt(WatchlistItem::getDisplayOrder))
+                                .map(item -> responses.get(item.getItemId()))
+                                .toList()))
+                .toList();
+    }
+
+    // One query for the instruments and two for the prices of all the items, sorted by
+    // display order, plus one for the day's minute closes when withIntraday. Only a
+    // tradable instrument is priced, as on the instrument page.
+    private List<WatchlistItemResponse> toItemResponses(List<WatchlistItem> items, boolean withIntraday) {
+        if (items.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> instrumentIds = items.stream().map(WatchlistItem::getInstrumentId).collect(Collectors.toSet());
+        Map<UUID, Instrument> instruments = instrumentRepository.findByInstrumentIds(instrumentIds);
+        List<String> tradableSymbols = instruments.values().stream()
+                .filter(Instrument::isTradable)
+                .map(Instrument::getSymbol)
+                .toList();
+        Map<String, MarketDataService.PriceMove> moves = marketDataService.getPriceMoves(tradableSymbols);
+        Map<String, List<IntradayPricePoint>> intraday = withIntraday
+                ? marketDataService.getIntradayCloses(tradableSymbols)
+                : Map.of();
+        return items.stream()
+                .sorted(Comparator.comparingInt(WatchlistItem::getDisplayOrder))
+                .map(item -> {
+                    Instrument instrument = instruments.get(item.getInstrumentId());
+                    boolean priced = instrument != null && instrument.isTradable();
+                    String symbol = priced ? instrument.getSymbol().toUpperCase() : null;
+                    return toWatchlistItemResponse(item, instrument, priced ? moves.get(symbol) : null,
+                            priced ? intraday.getOrDefault(symbol, List.of()) : List.of());
+                })
+                .toList();
+    }
+
+    private WatchlistItemResponse toWatchlistItemResponse(WatchlistItem item, Instrument instrument,
+                                                          MarketDataService.PriceMove move,
+                                                          List<IntradayPricePoint> intradayData) {
         if (instrument == null) {
             return new WatchlistItemResponse(
                     item.getItemId(), item.getInstrumentId(), item.getInstrumentId().toString(), "Unknown",
@@ -279,27 +319,21 @@ public class WatchlistService {
                     item.getAlertTriggeredAt(), item.getAlertTriggeredPrice());
         }
 
-        // The latest quote and the day's move from the previous close, from the same
-        // source the instrument page uses. No quote leaves the figures at zero, and the
-        // screen asks for live prices on its own.
+        // The latest price and the day's move from the previous close. No price leaves
+        // the figures at zero, and the screen asks for live prices on its own.
         double lastPrice = 0.0;
         double dayChange = 0.0;
         double dayChangePercent = 0.0;
         OffsetDateTime lastUpdated = null;
-        try {
-            InstrumentQuoteDto quote = marketDataService.getQuote(instrument.getSymbol());
-            if (quote.mid() != null) {
-                lastPrice = quote.mid().doubleValue();
-                lastUpdated = quote.asOf();
-                if (quote.previousClose() != null && quote.previousClose().signum() > 0) {
-                    BigDecimal change = quote.mid().subtract(quote.previousClose());
-                    dayChange = change.doubleValue();
-                    dayChangePercent = change.multiply(BigDecimal.valueOf(100))
-                            .divide(quote.previousClose(), 4, RoundingMode.HALF_UP).doubleValue();
-                }
+        if (move != null && move.price() != null) {
+            lastPrice = move.price().doubleValue();
+            lastUpdated = move.asOf();
+            if (move.previousClose() != null && move.previousClose().signum() > 0) {
+                BigDecimal change = move.price().subtract(move.previousClose());
+                dayChange = change.doubleValue();
+                dayChangePercent = change.multiply(BigDecimal.valueOf(100))
+                        .divide(move.previousClose(), 4, RoundingMode.HALF_UP).doubleValue();
             }
-        } catch (Exception e) {
-            log.debug("No quote for watchlist item {}: {}", instrument.getSymbol(), e.getMessage());
         }
 
         return new WatchlistItemResponse(
@@ -316,7 +350,7 @@ public class WatchlistService {
                 lastUpdated,
                 item.getAddedAt(),
                 item.getDisplayOrder(),
-                List.of(),
+                intradayData,
                 item.getAlertPrice(),
                 item.getAlertDirection(),
                 item.getAlertStatus(),
