@@ -85,6 +85,24 @@ refuses a browser origin it does not list. Without Jenkins: add it to
 Sign in with DevTools open (**Network**): the login request goes to
 `https://<domain>/auth-api/auth/login` and returns 200.
 
+### 5. Your own domain (optional, Route 53)
+
+1. **Certificate:** an ACM certificate covering the name, in **us-east-1** (CloudFront
+   only uses certificates from that region).
+2. **Distribution:** Edit, then add the name under **Alternate domain names (CNAMEs)**
+   and choose that certificate.
+3. **DNS:** in the Route 53 hosted zone, an **A** record (Alias) for the name, pointing to
+   the distribution. The console's "Route domains to CloudFront" does the same.
+4. **CORS:** run `etp-cd` with every browser address, comma-separated, no spaces:
+
+   ```
+   CLOUDFRONT_URL=https://<your-name>.<your-zone>,https://dxxxxxxxxxxxx.cloudfront.net
+   ```
+
+   Missed this step? Pages load and sign-in works, but placing an order fails with
+   "something went wrong": the trade API refuses any data-changing request from a
+   browser address it does not list.
+
 ## If something fails
 
 | Symptom | Cause |

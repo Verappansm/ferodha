@@ -29,7 +29,7 @@ The browser reaches everything through one hostname:
 Port 80 of the same load balancer serves the whole app on one address, the APIs by
 path (`/auth-api/*`, `/api/v1/*`): that is the origin for HTTPS through CloudFront
 (`cloudfront/README.md`). Deploying through Jenkins instead: `JenkinsfileCI` and
-`JenkinsfileCD` at the repository root, and `diff.md`.
+`JenkinsfileCD` at the repository root (the root README's Deployment section).
 
 ## Steps
 
