@@ -4,8 +4,33 @@
     <meta charset="utf-8" />
     <title>Ferodha</title>
     <base href="/" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="Ferodha is a trading platform for US and Indian equities: live prices, limit orders, a portfolio with profit and loss, watchlists with price alerts, and automated strategies."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1715" media="(prefers-color-scheme: dark)" />
+    <meta name="application-name" content="Ferodha" />
+    <meta name="apple-mobile-web-app-title" content="Ferodha" />
+
+    <!-- How a shared link previews (chat apps, social sites). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ferodha" />
+    <meta property="og:title" content="Ferodha · Invest with clarity" />
+    <meta
+      property="og:description"
+      content="US and Indian equities in one account, with every price, fee and order status in plain view."
+    />
+    <meta property="og:image" content="icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+
     <!-- Applies a saved light/dark choice before the app starts, so the page never flashes the wrong theme. -->
     <script>
       try {
@@ -13,8 +38,50 @@
         if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
       } catch (e) {}
     </script>
+    <!-- The splash inside <app-root> until Angular replaces it: the page's own colours, no flash of white. -->
+    <style>
+      html {
+        background: #f5f7f6;
+      }
+      html[data-theme='dark'] {
+        background: #0a1210;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme='light']) {
+          background: #0a1210;
+        }
+      }
+      .boot {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+      }
+      .boot img {
+        width: 56px;
+        height: 56px;
+        animation: boot-pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes boot-pulse {
+        50% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot img {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <div class="boot" role="status" aria-label="Loading Ferodha">
+        <img src="favicon.svg" alt="" width="56" height="56" />
+      </div>
+    </app-root>
+    <noscript
+      >Ferodha needs JavaScript to run. Turn it on in your browser and reload the page.</noscript
+    >
   </body>
 </html>

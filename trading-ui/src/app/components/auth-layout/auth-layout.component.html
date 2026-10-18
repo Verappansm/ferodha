@@ -1,7 +1,7 @@
 <div class="auth-page">
   <aside class="brand-panel" aria-label="About Ferodha">
     <div class="brand">
-      <span class="brand-mark" aria-hidden="true">F</span>
+      <img class="brand-mark" src="favicon.svg" alt="" width="36" height="36" />
       <span class="brand-name">Ferodha</span>
     </div>
 
@@ -9,8 +9,7 @@
       <p class="eyebrow">US and Indian equities</p>
       <h2>Invest with clarity, invest with Ferodha.</h2>
       <p class="lead">
-        US and Indian equities in one account, with every price, fee and order status in plain
-        view.
+        US and Indian equities in one account, with every price, fee and order status in plain view.
       </p>
 
       <ul class="features">
@@ -76,6 +75,11 @@
 
   <main class="form-panel">
     <div class="form-panel-top">
+      <!-- The brand panel is hidden on narrow screens; the logo moves up here. -->
+      <span class="brand brand-compact" aria-hidden="true">
+        <img class="brand-mark" src="favicon.svg" alt="" width="32" height="32" />
+        <span class="brand-name">Ferodha</span>
+      </span>
       <app-theme-toggle />
     </div>
 

@@ -203,9 +203,12 @@ h3 {
 
 /* ---- Page structure -------------------------------------------------------- */
 
-/* Every signed-in screen: one centred column, header, then cards. */
+/* Every signed-in screen: one centred column, header, then cards. The column is
+   minmax(0, 1fr), not auto, so a wide table scrolls inside its card instead of
+   stretching the whole page sideways on a phone. */
 .page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   align-content: start;
   width: 100%;
@@ -810,8 +813,13 @@ select.input {
 
 /* ---- Tables ----------------------------------------------------------------------- */
 
+/* position: relative makes the wrapper the containing block of any absolutely
+   positioned cell content (a .visually-hidden label), which would otherwise sit
+   outside the scroll area and widen the whole page. */
 .table-wrap {
+  position: relative;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .table {
@@ -1476,9 +1484,117 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
+/* ---- Toasts (app.html): a pop-up for each notification that arrives ------------- */
+
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 12px 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--ink-200);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  animation: toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.toast-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: var(--info);
+  border-radius: 50%;
+}
+
+.toast-positive .toast-dot {
+  background: var(--positive);
+}
+
+.toast-negative .toast-dot {
+  background: var(--negative);
+}
+
+.toast-warning .toast-dot {
+  background: var(--warning);
+}
+
+.toast-body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--ink-700);
+  text-decoration: none;
+}
+
+.toast-body strong {
+  font-size: 13.5px;
+  color: var(--ink-900);
+}
+
+.toast-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--ink-500);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: var(--ink-100);
+}
+
+.toast-close svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 @media (width <= 720px) {
   .page {
+    gap: 16px;
     padding: 20px 16px 48px;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  .card-header,
+  .card-footer {
+    padding: 12px 14px;
+  }
+
+  .card-body {
+    padding: 14px;
   }
 
   .form-grid {

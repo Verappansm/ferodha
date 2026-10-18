@@ -37,14 +37,10 @@
 }
 
 .brand-mark {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex: none;
   width: 30px;
   height: 30px;
-  font-size: 15px;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(135deg, var(--brand-500) 0%, var(--brand-700) 100%);
   border-radius: 8px;
 }
 
@@ -105,6 +101,8 @@
   flex: none;
   gap: 4px;
   align-items: center;
+  /* The theme toggle sits in the same row as the icon buttons, borderless like them. */
+  --toggle-border: transparent;
 }
 
 .trade-btn {
@@ -115,11 +113,6 @@
 .nav-actions .icon-btn.active {
   color: var(--brand-600);
   background: var(--brand-100);
-}
-
-/* The theme toggle sits in the same row as the icon buttons, borderless like them. */
-.nav-actions {
-  --toggle-border: transparent;
 }
 
 /* LEAP-008: the bell's unread count. */
@@ -302,114 +295,100 @@
   outline: none;
 }
 
-/* ---- Toasts -------------------------------------------------------------------- */
+/* ---- Folded navigation ------------------------------------------------------------ */
 
-.toasts {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 60;
-  display: grid;
-  gap: 10px;
-  width: min(380px, calc(100vw - 32px));
+/* Wide screens show the links inline; the toggle and the panel's own Trade button
+   only exist below the fold width. */
+.nav-toggle,
+.nav-panel-trade {
+  display: none;
 }
 
-.toast {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 12px 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--ink-200);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-pop);
-  animation: toast-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-}
-
-.toast-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  margin-top: 6px;
-  background: var(--info);
-  border-radius: 50%;
-}
-
-.toast-positive .toast-dot {
-  background: var(--positive);
-}
-
-.toast-negative .toast-dot {
-  background: var(--negative);
-}
-
-.toast-warning .toast-dot {
-  background: var(--warning);
-}
-
-.toast-body {
-  display: grid;
-  flex: 1;
-  gap: 2px;
-  min-width: 0;
-  font-size: 13px;
-  color: var(--ink-700);
-  text-decoration: none;
-}
-
-.toast-body strong {
-  font-size: 13.5px;
-  color: var(--ink-900);
-}
-
-.toast-close {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  color: var(--ink-500);
-  background: none;
-  border: 0;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.toast-close:hover {
-  background: var(--ink-100);
-}
-
-.toast-close svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-@media (width <= 900px) {
+@media (width <= 1100px) {
   .navbar-inner {
     gap: 12px;
-    padding: 0 16px;
+    padding: 0 20px;
+  }
+
+  .nav-toggle {
+    display: inline-grid;
+    margin-left: -6px;
+  }
+
+  /* The links become a panel that drops from under the bar. */
+  .nav-main {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: none;
+    padding: 12px 20px 16px;
+    background: var(--nav-bg);
+    border-bottom: 1px solid var(--nav-border);
+    box-shadow: var(--shadow-pop);
+    animation: menu-in 0.14s ease-out both;
+  }
+
+  .nav-main.open {
+    display: grid;
+    gap: 12px;
+  }
+
+  .nav-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 4px;
+  }
+
+  .nav-links a {
+    padding: 10px 12px;
+    font-size: 14.5px;
+  }
+
+  .nav-links a.active {
+    background: var(--brand-100);
+  }
+
+  .nav-links a.active::after {
+    display: none;
+  }
+
+  /* The actions keep to the right edge once the inline links are gone. */
+  .nav-actions {
+    margin-left: auto;
   }
 
   .trade-btn {
     display: none;
   }
+
+  .nav-panel-trade {
+    display: inline-flex;
+    justify-self: start;
+    padding-inline: 28px;
+  }
 }
 
 @media (width <= 560px) {
+  .navbar-inner {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .nav-main {
+    padding: 10px 12px 14px;
+  }
+
+  .nav-panel-trade {
+    justify-self: stretch;
+  }
+
   .nav-brand {
-    font-size: 0;
     gap: 0;
+    font-size: 0;
+  }
+
+  .account {
+    margin-left: 2px;
   }
 }

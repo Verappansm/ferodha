@@ -1,9 +1,22 @@
 /* Layout only: card, field, input, kv, notice and btn are global (styles.css). */
-/* One column: the ticket, then the order result, then how it fills. */
+/* The ticket, then the order result and how it fills: side by side on a wide
+   screen, so the page has no empty half; one column below that. */
 .ticket-layout {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
-  max-width: 640px;
+  align-items: start;
+}
+
+@media (width > 1024px) {
+  .ticket-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(300px, 2fr);
+  }
+
+  .side-col {
+    position: sticky;
+    top: 80px;
+  }
 }
 
 /* The ticket carries its side's colour along the top edge. */

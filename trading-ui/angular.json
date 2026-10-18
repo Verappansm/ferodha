@@ -84,7 +84,14 @@
             "browser": "projects/admin/src/main.ts",
             "tsConfig": "projects/admin/tsconfig.app.json",
             "styles": ["projects/admin/src/styles.css"],
-            "baseHref": "/admin/"
+            "baseHref": "/admin/",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "ignore": ["manifest.webmanifest"]
+              }
+            ]
           },
           "configurations": {
             "production": {
